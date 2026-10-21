@@ -1,0 +1,34 @@
+{
+  "name": "broken-route",
+  "description": "Home page links to /pricing, which has no route. /about exists and must not be flagged.",
+  "variants": { "default": { "outDir": "out", "env": {} } },
+  "defaultVariant": "default",
+  "backendRoutes": {},
+  "selfTest": {
+    "default": {
+      "links": [{ "path": "/pricing", "status": 404 }, { "path": "/about", "status": 200 }],
+      "pageErrors": [],
+      "minTextLength": 10
+    }
+  },
+  "expected": {
+    "default": {
+      "pulseStatus": "degraded",
+      "findings": [{ "code": "ROUTE_BROKEN", "path": "/pricing" }],
+      "issues": [
+        {
+          "leadCode": "ROUTE_MISSING",
+          "reclassifiedFrom": "ROUTE_BROKEN",
+          "promptType": "code_fix",
+          "promptMustMention": ["/pricing", "app/page.tsx"],
+          "trace": {
+            "file": "app/page.tsx",
+            "line": 7,
+            "lineContains": "href=\"/pricing\"",
+            "joinKey": "/pricing"
+          }
+        }
+      ]
+    }
+  }
+}

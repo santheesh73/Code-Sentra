@@ -1,0 +1,33 @@
+{
+  "name": "console-throw",
+  "description": "Throws new Error(\"CS_FIXTURE_BOOM\") on load from a timer, producing an uncaught exception.",
+  "variants": { "default": { "outDir": "out", "env": {} } },
+  "defaultVariant": "default",
+  "backendRoutes": {},
+  "selfTest": {
+    "default": {
+      "requests": [],
+      "pageErrors": ["CS_FIXTURE_BOOM"],
+      "minTextLength": 10
+    }
+  },
+  "expected": {
+    "default": {
+      "pulseStatus": "degraded",
+      "findings": [{ "code": "UNCAUGHT_EXCEPTION", "message": "CS_FIXTURE_BOOM" }],
+      "issues": [
+        {
+          "leadCode": "UNCAUGHT_EXCEPTION",
+          "promptType": "code_fix",
+          "promptMustMention": ["CS_FIXTURE_BOOM", "app/page.tsx"],
+          "trace": {
+            "file": "app/page.tsx",
+            "line": 9,
+            "lineContains": "throw new Error(\"CS_FIXTURE_BOOM\")",
+            "joinKey": "CS_FIXTURE_BOOM"
+          }
+        }
+      ]
+    }
+  }
+}

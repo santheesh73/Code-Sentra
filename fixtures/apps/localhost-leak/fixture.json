@@ -1,0 +1,33 @@
+{
+  "name": "localhost-leak",
+  "description": "Production page calls http://localhost:4000/data.",
+  "variants": { "default": { "outDir": "out", "env": {} } },
+  "defaultVariant": "default",
+  "backendRoutes": {},
+  "selfTest": {
+    "default": {
+      "requests": [{ "url": "http://localhost:4000/data" }],
+      "pageErrors": [],
+      "minTextLength": 10
+    }
+  },
+  "expected": {
+    "default": {
+      "pulseStatus": "degraded",
+      "findings": [{ "code": "LOCALHOST_CALL", "url": "http://localhost:4000/data" }],
+      "issues": [
+        {
+          "leadCode": "LOCALHOST_CALL",
+          "promptType": "code_fix",
+          "promptMustMention": ["app/page.tsx", "localhost:4000"],
+          "trace": {
+            "file": "app/page.tsx",
+            "line": 9,
+            "lineContains": "\"http://localhost:4000/data\"",
+            "joinKey": "localhost:4000"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "healthy",
+  "description": "Control app: renders content, links only to existing routes, no failing requests, no errors.",
+  "variants": { "default": { "outDir": "out", "env": {} } },
+  "defaultVariant": "default",
+  "backendRoutes": {},
+  "selfTest": {
+    "default": {
+      "requests": [],
+      "links": [{ "path": "/about", "status": 200 }],
+      "pageErrors": [],
+      "consoleErrors": [],
+      "noFailedRequests": true,
+      "minTextLength": 10
+    }
+  },
+  "expected": {
+    "default": { "pulseStatus": "live", "findings": [], "issues": [] }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "blank",
+  "description": "Root page renders nothing (returns null).",
+  "variants": { "default": { "outDir": "out", "env": {} } },
+  "defaultVariant": "default",
+  "backendRoutes": {},
+  "selfTest": {
+    "default": {
+      "requests": [],
+      "pageErrors": [],
+      "maxTextLength": 0
+    }
+  },
+  "expected": {
+    "default": {
+      "pulseStatus": "degraded",
+      "findings": [{ "code": "BLANK_PAGE", "path": "/" }],
+      "issues": [
+        {
+          "leadCode": "BLANK_PAGE",
+          "promptType": "code_fix",
+          "promptMustMention": ["app/page.tsx"],
+          "trace": {
+            "file": "app/page.tsx",
+            "line": 1,
+            "lineContains": "export default function Home",
+            "joinKey": "/"
+          }
+        }
+      ]
+    }
+  }
+}

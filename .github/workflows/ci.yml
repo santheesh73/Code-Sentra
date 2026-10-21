@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+  typecheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  # Unit tests plus the Phase 0 fixture gate (harness + real-browser fixture self-test).
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Chromium for the fixture self-test
+        run: pnpm --filter @codesentra/fixture-harness exec playwright-core install --with-deps chromium
+      - run: pnpm build
+      - run: pnpm test
+
+  compose:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Write throwaway .env
+        run: |
+          {
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "S3_BUCKET=codesentra"
+            echo "S3_ACCESS_KEY_ID=ci-$(openssl rand -hex 4)"
+            echo "S3_SECRET_ACCESS_KEY=$(openssl rand -hex 20)"
+          } > .env
+      # Wait only on long-running services: `up --wait` exits 1 when the one-shot minio-init finishes.
+      - run: docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures up -d --build --wait postgres minio fixture-harness
+      - name: Create bucket
+        run: docker compose --env-file .env -f infra/docker-compose.yml run --rm minio-init
+      - name: Smoke-test the harness
+        run: curl -fsS http://localhost:4100/ -o /dev/null
+      - if: always()
+        run: docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures down -v
+
+  secrets:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: docker run --rm -v "$PWD:/repo" -w /repo zricethezav/gitleaks:v8.30.1 git . --config .gitleaks.toml --no-banner --redact

@@ -1,0 +1,122 @@
+{
+  "name": "ts-taskboard",
+  "description": "Express + TypeScript task API. Verified by hand in a scratch sandbox: npm ci && npm run build succeeds; npm test gives 2 pass, 1 fail, 1 skip; npm audit flags lodash@4.17.15 as high.",
+  "snapshot": { "kind": "zip", "hasHistory": false },
+  "languages": ["TypeScript"],
+  "frameworks": ["Express"],
+  "packageManager": "npm",
+  "routes": [
+    { "method": "POST", "path": "/tasks", "locator": "src/routes/tasks.ts:8" },
+    { "method": "GET", "path": "/tasks", "locator": "src/routes/tasks.ts:17" },
+    { "method": "PATCH", "path": "/tasks/:id/done", "locator": "src/routes/tasks.ts:21" },
+    { "method": "GET", "path": "/tasks/export.csv", "locator": "src/routes/tasks.ts:30" }
+  ],
+  "envVars": {
+    "read": [
+      { "name": "TASKBOARD_ADMIN_TOKEN", "locator": "src/server.ts:9" },
+      { "name": "PORT", "locator": "src/server.ts:22" }
+    ],
+    "documented": ["PORT", "REDIS_URL"]
+  },
+  "probes": {
+    "install": "pass",
+    "build": "pass",
+    "tests": { "pass": 2, "fail": 1, "skip": 1 }
+  },
+  "features": [
+    {
+      "name": "Create tasks",
+      "status": "complete",
+      "implementation": ["src/routes/tasks.ts:8"],
+      "tests": ["test/store.test.ts:6"]
+    },
+    {
+      "name": "List tasks",
+      "status": "complete",
+      "implementation": ["src/routes/tasks.ts:17"],
+      "tests": ["test/store.test.ts:13"]
+    },
+    {
+      "name": "Mark tasks done",
+      "status": "partial",
+      "implementation": ["src/routes/tasks.ts:21", "src/lib/store.ts:29"],
+      "why": "TODO marker in src/lib/store.ts and the covering test fails"
+    },
+    {
+      "name": "Export tasks to CSV",
+      "status": "partial",
+      "implementation": ["src/routes/tasks.ts:30", "src/lib/csv.ts:3"],
+      "why": "exportCsv is a stub that throws and its test is skipped"
+    },
+    {
+      "name": "Email reminders",
+      "status": "planned",
+      "intent": ["README.md:15"],
+      "why": "README roadmap only; no implementation"
+    }
+  ],
+  "findings": [
+    {
+      "code": "TESTS_FAILING",
+      "locator": "test/store.test.ts:24",
+      "lineContains": "marks a task done"
+    },
+    {
+      "code": "SKIPPED_TESTS",
+      "locator": "test/store.test.ts:30",
+      "lineContains": "test.skip(\"exports tasks as CSV\""
+    },
+    {
+      "code": "TODO_MARKER",
+      "locator": "src/lib/store.ts:32",
+      "lineContains": "TODO: persist the completion timestamp"
+    },
+    {
+      "code": "STUB_IMPLEMENTATION",
+      "locator": "src/lib/csv.ts:4",
+      "lineContains": "throw new Error(\"not implemented\")"
+    },
+    {
+      "code": "ENV_VAR_UNDOCUMENTED",
+      "locator": "src/server.ts:9",
+      "lineContains": "process.env.TASKBOARD_ADMIN_TOKEN",
+      "envVar": "TASKBOARD_ADMIN_TOKEN"
+    },
+    {
+      "code": "ENV_VAR_UNUSED",
+      "locator": ".env.example:4",
+      "lineContains": "REDIS_URL=",
+      "envVar": "REDIS_URL"
+    },
+    {
+      "code": "SECRET_EXPOSED",
+      "locator": "src/config/defaults.ts:4",
+      "lineContains": "AKIACODESENTRAFIXTUR",
+      "secretType": "aws-access-token",
+      "storedPreviewMustNotContain": "AKIACODESENTRAFIXTUR"
+    },
+    {
+      "code": "VULNERABLE_DEPENDENCY",
+      "locator": "package-lock.json",
+      "ecosystem": "npm",
+      "package": "lodash",
+      "version": "4.17.15",
+      "mustIncludeAdvisory": "GHSA-p6mc-m468-83gw"
+    }
+  ],
+  "absentFindings": [
+    "BUILD_FAILED",
+    "TYPECHECK_ERRORS",
+    "NO_TESTS",
+    "MISSING_BUILD_SCRIPT"
+  ],
+  "forbiddenClaims": [
+    { "text": "All tests pass.", "reason": "one test fails" },
+    { "text": "CSV export is complete.", "reason": "exportCsv is a stub" },
+    { "text": "Email reminders are implemented.", "reason": "planned only" },
+    { "text": "Tasks are stored in PostgreSQL.", "reason": "in-memory store; no database" },
+    { "text": "Authentication is handled in src/auth.ts.", "reason": "file does not exist" },
+    { "text": "The project has 12 tests.", "reason": "there are 4" },
+    { "text": "No secrets were found.", "reason": "an AWS access key id pattern is committed" }
+  ]
+}

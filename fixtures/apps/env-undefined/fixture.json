@@ -1,0 +1,51 @@
+{
+  "name": "env-undefined",
+  "description": "Client page fetches `${process.env.NEXT_PUBLIC_API_URL}/api/ping`; built with the variable unset, the browser requests /undefined/api/ping (same-origin 404).",
+  "variants": {
+    "broken": { "outDir": "out", "env": {} },
+    "fixed": { "outDir": "out-fixed", "env": { "NEXT_PUBLIC_API_URL": "/backend" } }
+  },
+  "defaultVariant": "broken",
+  "backendRoutes": {
+    "/backend/api/ping": { "status": 200, "json": { "ok": true } }
+  },
+  "selfTest": {
+    "broken": {
+      "requests": [{ "path": "/undefined/api/ping", "status": 404 }],
+      "pageErrors": [],
+      "minTextLength": 10
+    },
+    "fixed": {
+      "requests": [{ "path": "/backend/api/ping", "status": 200 }],
+      "forbiddenRequestPaths": ["/undefined/api/ping"],
+      "pageErrors": [],
+      "minTextLength": 10
+    }
+  },
+  "expected": {
+    "broken": {
+      "pulseStatus": "degraded",
+      "findings": [
+        { "code": "UNDEFINED_IN_URL", "path": "/undefined/api/ping" },
+        { "code": "SAME_ORIGIN_FAILURE", "path": "/undefined/api/ping" }
+      ],
+      "issues": [
+        {
+          "leadCode": "UNDEFINED_IN_URL",
+          "corroboratedBy": ["SAME_ORIGIN_FAILURE"],
+          "promptType": "code_fix",
+          "promptMustMention": ["NEXT_PUBLIC_API_URL", "app/page.tsx"],
+          "configGuidanceMustMention": ["NEXT_PUBLIC_API_URL"],
+          "trace": {
+            "file": "app/page.tsx",
+            "line": 9,
+            "lineContains": "process.env.NEXT_PUBLIC_API_URL}/api/ping",
+            "joinKey": "/api/ping",
+            "envVars": ["NEXT_PUBLIC_API_URL"]
+          }
+        }
+      ]
+    },
+    "fixed": { "pulseStatus": "live", "findings": [], "issues": [] }
+  }
+}

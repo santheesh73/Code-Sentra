@@ -1,0 +1,8 @@
+# Secret scan of this repository (CI). fixtures/repos/ contains deliberately planted,
+# fake credentials that CodeSentra's own Scan must detect, so it is excluded here.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Planted fake secrets in Scan fixture repos"
+paths = ['''^fixtures/repos/''']

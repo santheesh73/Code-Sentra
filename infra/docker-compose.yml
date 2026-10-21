@@ -1,0 +1,80 @@
+# Local development infrastructure.
+#
+#   pnpm infra:up          # postgres + minio, then `run --rm minio-init` for the bucket
+#   pnpm infra:fixtures    # also the fixture harness on localhost:4100+
+#
+# Reads ../.env (copy ../.env.example). All ports bind to 127.0.0.1 only.
+# Behind a TLS-intercepting proxy, prebuild the harness image with the optional
+# `extra_ca` secret (see docs/architecture.md), then run without --build.
+#
+# api, web, worker-scan, worker-pulse and worker-link are added here as each is
+# built (Phase 1+); they do not exist yet, so they are not listed (Rule 6).
+name: codesentra
+
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_USER: codesentra
+      POSTGRES_DB: codesentra
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codesentra -d codesentra"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Community build of MinIO from source (ADR 0004): upstream stopped publishing images.
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID in .env}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  minio-init:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET in .env}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$$S3_ACCESS_KEY_ID" "$$S3_SECRET_ACCESS_KEY" &&
+        mc mb --ignore-existing "local/$$S3_BUCKET" &&
+        mc anonymous set none "local/$$S3_BUCKET"
+    restart: "no"
+
+  fixture-harness:
+    profiles: ["fixtures"]
+    build:
+      context: ..
+      dockerfile: fixtures/harness/Dockerfile
+    environment:
+      HARNESS_HOST: 0.0.0.0
+      HARNESS_PUBLIC_HOST: localhost
+      HARNESS_BASE_PORT: "4100"
+    ports:
+      - "127.0.0.1:4100-4130:4100-4130"
+
+volumes:
+  postgres-data:
+  minio-data:

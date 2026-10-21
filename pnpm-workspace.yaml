@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - packages/*
+  - fixtures/apps/*
+  - fixtures/harness
+# fixtures/repos/* are scan *inputs* and are deliberately not workspace members:
+# their dependencies (some intentionally vulnerable) must never be installed here.

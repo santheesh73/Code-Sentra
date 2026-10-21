@@ -21,6 +21,13 @@ describe("health", () => {
   });
 });
 
+describe("providers", () => {
+  it("reports only configured sign-in methods", async () => {
+    const res = await api.app.inject({ method: "GET", url: "/v1/auth/providers" });
+    expect(res.json()).toEqual({ email: true, github: true });
+  });
+});
+
 describe("magic link sign-in", () => {
   it("signs in, creates a personal org, and exposes /v1/me", async () => {
     const cookie = await signIn(api, "Ana@Example.com");

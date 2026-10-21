@@ -1,0 +1,19 @@
+{
+  "name": "@codesentra/worker-pulse",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@codesentra/config": "workspace:*",
+    "@codesentra/db": "workspace:*",
+    "@codesentra/queue": "workspace:*",
+    "@codesentra/storage": "workspace:*",
+    "pino": "10.4.0"
+  }
+}

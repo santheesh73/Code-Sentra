@@ -28,7 +28,7 @@ export interface FakeGithub {
     {
       id: number;
       login: string;
-      name: string;
+      name: string | null;
       emails: { email: string; primary: boolean; verified: boolean }[];
     }
   >;

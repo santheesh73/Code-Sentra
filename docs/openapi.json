@@ -122,6 +122,39 @@
         }
       }
     },
+    "/v1/auth/providers": {
+      "get": {
+        "summary": "Which sign-in methods this server has configured",
+        "tags": [
+          "auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "boolean"
+                    },
+                    "github": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "email",
+                    "github"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/email": {
       "post": {
         "summary": "Send a sign-in link by email",

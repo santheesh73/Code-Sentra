@@ -1,7 +1,8 @@
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
-import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
+import type { FastifyBaseLogger } from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import {
   jsonSchemaTransform,
   serializerCompiler,
@@ -32,10 +33,10 @@ export const API_VERSION = "0.1.0";
 
 export async function buildApp(
   ctx: AppContext,
-  opts: { logger?: FastifyServerOptions["logger"]; trustProxy?: boolean } = {},
+  opts: { logger?: FastifyBaseLogger; trustProxy?: boolean } = {},
 ): Promise<BuiltApp> {
   const app = Fastify({
-    logger: opts.logger ?? false,
+    ...(opts.logger ? { loggerInstance: opts.logger } : { logger: false }),
     trustProxy: opts.trustProxy ?? true,
     bodyLimit: 1024 * 1024,
     requestTimeout: 30_000,

@@ -41,7 +41,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
 
-  # Unit tests plus the Phase 0 fixture gate (harness + real-browser fixture self-test).
+  # Unit + integration tests and the Phase 0 fixture gate (harness + real-browser fixture self-test).
   test:
     runs-on: ubuntu-24.04
     steps:
@@ -55,7 +55,34 @@ jobs:
       - name: Install Chromium for the fixture self-test
         run: pnpm --filter @codesentra/fixture-harness exec playwright-core install --with-deps chromium
       - run: pnpm build
+      # Integration tests start Postgres/MinIO with Testcontainers (Docker is available on the runner).
       - run: pnpm test
+      - name: OpenAPI docs are up to date
+        run: pnpm openapi && git diff --exit-code docs/openapi.json docs/api.md
+
+  # Phase 1 gate: real Postgres + MinIO (Testcontainers), API, worker and web, driven in Chromium.
+  e2e:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Chromium
+        run: pnpm --filter @codesentra/e2e exec playwright install --with-deps chromium
+      - run: pnpm turbo run build --filter=@codesentra/api --filter=@codesentra/web --filter=@codesentra/worker-pulse
+      - run: pnpm e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: |
+            e2e/test-results
+            e2e/playwright-report
+          retention-days: 7
 
   compose:
     runs-on: ubuntu-24.04

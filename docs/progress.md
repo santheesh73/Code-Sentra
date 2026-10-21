@@ -1,5 +1,91 @@
 # Progress
 
+## Phase 1 — Foundation (2026-10-21)
+
+### Built
+
+- **`packages/db`:** Drizzle schema and migrations for organizations, users, memberships,
+  auth identities, sessions, magic-link tokens, projects, environments, runs, run_steps and
+  audit_log. Postgres RLS through `withOrg()` (ADR 0009), with composite FKs keeping child rows
+  in their parent's org. Shared run and step queries. A Testcontainers helper.
+- **`packages/queue`:** pg-boss 12 client where the job id is the run id. Zod payloads,
+  per-type timeouts, 3 retries with backoff, a worker runtime with a step runner,
+  final-attempt failure, a dead-job sweep, and LISTEN/NOTIFY progress events (ADR 0012).
+- **`packages/storage`:** S3 client with key validation (MinIO-compatible).
+- **`packages/config`:** integrations are required in production and optional elsewhere
+  (they answer 501 when absent); email outbox transport for dev and test (ADR 0007).
+- **`packages/core`:** `diagnostic` run type, and `deriveRunStatus` (a skipped step makes the run partial).
+- **`apps/api`:**
+  - Auth: magic link and GitHub OAuth with PKCE, hashed session tokens, an Origin check,
+    JSON-only bodies, and IP and per-address rate limits (ADR 0010).
+  - Orgs and members, with audited role changes and a last-owner guard.
+  - Projects and environments; diagnostic runs; run read and SSE stream.
+  - RFC 9457 errors; generated OpenAPI 3.1 (`docs/openapi.json`, `docs/api.md`, with a drift
+    test and CI check).
+  - Section 12 endpoints for later phases authorize, then answer 501.
+- **`apps/worker-pulse`:** runs the real platform diagnostic (database, queue, object
+  storage) (ADR 0008).
+- **`apps/web`:**
+  - Next.js 16 + Tailwind 4 + shadcn-style components + TanStack Query, with the
+    same-origin API proxy (ADR 0011).
+  - Pages: sign-in (shows only configured methods), link verification, projects list,
+    new project, project overview, live run view (SSE, gaps highlighted, per-step logs),
+    settings (members, roles, new org).
+  - Dark mode, keyboard focus states, and layouts down to 375 px.
+  - Nothing green for an unchecked state: environments read "Not checked" until Pulse
+    exists, and a partial run is amber.
+- **`e2e/`:** the Phase 1 gate in Chromium against real Postgres, MinIO, the API, the worker
+  and web; plus 375 px overflow checks.
+- **CI:** an e2e job, an OpenAPI drift check, and integration tests on Testcontainers.
+
+### Deferred or partial
+
+- **Not yet built (Phase 5):** API tokens for the CLI, GitHub App installation, schedules,
+  notifications. The UI says so.
+- **Logs:** run logs are capped text on `run_steps.log`; there is no separate log storage yet.
+- **Org deletion and invitations:** there is no org deletion endpoint. Adding a member creates the user
+  row, and they join on first sign-in; there is no invitation email yet.
+- **docker-compose:** still runs infrastructure only. api, web and worker run from
+  `pnpm start:*`, and containerised app services arrive with the production Dockerfiles
+  in Phase 5.
+- **Observability:** OpenTelemetry and Sentry wiring is Phase 5. Logs are structured pino
+  with cookie and authorization redaction.
+
+### Known risks
+
+- **RLS boundary:** raw SQL inside a tenant transaction could `RESET ROLE`. No tenant path
+  builds SQL from input; a separate login role would remove the risk (ADR 0009).
+- **Proxy hop:** the web proxy adds a hop to every API call. Revisit if latency matters.
+
+### Gate result
+
+Run from a clean tree (all build outputs and turbo caches deleted) on 2026-10-21:
+
+```
+pnpm lint          Checked 198 files. No fixes applied.
+pnpm typecheck     Tasks: 30 successful, 30 total
+pnpm build         Tasks: 15 successful, 15 total
+pnpm test          Tasks: 21 successful, 21 total
+  @codesentra/core             45 passed
+  @codesentra/config           18 passed
+  @codesentra/storage           3 passed
+  @codesentra/db               16 passed   (RLS attacks, composite FKs, run lifecycle)
+  @codesentra/queue             6 passed   (Postgres + MinIO: live events, idempotency, gap, retries, sweep)
+  @codesentra/api              32 passed   (auth, CSRF, GitHub OAuth fake, projects, members,
+                                            SSE, 501s, OpenAPI drift, cross-org on every route)
+  @codesentra/fixture-harness  42 passed
+pnpm e2e           4 passed
+  ✓ redirects signed-out visitors to sign-in
+  ✓ Phase 1 gate: sign in, create a project, trigger a job and watch its steps live
+  ✓ @responsive pages fit a 375 px screen (desktop + mobile projects)
+```
+
+The gate test signs in through a real magic link, creates a project, starts a diagnostic,
+and sees all steps `pending` with the stream connected. Only then does it start the worker,
+and it watches every step turn `done` and the run turn `Succeeded` with no page navigation.
+
+**Phase 1 gate: passed locally.**
+
 ## Phase 0 — Fixtures and skeleton (2026-10-21)
 
 ### Built
@@ -47,8 +133,7 @@
   to `runc` and record which runtime was used.
 - **MinIO:** upstream images are gone; we use the pinned `pgsty/minio` build (ADR 0004).
 - **CI action versions** are pinned to major tags (`checkout@v5`, `setup-node@v5`,
-  `pnpm/action-setup@v4`) and have not been run on GitHub yet. Pin to SHAs once the
-  first run is green.
+  `pnpm/action-setup@v4`). Pin to SHAs in Phase 5 hardening.
 
 ### Gate result
 
@@ -68,4 +153,4 @@ gitleaks git . (with .gitleaks.toml)   no leaks found
 gitleaks on fixtures/repos (no allowlist)  aws-access-token at py-notes-api scripts/seed.py:6 and ts-taskboard src/config/defaults.ts:4
 ```
 
-**Phase 0 gate: passed locally.** CI has not run on GitHub yet.
+**Phase 0 gate: passed locally, and in CI on santheesh73/Code-Sentra#1 (merged).**

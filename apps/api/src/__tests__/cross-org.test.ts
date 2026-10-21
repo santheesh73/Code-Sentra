@@ -46,12 +46,13 @@ beforeAll(async () => {
 }, 180_000);
 afterAll(async () => api?.close());
 
-type Attack = { url: string; payload?: unknown };
+type Attack = { url: string; payload?: Record<string, unknown> };
 
 /** Routes that carry no tenant resource identifier, with the reason. */
 const NOT_TENANT_SCOPED: Record<string, string> = {
   "GET /health": "public liveness",
   "GET /v1/openapi.json": "public API description",
+  "GET /v1/auth/providers": "public; lists configured sign-in methods",
   "POST /v1/auth/email": "unauthenticated sign-in",
   "POST /v1/auth/email/verify": "unauthenticated sign-in",
   "GET /v1/auth/github": "unauthenticated sign-in",

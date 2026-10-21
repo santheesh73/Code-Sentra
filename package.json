@@ -16,7 +16,14 @@
     "gate:phase0": "pnpm --filter @codesentra/fixture-harness gate",
     "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d --wait postgres minio && docker compose --env-file .env -f infra/docker-compose.yml run --rm minio-init",
     "infra:fixtures": "docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures up -d --build --wait postgres minio fixture-harness && docker compose --env-file .env -f infra/docker-compose.yml run --rm minio-init",
-    "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures down"
+    "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures down",
+    "db:migrate": "node --env-file=.env packages/db/dist/migrate-cli.js",
+    "start:api": "node --env-file=.env apps/api/dist/server.js",
+    "start:worker-pulse": "node --env-file=.env apps/worker-pulse/dist/main.js",
+    "start:web": "node --env-file=.env apps/web/node_modules/next/dist/bin/next start apps/web --port 3000",
+    "dev:web": "node --env-file=.env apps/web/node_modules/next/dist/bin/next dev apps/web --port 3000",
+    "e2e": "pnpm --filter @codesentra/e2e e2e",
+    "openapi": "pnpm --filter @codesentra/api openapi"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",

@@ -1,59 +1,83 @@
 # CodeSentra architecture
 
 The kickoff document (Sections 1–20) is the source of truth. This file records what
-exists in the repository right now and how the pieces fit together.
+exists in the repository now and how the pieces fit together. Decisions are in
+[`decisions/`](decisions/), and the HTTP API is in [`api.md`](api.md) and [`openapi.json`](openapi.json).
 
-## Current state: Phase 0 (fixtures and skeleton)
+## Current state: Phase 1 (foundation)
 
 ```
-codesentra/
-  packages/
-    core/       finding codes and declarations, evidence/report/claim schemas, enums,
-                fingerprints, Pulse status rule, issue re-check lifecycle
-    config/     per-service env validation (fails fast, rejects placeholders)
-  fixtures/
-    apps/       6 Next.js static-export apps, each with a fixture.json
-    harness/    serves the apps + failure simulators; Chromium self-test
-    repos/      ts-taskboard, py-notes-api (scan input in repo/, expected.json beside it)
-  infra/
-    docker-compose.yml   postgres 16, minio (+ bucket init), fixture harness (profile)
-  docs/
-    decisions/  ADRs 0001–0006
+Browser ──► apps/web (Next.js) ──/api/* proxy──► apps/api (Fastify) ──► Postgres 16
+                                                     │   ▲              (RLS, pg-boss)
+                                                     │   └── LISTEN cs_run_events ◄──┐
+                                                     └── enqueue (job id = run id)    │
+                                                                                      │
+                                             apps/worker-pulse ── step runner ── NOTIFY
+                                                     └── object storage (MinIO / S3)
 ```
 
-Not built yet: `apps/*`, `packages/{db,queue,graph,parsers,checks,claims,prompts,sandbox,ssrf}`,
-and `infra/{sandbox,pulse}`. They arrive in the phases listed in Section 18.
+```
+apps/
+  api/            Fastify + Zod, OpenAPI 3.1, auth, orgs, projects, runs, SSE, 501s for later phases
+  web/            Next.js App Router: sign-in, projects, new project, project, run (live), settings
+  worker-pulse/   runs `system.diagnostic` now; Pulse checks in Phase 2
+packages/
+  core/           finding codes, schemas, fingerprints, status rules, deriveRunStatus
+  config/         per-service env validation; integrations optional outside production
+  db/             Drizzle schema + migrations, RLS, withOrg(), run/step queries, test DB helper
+  queue/          pg-boss client, job specs, worker runtime, progress events, diagnostic job
+  storage/        S3 client (MinIO-compatible)
+e2e/              Playwright gate: real Postgres + MinIO + API + worker + web
+fixtures/         Phase 0 fixture apps, harness and repos
+```
 
-## Contracts already fixed
+Not built yet: `apps/{worker-scan,worker-link,cli}`, and
+`packages/{graph,parsers,checks,claims,prompts,sandbox,ssrf}`.
 
-- **Finding codes** (`@codesentra/core`): `SCAN_CODES`, `PULSE_CODES`, and
-  `FINDING_CODE_DECLARATIONS` (module, default severity, prompt type, trace requirement,
-  merge specificity, re-check descriptor). Codes are the stable contract; titles may change.
-- **Evidence**: `EvidenceKind`, `EvidenceInput { kind, locator, payload }`, and
-  `evidenceHash = sha256(kind \n locator \n canonicalJson(payload))`.
-- **Fingerprint**: `sha256(code \n normalizeLocator(module, locator) [\n normalizedMessage])`,
-  in `@codesentra/core/hashing`.
-- **Status rule**: `computePulseStatus({ main, groups, findings })` returns `{ status, gaps }`.
-- **Lifecycle**: `nextIssueStatus(current, { checkGroupRan, observed })`.
-- **LLM output schemas**: `ReportDraftSchema` and `FeatureProposalSchema`. Every claim is
-  `{ text, evidence_ids[] }`.
+## Request path
 
-## Fixture harness
+1. The browser only ever talks to `PUBLIC_APP_URL`. `/api/*` is streamed to the API
+   (ADR 0011), so the session cookie is first-party.
+2. The API resolves `cs_session` to a user (hashed lookup). Every state-changing request must
+   carry the app's Origin and a JSON body (ADR 0010).
+3. Routes authorize first: membership and role, with 404 for anything outside the caller's
+   orgs. Then they read and write through `db.withOrg(orgId)`, where Postgres RLS filters
+   every statement (ADR 0009).
+4. Long operations create a `run` with ordered `run_steps`, enqueue a pg-boss job whose id is
+   the run id, and answer `202 { run_id }`.
 
-`startHarness()` binds 127.0.0.1 ephemeral ports, or sequential ports from `HARNESS_BASE_PORT`.
-It returns `targets.apps[name].url`, `targets.simulators[name].url`, the throwaway CA PEM,
-and `setVariant(app, variant)`. `pnpm fixtures:serve` prints the targets as JSON. In
-compose, the harness listens on `localhost:4100+`.
+## Run lifecycle
+
+`queued → running → succeeded | partial | failed`. The worker claims the job, marks the run
+running, and executes declared steps through `ctx.step()`. Each transition commits together
+with a `pg_notify`, and the API's single listener pushes full run snapshots over
+`GET /v1/runs/{id}/stream`. A skipped step must carry a reason and makes the run
+`partial`. A final failed attempt marks unstarted steps skipped with the reason. A sweep
+fails runs whose job died (ADR 0012).
+
+## Data model (Phase 1 tables)
+
+`organizations`, `users`, `memberships`, `auth_identities`, `sessions`, `magic_link_tokens`,
+`projects`, `environments`, `runs`, `run_steps`, `audit_log`. All tables have `id`,
+`created_at` and `updated_at`. Tenant tables have `org_id` with RLS, and children use composite
+`(org_id, parent_id)` foreign keys. The other Section 6 tables arrive with the phases that use them.
 
 ## Local development
 
 ```sh
 pnpm install
-cp .env.example .env   # fill in values; POSTGRES_PASSWORD and S3_* are enough for infra
-pnpm infra:up          # postgres + minio
-pnpm build && pnpm test
-pnpm fixtures:serve    # or: pnpm infra:fixtures (containerised)
+cp .env.example .env     # set POSTGRES_PASSWORD, DATABASE_URL, SESSION_SECRET, ENCRYPTION_KEY,
+                         # PUBLIC_APP_URL=http://localhost:3000, EMAIL_TRANSPORT=outbox, S3_* for MinIO
+pnpm infra:up            # postgres + minio + bucket
+pnpm build
+pnpm db:migrate
+pnpm start:api & pnpm start:worker-pulse & pnpm start:web
+# sign in at http://localhost:3000/signin; the link is written to .outbox/*.json
 ```
 
-Behind a TLS-intercepting proxy, build the harness image with
-`docker build --secret id=extra_ca,src=<ca.pem> -f fixtures/harness/Dockerfile -t codesentra-fixture-harness .`
+## Tests
+
+- `pnpm test`: unit tests, plus integration tests on Testcontainers Postgres and MinIO (db
+  RLS attacks, queue end to end, API including cross-org access on every route), plus the
+  Phase 0 fixture gate.
+- `pnpm e2e`: the Phase 1 gate in Chromium against the real stack.

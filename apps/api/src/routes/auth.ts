@@ -25,6 +25,18 @@ export function authRoutes(ctx: AppContext): FastifyPluginAsyncZod {
   return async (app) => {
     const appUrl = ctx.config.PUBLIC_APP_URL.replace(/\/$/, "");
 
+    app.get(
+      "/v1/auth/providers",
+      {
+        schema: {
+          tags: ["auth"],
+          summary: "Which sign-in methods this server has configured",
+          response: { 200: z.object({ email: z.boolean(), github: z.boolean() }) },
+        },
+      },
+      async () => ({ email: ctx.email !== null, github: ctx.config.integrations.github_oauth }),
+    );
+
     app.post(
       "/v1/auth/email",
       {

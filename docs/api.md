@@ -14,6 +14,7 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | GET | `/v1/auth/github` | Start GitHub sign-in | 302, 501 |
 | GET | `/v1/auth/github/callback` | GitHub OAuth callback | 302, 501 |
 | POST | `/v1/auth/logout` | End the session | 204 |
+| GET | `/v1/auth/providers` | Which sign-in methods this server has configured | 200 |
 | GET | `/v1/evidence/{id}` | One evidence record (Phase 2) | 401, 404, 501 |
 | GET | `/v1/issues/{id}` | Issue with traces, history, blast radius (Phase 2) | 401, 404, 501 |
 | POST | `/v1/issues/{id}/dismiss` | Dismiss with reason (Phase 2) | 401, 404, 501 |

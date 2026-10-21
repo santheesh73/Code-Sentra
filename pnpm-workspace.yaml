@@ -3,5 +3,6 @@ packages:
   - packages/*
   - fixtures/apps/*
   - fixtures/harness
+  - e2e
 # fixtures/repos/* are scan *inputs* and are deliberately not workspace members:
 # their dependencies (some intentionally vulnerable) must never be installed here.

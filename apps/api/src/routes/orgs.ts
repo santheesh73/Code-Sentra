@@ -62,14 +62,12 @@ export function orgRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             .returning();
           if (!o) throw new Error("org insert failed");
           await tx.insert(s.memberships).values({ orgId: o.id, userId: user.id, role: "owner" });
-          await tx
-            .insert(s.auditLog)
-            .values({
-              orgId: o.id,
-              actorId: user.id,
-              action: "organization.created",
-              target: `organization:${o.id}`,
-            });
+          await tx.insert(s.auditLog).values({
+            orgId: o.id,
+            actorId: user.id,
+            action: "organization.created",
+            target: `organization:${o.id}`,
+          });
           return o;
         });
         return reply
@@ -148,15 +146,15 @@ export function orgRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             target: `user:${u.id}`,
             metadata: { role: req.body.role },
           });
-          return { u, m: inserted[0]! };
+          const m = inserted[0];
+          if (!m) throw new Error("membership insert returned no row");
+          return { u, m };
         });
-        return reply
-          .code(201)
-          .send({
-            user: userDto(member.u),
-            role: member.m.role,
-            joined_at: member.m.createdAt.toISOString(),
-          });
+        return reply.code(201).send({
+          user: userDto(member.u),
+          role: member.m.role,
+          joined_at: member.m.createdAt.toISOString(),
+        });
       },
     );
 
@@ -200,10 +198,11 @@ export function orgRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             target: `user:${m.userId}`,
             metadata: { from: m.role, to: req.body.role },
           });
+          if (!u || !updated) throw new Error("membership update returned no row");
           return {
-            user: userDto(u!),
-            role: updated!.role,
-            joined_at: updated!.createdAt.toISOString(),
+            user: userDto(u),
+            role: updated.role,
+            joined_at: updated.createdAt.toISOString(),
           };
         });
       },

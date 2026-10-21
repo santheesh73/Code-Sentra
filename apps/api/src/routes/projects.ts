@@ -94,27 +94,24 @@ export function projectRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             .returning();
           if (!p) throw new Error("project insert failed");
           if (req.body.environments.length > 0) {
-            await tx
-              .insert(s.environments)
-              .values(
-                req.body.environments.map((e) => ({
-                  orgId: access.orgId,
-                  projectId: p.id,
-                  name: e.name,
-                  url: e.url,
-                })),
-              );
+            await tx.insert(s.environments).values(
+              req.body.environments.map((e) => ({
+                orgId: access.orgId,
+                projectId: p.id,
+                name: e.name,
+                url: e.url,
+              })),
+            );
           }
-          await tx
-            .insert(s.auditLog)
-            .values({
-              orgId: access.orgId,
-              actorId: access.user.id,
-              action: "project.created",
-              target: `project:${p.id}`,
-            });
+          await tx.insert(s.auditLog).values({
+            orgId: access.orgId,
+            actorId: access.user.id,
+            action: "project.created",
+            target: `project:${p.id}`,
+          });
           const [out] = await loadProjects(tx, [p.id]);
-          return out!;
+          if (!out) throw new Error("created project not readable");
+          return out;
         });
         return reply.code(201).send(dto);
       },
@@ -242,7 +239,8 @@ export function projectRoutes(ctx: AppContext): FastifyPluginAsyncZod {
                 url: req.body.url,
               })
               .returning();
-            return e!;
+            if (!e) throw new Error("environment insert returned no row");
+            return e;
           });
           return reply.code(201).send(environmentDto(env));
         } catch (e) {

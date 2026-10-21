@@ -4,6 +4,8 @@
 #   pnpm infra:fixtures    # also the fixture harness on localhost:4100+
 #
 # Reads ../.env (copy ../.env.example). All ports bind to 127.0.0.1 only.
+# Behind a TLS-intercepting proxy, prebuild the harness image with the optional
+# `extra_ca` secret (see docs/architecture.md), then run without --build.
 #
 # api, web, worker-scan, worker-pulse and worker-link are added here as each is
 # built (Phase 1+); they do not exist yet, so they are not listed (Rule 6).
@@ -66,18 +68,12 @@ services:
     build:
       context: ..
       dockerfile: fixtures/harness/Dockerfile
-      secrets: [extra_ca]
     environment:
       HARNESS_HOST: 0.0.0.0
       HARNESS_PUBLIC_HOST: localhost
       HARNESS_BASE_PORT: "4100"
     ports:
       - "127.0.0.1:4100-4130:4100-4130"
-
-secrets:
-  # Only needed behind a TLS-intercepting proxy: EXTRA_CA_FILE=/path/to/ca.pem
-  extra_ca:
-    file: ${EXTRA_CA_FILE:-/dev/null}
 
 volumes:
   postgres-data:

@@ -69,7 +69,10 @@ jobs:
             echo "S3_ACCESS_KEY_ID=ci-$(openssl rand -hex 4)"
             echo "S3_SECRET_ACCESS_KEY=$(openssl rand -hex 20)"
           } > .env
-      - run: docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures up -d --build --wait
+      # Wait only on long-running services: `up --wait` exits 1 when the one-shot minio-init finishes.
+      - run: docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures up -d --build --wait postgres minio fixture-harness
+      - name: Create bucket
+        run: docker compose --env-file .env -f infra/docker-compose.yml run --rm minio-init
       - name: Smoke-test the harness
         run: curl -fsS http://localhost:4100/ -o /dev/null
       - if: always()

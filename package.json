@@ -14,8 +14,8 @@
     "fixtures:build": "turbo run build --filter=./fixtures/apps/*",
     "fixtures:serve": "pnpm --filter @codesentra/fixture-harness start",
     "gate:phase0": "pnpm --filter @codesentra/fixture-harness gate",
-    "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d --wait",
-    "infra:fixtures": "docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures up -d --build --wait",
+    "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d --wait postgres minio && docker compose --env-file .env -f infra/docker-compose.yml run --rm minio-init",
+    "infra:fixtures": "docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures up -d --build --wait postgres minio fixture-harness && docker compose --env-file .env -f infra/docker-compose.yml run --rm minio-init",
     "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures down"
   },
   "devDependencies": {

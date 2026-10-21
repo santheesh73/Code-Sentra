@@ -1,6 +1,6 @@
 # Local development infrastructure.
 #
-#   pnpm infra:up          # postgres + minio (+ bucket)
+#   pnpm infra:up          # postgres + minio, then `run --rm minio-init` for the bucket
 #   pnpm infra:fixtures    # also the fixture harness on localhost:4100+
 #
 # Reads ../.env (copy ../.env.example). All ports bind to 127.0.0.1 only.

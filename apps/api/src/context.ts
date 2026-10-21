@@ -1,0 +1,21 @@
+import type { ServiceEnv } from "@codesentra/config";
+import type { Database } from "@codesentra/db";
+import type { QueueClient, RunEventListener } from "@codesentra/queue";
+import type { AuthService } from "./auth/service.js";
+import type { Authz } from "./authz.js";
+import type { EmailTransport } from "./email.js";
+import type { CookieSettings } from "./session-plugin.js";
+
+export interface AppContext {
+  config: ServiceEnv<"api">;
+  db: Database;
+  auth: AuthService;
+  authz: Authz;
+  queue: QueueClient;
+  events: RunEventListener;
+  /** null when the email integration is not configured. */
+  email: EmailTransport | null;
+  cookie: CookieSettings;
+  /** Injected for GitHub OAuth so tests can point at a local fake. */
+  fetch: typeof fetch;
+}

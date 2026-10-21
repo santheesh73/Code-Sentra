@@ -1,0 +1,166 @@
+import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import { z } from "zod";
+import { requireUser } from "../authz.js";
+import type { AppContext } from "../context.js";
+import { notImplemented, Problem } from "../errors.js";
+
+type Scope = "project" | "run" | "user" | "none";
+
+interface Unbuilt {
+  method: "GET" | "POST" | "DELETE";
+  url: string;
+  summary: string;
+  phase: string;
+  scope: Scope;
+}
+
+/**
+ * Section 12 endpoints that later phases build. They authenticate and authorize like
+ * the real thing (so cross-org tests cover them) and then answer 501 (Rule 6).
+ */
+export const UNBUILT: Unbuilt[] = [
+  {
+    method: "POST",
+    url: "/v1/projects/:id/snapshots",
+    summary: "Upload a zip or register a git ref",
+    phase: "Phase 3",
+    scope: "project",
+  },
+  {
+    method: "POST",
+    url: "/v1/projects/:id/scan",
+    summary: "Start Sentra Scan",
+    phase: "Phase 3",
+    scope: "project",
+  },
+  {
+    method: "POST",
+    url: "/v1/projects/:id/pulse",
+    summary: "Start Sentra Pulse on an environment",
+    phase: "Phase 2",
+    scope: "project",
+  },
+  {
+    method: "POST",
+    url: "/v1/projects/:id/check",
+    summary: "Full check: Scan + Pulse, then Link",
+    phase: "Phase 4",
+    scope: "project",
+  },
+  {
+    method: "GET",
+    url: "/v1/projects/:id/issues",
+    summary: "Issues for a project",
+    phase: "Phase 2",
+    scope: "project",
+  },
+  {
+    method: "POST",
+    url: "/v1/projects/:id/schedules",
+    summary: "Create a recurring Pulse",
+    phase: "Phase 5",
+    scope: "project",
+  },
+  {
+    method: "GET",
+    url: "/v1/projects/:id/schedules",
+    summary: "List schedules",
+    phase: "Phase 5",
+    scope: "project",
+  },
+  {
+    method: "DELETE",
+    url: "/v1/projects/:id/schedules",
+    summary: "Delete a schedule",
+    phase: "Phase 5",
+    scope: "project",
+  },
+  {
+    method: "GET",
+    url: "/v1/runs/:id/report",
+    summary: "Scan report",
+    phase: "Phase 3",
+    scope: "run",
+  },
+  {
+    method: "GET",
+    url: "/v1/runs/:id/findings",
+    summary: "Findings for a run",
+    phase: "Phase 2",
+    scope: "run",
+  },
+  {
+    method: "POST",
+    url: "/v1/pulse",
+    summary: "One-off Pulse on any public URL",
+    phase: "Phase 2",
+    scope: "user",
+  },
+  {
+    method: "GET",
+    url: "/v1/issues/:id",
+    summary: "Issue with traces, history, blast radius",
+    phase: "Phase 2",
+    scope: "user",
+  },
+  {
+    method: "GET",
+    url: "/v1/issues/:id/fix-prompt",
+    summary: "Latest fix prompt",
+    phase: "Phase 2",
+    scope: "user",
+  },
+  {
+    method: "POST",
+    url: "/v1/issues/:id/recheck",
+    summary: "Targeted re-check",
+    phase: "Phase 4",
+    scope: "user",
+  },
+  {
+    method: "POST",
+    url: "/v1/issues/:id/dismiss",
+    summary: "Dismiss with reason",
+    phase: "Phase 2",
+    scope: "user",
+  },
+  {
+    method: "GET",
+    url: "/v1/evidence/:id",
+    summary: "One evidence record",
+    phase: "Phase 2",
+    scope: "user",
+  },
+  {
+    method: "POST",
+    url: "/v1/webhooks/github",
+    summary: "GitHub App webhooks",
+    phase: "Phase 5",
+    scope: "none",
+  },
+];
+
+export function unbuiltRoutes(ctx: AppContext): FastifyPluginAsyncZod {
+  return async (app) => {
+    for (const r of UNBUILT) {
+      const hasId = r.url.includes(":id");
+      app.route({
+        method: r.method,
+        url: r.url,
+        schema: {
+          tags: ["not yet available"],
+          summary: `${r.summary} (${r.phase})`,
+          ...(hasId ? { params: z.object({ id: z.uuid() }) } : {}),
+          response: { 401: Problem, 404: Problem, 501: Problem },
+        },
+        handler: async (req) => {
+          const id = (req.params as { id?: string }).id ?? "";
+          if (r.scope === "project") await ctx.authz.requireProject(req, id);
+          else if (r.scope === "run") await ctx.authz.requireRun(req, id);
+          else if (r.scope === "user") requireUser(req);
+          throw notImplemented(r.summary, r.phase);
+        },
+      });
+    }
+  };
+}

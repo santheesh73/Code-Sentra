@@ -4,11 +4,13 @@ import { startHarness } from "./harness.js";
 
 const basePort = process.env.HARNESS_BASE_PORT ? Number(process.env.HARNESS_BASE_PORT) : undefined;
 const host = process.env.HARNESS_HOST ?? "127.0.0.1";
+const publicHost = process.env.HARNESS_PUBLIC_HOST;
 const caOut = process.env.HARNESS_CA_OUT;
 
 const harness = await startHarness({
   host,
   basePort,
+  publicHost,
   log: (line) => process.stderr.write(`[harness] ${line}\n`),
 });
 

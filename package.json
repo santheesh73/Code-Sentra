@@ -13,7 +13,10 @@
     "format": "biome format --write .",
     "fixtures:build": "turbo run build --filter=./fixtures/apps/*",
     "fixtures:serve": "pnpm --filter @codesentra/fixture-harness start",
-    "gate:phase0": "pnpm --filter @codesentra/fixture-harness gate"
+    "gate:phase0": "pnpm --filter @codesentra/fixture-harness gate",
+    "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d --wait",
+    "infra:fixtures": "docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures up -d --build --wait",
+    "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures down"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",

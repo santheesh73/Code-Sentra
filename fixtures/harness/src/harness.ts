@@ -40,6 +40,8 @@ export interface HarnessTargets {
 export interface HarnessOptions {
   /** Bind address. Defaults to 127.0.0.1; the harness is never exposed beyond the host by default. */
   host?: string;
+  /** Host name used in advertised URLs (e.g. "localhost" when bound to 0.0.0.0 in a container). */
+  publicHost?: string;
   /** If set, servers bind sequential ports from here; otherwise ephemeral ports. */
   basePort?: number;
   /** Delay for the `slow` simulator, ms (Pulse SLOW_RESPONSE default threshold is 3000). */
@@ -69,6 +71,7 @@ type Handler = (req: IncomingMessage, res: ServerResponse) => void;
 
 export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> {
   const host = opts.host ?? "127.0.0.1";
+  const publicHost = opts.publicHost ?? (host === "0.0.0.0" ? "localhost" : host);
   const slowMs = opts.slowMs ?? 3500;
   const log = opts.log ?? (() => {});
   const apps = opts.apps ?? loadFixtureApps();
@@ -91,7 +94,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     });
     return (server.address() as AddressInfo).port;
   };
-  const httpUrl = (port: number, path = "/") => `http://${host}:${port}${path}`;
+  const httpUrl = (port: number, path = "/") => `http://${publicHost}:${port}${path}`;
   const http = async (handler: Handler) => httpUrl(await listen(createServer(handler)));
   const https = async (pair: CertPair) => {
     const port = await listen(
@@ -99,7 +102,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
         sendHtml(res, 200, "TLS simulator"),
       ),
     );
-    return `https://${host === "127.0.0.1" ? "localhost" : host}:${port}/`;
+    return `https://${publicHost === "127.0.0.1" ? "localhost" : publicHost}:${port}/`;
   };
 
   // --- Fixture apps -------------------------------------------------------

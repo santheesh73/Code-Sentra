@@ -1,0 +1,8 @@
+[project]
+name = "py-notes-api"
+version = "0.3.0"
+description = "A small FastAPI service for personal notes"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -143,7 +143,8 @@ describe(".env.example", () => {
       .map((l) => /^([A-Z0-9_]+)=/.exec(l)?.[1])
       .filter((k): k is string => Boolean(k))
       .sort();
-    const known = ALL_ENV_KEYS.filter((k) => k !== "NODE_ENV").sort();
+    const composeOnly = ["POSTGRES_PASSWORD"];
+    const known = [...ALL_ENV_KEYS.filter((k) => k !== "NODE_ENV"), ...composeOnly].sort();
     expect(documented).toEqual(known);
   });
 

@@ -2,7 +2,14 @@ import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ALL_ENV_KEYS, ConfigError, isPlaceholder, loadConfig, SERVICE_ENV } from "./index.js";
+import {
+  ALL_ENV_KEYS,
+  ConfigError,
+  INTEGRATIONS,
+  isPlaceholder,
+  loadConfig,
+  SERVICE_ENV,
+} from "./index.js";
 
 function validEnv(): Record<string, string> {
   const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -135,6 +142,81 @@ describe("loadConfig", () => {
   });
 });
 
+describe("integrations (ADR 0007)", () => {
+  const core = () => {
+    const env = validEnv();
+    return {
+      NODE_ENV: "development",
+      DATABASE_URL: env.DATABASE_URL,
+      SESSION_SECRET: env.SESSION_SECRET,
+      ENCRYPTION_KEY: env.ENCRYPTION_KEY,
+      PUBLIC_APP_URL: env.PUBLIC_APP_URL,
+    } as Record<string, string>;
+  };
+
+  it("disables absent integrations outside production", () => {
+    const cfg = loadConfig("api", core());
+    expect(cfg.integrations).toMatchObject({
+      s3: false,
+      github_oauth: false,
+      github_app: false,
+      email: false,
+      slack: false,
+    });
+    expect(cfg.S3_BUCKET).toBeUndefined();
+  });
+
+  it("requires every declared integration in production", () => {
+    try {
+      loadConfig("api", { ...core(), NODE_ENV: "production" });
+      expect.unreachable();
+    } catch (e) {
+      const keys = (e as ConfigError).problems.map((p) => p.key);
+      for (const k of [
+        "S3_BUCKET",
+        "GITHUB_OAUTH_CLIENT_ID",
+        "EMAIL_PROVIDER_API_KEY",
+        "SLACK_CLIENT_SECRET",
+      ]) {
+        expect(keys).toContain(k);
+      }
+    }
+    expect(loadConfig("api", { ...validEnv(), NODE_ENV: "production" }).integrations.s3).toBe(true);
+  });
+
+  it("rejects a partially configured integration", () => {
+    expect(() => loadConfig("api", { ...core(), S3_BUCKET: "codesentra" })).toThrow(
+      /partially configured/,
+    );
+  });
+
+  it("enables a fully configured integration", () => {
+    const env = validEnv();
+    const cfg = loadConfig("api", {
+      ...core(),
+      GITHUB_OAUTH_CLIENT_ID: env.GITHUB_OAUTH_CLIENT_ID,
+      GITHUB_OAUTH_CLIENT_SECRET: env.GITHUB_OAUTH_CLIENT_SECRET,
+    });
+    expect(cfg.integrations.github_oauth).toBe(true);
+    expect(cfg.GITHUB_OAUTH_BASE_URL).toBe("https://github.com");
+  });
+
+  it("allows the email outbox only outside production", () => {
+    expect(loadConfig("api", { ...core(), EMAIL_TRANSPORT: "outbox" }).integrations.email).toBe(
+      true,
+    );
+    expect(() =>
+      loadConfig("api", { ...validEnv(), NODE_ENV: "production", EMAIL_TRANSPORT: "outbox" }),
+    ).toThrow(/outbox is not allowed in production/);
+  });
+
+  it("applies defaults to non-secret settings", () => {
+    const cfg = loadConfig("api", core());
+    expect(cfg.API_PORT).toBe(4000);
+    expect(cfg.EMAIL_TRANSPORT).toBe("resend");
+  });
+});
+
 describe(".env.example", () => {
   it("documents exactly the variables the schema knows", () => {
     const path = fileURLToPath(new URL("../../../.env.example", import.meta.url));
@@ -144,14 +226,21 @@ describe(".env.example", () => {
       .filter((k): k is string => Boolean(k))
       .sort();
     const composeOnly = ["POSTGRES_PASSWORD"];
-    const known = [...ALL_ENV_KEYS.filter((k) => k !== "NODE_ENV"), ...composeOnly].sort();
+    const known = [...ALL_ENV_KEYS, ...composeOnly].sort();
     expect(documented).toEqual(known);
   });
 
   it("every schema variable is used by at least one service or is optional", () => {
-    const used = new Set<string>(Object.values(SERVICE_ENV).flat());
+    const used = new Set<string>(
+      Object.values(SERVICE_ENV).flatMap((s) => [
+        ...s.required,
+        ...s.settings,
+        ...s.integrations.flatMap((i) => INTEGRATIONS[i]),
+      ]),
+    );
     for (const k of ALL_ENV_KEYS) {
-      if (["NODE_ENV", "SENTRY_DSN", "OTEL_EXPORTER_OTLP_ENDPOINT"].includes(k)) continue;
+      if (["NODE_ENV", "LOG_LEVEL", "SENTRY_DSN", "OTEL_EXPORTER_OTLP_ENDPOINT"].includes(k))
+        continue;
       expect(used.has(k), k).toBe(true);
     }
   });

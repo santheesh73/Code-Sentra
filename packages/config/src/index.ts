@@ -54,11 +54,18 @@ const pemKey = () =>
     .transform((v) => v.replace(/\\n/g, "\n"))
     .refine((v) => /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(v), "must be a PEM private key");
 
+const port = (fallback: number) => z.coerce.number().int().min(1).max(65535).default(fallback);
+
 export const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   DATABASE_URL: postgresUrl(),
   SESSION_SECRET: secret(32),
   ENCRYPTION_KEY: encryptionKey(),
+  PUBLIC_APP_URL: url(),
+  API_HOST: z.string().default("127.0.0.1"),
+  API_PORT: port(4000),
+  API_INTERNAL_URL: url().default("http://127.0.0.1:4000"),
   S3_ENDPOINT: url(),
   S3_BUCKET: secret(3),
   S3_ACCESS_KEY_ID: secret(3),
@@ -67,14 +74,17 @@ export const EnvSchema = z.object({
   ANTHROPIC_MODEL: secret(1),
   GITHUB_OAUTH_CLIENT_ID: secret(1),
   GITHUB_OAUTH_CLIENT_SECRET: secret(10),
+  GITHUB_OAUTH_BASE_URL: url().default("https://github.com"),
+  GITHUB_API_BASE_URL: url().default("https://api.github.com"),
   GITHUB_APP_ID: z.string().regex(/^\d+$/, "must be the numeric GitHub App id"),
   GITHUB_APP_PRIVATE_KEY: pemKey(),
   GITHUB_WEBHOOK_SECRET: secret(16),
+  EMAIL_TRANSPORT: z.enum(["resend", "outbox"]).default("resend"),
+  EMAIL_OUTBOX_DIR: z.string().min(1).default(".outbox"),
   EMAIL_FROM: z.email(),
   EMAIL_PROVIDER_API_KEY: secret(8),
   SLACK_CLIENT_ID: secret(1),
   SLACK_CLIENT_SECRET: secret(8),
-  PUBLIC_APP_URL: url(),
   SANDBOX_RUNTIME: z.enum(["runsc", "runc"]),
   SENTRY_DSN: url().optional(),
   OTEL_EXPORTER_OTLP_ENDPOINT: url().optional(),
@@ -83,72 +93,90 @@ export const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema>;
 export type EnvKey = keyof Env;
 
-const ALWAYS: EnvKey[] = ["NODE_ENV", "SENTRY_DSN", "OTEL_EXPORTER_OTLP_ENDPOINT"];
+/**
+ * External integrations. In production every integration a service declares is
+ * required. Elsewhere an integration may be entirely absent: it is then reported as
+ * disabled and the feature it powers answers 501 "not configured" (ADR 0007). A
+ * partially configured integration is always an error.
+ */
+export const INTEGRATIONS = {
+  s3: ["S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"],
+  github_oauth: ["GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET"],
+  github_app: ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET"],
+  email: ["EMAIL_FROM", "EMAIL_PROVIDER_API_KEY"],
+  slack: ["SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET"],
+  anthropic: ["ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"],
+} as const satisfies Record<string, readonly EnvKey[]>;
+export type Integration = keyof typeof INTEGRATIONS;
+
+/** Non-secret settings with safe defaults; validated when present. */
+const ALWAYS = [
+  "NODE_ENV",
+  "LOG_LEVEL",
+  "SENTRY_DSN",
+  "OTEL_EXPORTER_OTLP_ENDPOINT",
+] as const satisfies readonly EnvKey[];
+
+interface ServiceSpec {
+  required: readonly EnvKey[];
+  settings: readonly EnvKey[];
+  integrations: readonly Integration[];
+}
 
 /**
- * Variables each service needs. A service validates exactly these at startup, so a
- * scan worker does not need Slack credentials (ADR 0003). The union covers every
- * variable in `.env.example`.
+ * What each service validates at startup (ADR 0003). A scan worker never sees Slack
+ * credentials; a Pulse worker never sees the Anthropic key.
  */
 export const SERVICE_ENV = {
-  api: [
-    "DATABASE_URL",
-    "SESSION_SECRET",
-    "ENCRYPTION_KEY",
-    "S3_ENDPOINT",
-    "S3_BUCKET",
-    "S3_ACCESS_KEY_ID",
-    "S3_SECRET_ACCESS_KEY",
-    "GITHUB_OAUTH_CLIENT_ID",
-    "GITHUB_OAUTH_CLIENT_SECRET",
-    "GITHUB_APP_ID",
-    "GITHUB_APP_PRIVATE_KEY",
-    "GITHUB_WEBHOOK_SECRET",
-    "EMAIL_FROM",
-    "EMAIL_PROVIDER_API_KEY",
-    "SLACK_CLIENT_ID",
-    "SLACK_CLIENT_SECRET",
-    "PUBLIC_APP_URL",
-  ],
-  web: ["PUBLIC_APP_URL", "SESSION_SECRET"],
-  "worker-scan": [
-    "DATABASE_URL",
-    "ENCRYPTION_KEY",
-    "S3_ENDPOINT",
-    "S3_BUCKET",
-    "S3_ACCESS_KEY_ID",
-    "S3_SECRET_ACCESS_KEY",
-    "GITHUB_APP_ID",
-    "GITHUB_APP_PRIVATE_KEY",
-    "SANDBOX_RUNTIME",
-  ],
-  "worker-pulse": [
-    "DATABASE_URL",
-    "ENCRYPTION_KEY",
-    "S3_ENDPOINT",
-    "S3_BUCKET",
-    "S3_ACCESS_KEY_ID",
-    "S3_SECRET_ACCESS_KEY",
-  ],
-  "worker-link": [
-    "DATABASE_URL",
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_MODEL",
-    "GITHUB_APP_ID",
-    "GITHUB_APP_PRIVATE_KEY",
-    "EMAIL_FROM",
-    "EMAIL_PROVIDER_API_KEY",
-    "SLACK_CLIENT_ID",
-    "SLACK_CLIENT_SECRET",
-    "PUBLIC_APP_URL",
-  ],
-} as const satisfies Record<string, readonly EnvKey[]>;
+  api: {
+    required: ["DATABASE_URL", "SESSION_SECRET", "ENCRYPTION_KEY", "PUBLIC_APP_URL"],
+    settings: [
+      "API_HOST",
+      "API_PORT",
+      "GITHUB_OAUTH_BASE_URL",
+      "GITHUB_API_BASE_URL",
+      "EMAIL_TRANSPORT",
+      "EMAIL_OUTBOX_DIR",
+    ],
+    integrations: ["s3", "github_oauth", "github_app", "email", "slack"],
+  },
+  web: {
+    required: ["PUBLIC_APP_URL"],
+    settings: ["API_INTERNAL_URL"],
+    integrations: [],
+  },
+  "worker-scan": {
+    required: ["DATABASE_URL", "ENCRYPTION_KEY", "SANDBOX_RUNTIME"],
+    settings: [],
+    integrations: ["s3", "github_app"],
+  },
+  "worker-pulse": {
+    required: ["DATABASE_URL", "ENCRYPTION_KEY"],
+    settings: [],
+    integrations: ["s3"],
+  },
+  "worker-link": {
+    required: ["DATABASE_URL", "PUBLIC_APP_URL"],
+    settings: ["EMAIL_TRANSPORT", "EMAIL_OUTBOX_DIR"],
+    integrations: ["anthropic", "github_app", "email", "slack"],
+  },
+} as const satisfies Record<string, ServiceSpec>;
 
 export type Service = keyof typeof SERVICE_ENV;
+
+type IntegrationKeysOf<S extends Service> =
+  (typeof INTEGRATIONS)[(typeof SERVICE_ENV)[S]["integrations"][number]][number];
+
 export type ServiceEnv<S extends Service> = Pick<
   Env,
-  (typeof SERVICE_ENV)[S][number] | (typeof ALWAYS)[number]
->;
+  | (typeof SERVICE_ENV)[S]["required"][number]
+  | (typeof SERVICE_ENV)[S]["settings"][number]
+  | (typeof ALWAYS)[number]
+> &
+  Partial<Pick<Env, IntegrationKeysOf<S>>> & {
+    /** Which declared integrations are configured. Undeclared ones are always false. */
+    integrations: Record<Integration, boolean>;
+  };
 
 export class ConfigError extends Error {
   constructor(
@@ -162,33 +190,75 @@ export class ConfigError extends Error {
   }
 }
 
+const present = (env: Record<string, string | undefined>, k: string) =>
+  env[k] !== undefined && env[k] !== "";
+
 /**
- * Validates the variables a service needs. Throws ConfigError listing every
- * problem at once; never substitutes defaults for secrets. Values are never
- * included in error messages.
+ * Validates the variables a service needs. Throws ConfigError listing every problem
+ * at once; never substitutes defaults for secrets; never includes values in errors.
  */
 export function loadConfig<S extends Service>(
   service: S,
   env: Record<string, string | undefined> = process.env,
 ): ServiceEnv<S> {
-  const keys = [...SERVICE_ENV[service], ...ALWAYS];
-  const mask = Object.fromEntries(keys.map((k) => [k, true])) as { [K in EnvKey]?: true };
+  const spec: ServiceSpec = SERVICE_ENV[service];
+  const production = env.NODE_ENV === "production";
+  const problems: { key: string; message: string }[] = [];
+  const integrations = Object.fromEntries(
+    Object.keys(INTEGRATIONS).map((k) => [k, false]),
+  ) as Record<Integration, boolean>;
+
+  const keys = new Set<EnvKey>([...spec.required, ...spec.settings, ...ALWAYS]);
+  const outbox = env.EMAIL_TRANSPORT === "outbox";
+  if (production && outbox && spec.settings.includes("EMAIL_TRANSPORT")) {
+    problems.push({ key: "EMAIL_TRANSPORT", message: "outbox is not allowed in production" });
+  }
+
+  for (const name of spec.integrations) {
+    const groupKeys: readonly EnvKey[] = INTEGRATIONS[name];
+    // The outbox transport needs no provider key; email is then "configured" locally.
+    if (name === "email" && outbox && !production) {
+      integrations.email = true;
+      if (present(env, "EMAIL_FROM")) keys.add("EMAIL_FROM");
+      continue;
+    }
+    const set = groupKeys.filter((k) => present(env, k));
+    if (production || set.length > 0) {
+      for (const k of groupKeys) keys.add(k);
+      integrations[name] = true;
+      if (!production && set.length < groupKeys.length) {
+        const missing = groupKeys.filter((k) => !present(env, k));
+        for (const k of missing) {
+          problems.push({
+            key: k,
+            message: `is required because ${name} is partially configured (set all of ${groupKeys.join(", ")} or none)`,
+          });
+        }
+      }
+    }
+  }
+
+  const mask = Object.fromEntries([...keys].map((k) => [k, true])) as { [K in EnvKey]?: true };
   const schema = EnvSchema.pick(mask);
   const input = Object.fromEntries(
-    keys.map((k) => {
+    [...keys].map((k) => {
       const v = env[k];
       return [k, v === "" ? undefined : v];
     }),
   );
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    const problems = parsed.error.issues.map((i) => ({
-      key: String(i.path[0] ?? "(root)"),
-      message: i.code === "invalid_type" && i.input === undefined ? "is required" : i.message,
-    }));
-    throw new ConfigError(service, problems);
+    for (const i of parsed.error.issues) {
+      const key = String(i.path[0] ?? "(root)");
+      if (problems.some((p) => p.key === key)) continue;
+      problems.push({
+        key,
+        message: i.code === "invalid_type" && i.input === undefined ? "is required" : i.message,
+      });
+    }
   }
-  return parsed.data as ServiceEnv<S>;
+  if (problems.length > 0) throw new ConfigError(service, problems);
+  return { ...(parsed.data as object), integrations } as ServiceEnv<S>;
 }
 
 /** Every variable name, for `.env.example` drift checks. */

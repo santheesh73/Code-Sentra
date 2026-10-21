@@ -6,7 +6,8 @@ export type Severity = z.infer<typeof Severity>;
 export const Module = z.enum(["scan", "pulse"]);
 export type Module = z.infer<typeof Module>;
 
-export const RunType = z.enum(["scan", "pulse", "link", "recheck"]);
+/** `diagnostic` verifies the platform itself (DB, queue, storage) end to end (ADR 0008). */
+export const RunType = z.enum(["scan", "pulse", "link", "recheck", "diagnostic"]);
 export type RunType = z.infer<typeof RunType>;
 
 export const RunTrigger = z.enum(["manual", "webhook", "schedule", "cli"]);
@@ -46,6 +47,7 @@ export const JobType = z.enum([
   "link.run",
   "issue.recheck",
   "schedule.tick",
+  "system.diagnostic",
 ]);
 export type JobType = z.infer<typeof JobType>;
 

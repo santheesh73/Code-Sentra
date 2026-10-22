@@ -523,6 +523,8 @@ importers:
         specifier: 12.2.1
         version: 12.2.1
 
+  packages/sandbox: {}
+
   packages/scan:
     dependencies:
       '@codesentra/core':

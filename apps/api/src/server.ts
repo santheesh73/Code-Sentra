@@ -4,12 +4,20 @@ import { GithubApp } from "@codesentra/github";
 import { type EmailTransport, outboxTransport, resendTransport } from "@codesentra/notify";
 import { createRunEventListener, startQueueClient } from "@codesentra/queue";
 import { objectStoreFromEnv } from "@codesentra/storage";
+import { initTelemetry } from "@codesentra/telemetry/init";
 import pino from "pino";
 import { buildApp } from "./app.js";
 import { createAuthService } from "./auth/service.js";
 import { createAuthz } from "./authz.js";
 
 const config = loadConfig("api");
+// Tracing (OTLP) and error reporting (Sentry), each only when configured (Section 19).
+const telemetry = initTelemetry({
+  service: "api",
+  environment: config.NODE_ENV,
+  otlpEndpoint: config.OTEL_EXPORTER_OTLP_ENDPOINT,
+  sentryDsn: config.SENTRY_DSN,
+});
 const log = pino({
   level: config.LOG_LEVEL,
   redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'],
@@ -82,6 +90,7 @@ const shutdown = async (signal: string) => {
   await events.close();
   await queue.stop();
   await db.close();
+  await telemetry.shutdown();
   process.exit(0);
 };
 process.on("SIGTERM", () => void shutdown("SIGTERM"));

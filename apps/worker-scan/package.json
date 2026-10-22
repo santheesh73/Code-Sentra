@@ -21,7 +21,8 @@
     "@codesentra/scan": "workspace:*",
     "@codesentra/ssrf": "workspace:*",
     "@codesentra/storage": "workspace:*",
-    "pino": "10.4.0"
+    "pino": "10.4.0",
+    "@codesentra/telemetry": "workspace:*"
   },
   "devDependencies": {
     "@codesentra/fixture-harness": "workspace:*"

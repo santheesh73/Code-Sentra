@@ -1,3 +1,4 @@
+import { withSpan } from "@codesentra/telemetry";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
@@ -54,6 +55,17 @@ export async function buildApp(
   app.setSerializerCompiler(serializerCompiler);
 
   const routes: RegisteredRoute[] = [];
+  // Every handler runs in a span named by its route (Section 19), so jobs it enqueues
+  // carry the request's trace to the workers.
+  app.addHook("onRoute", (r) => {
+    const handler = r.handler;
+    const name = `${[r.method].flat().join(",")} ${r.url}`;
+    r.handler = function traced(this: unknown, req, reply) {
+      return withSpan(name, { "http.route": r.url, "http.request.method": req.method }, () =>
+        Promise.resolve((handler as (...a: unknown[]) => unknown).call(this, req, reply)),
+      );
+    } as typeof r.handler;
+  });
   app.addHook("onRoute", (r) => {
     if (r.url.startsWith("/v1/") || r.url === "/health") {
       for (const m of [r.method].flat()) if (m !== "HEAD") routes.push({ method: m, url: r.url });

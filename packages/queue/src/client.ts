@@ -1,4 +1,5 @@
 import { JobType } from "@codesentra/core";
+import { currentTraceparent } from "@codesentra/telemetry";
 import { PgBoss } from "pg-boss";
 import { JOB_SPECS, type RunJobPayload, timeoutFor } from "./jobs.js";
 
@@ -50,7 +51,11 @@ export async function startQueueClient(
   return {
     boss,
     async enqueue(type, payload) {
-      const data = JOB_SPECS[type].payload.parse(payload);
+      const traceparent = payload.traceparent ?? currentTraceparent();
+      const data = JOB_SPECS[type].payload.parse({
+        ...payload,
+        ...(traceparent ? { traceparent } : {}),
+      });
       const id = await boss.send(type, data, { id: data.runId });
       return id !== null;
     },

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { useOrg } from "@/components/app-shell";
+import { AuditCard, GithubCard, TokensCard } from "@/components/org-integrations";
 import {
   Button,
   Card,
@@ -11,7 +12,6 @@ import {
   Input,
   Label,
   Notice,
-  NotYetAvailable,
   Select,
   Spinner,
 } from "@/components/ui/primitives";
@@ -100,13 +100,13 @@ export default function SettingsPage() {
 
       <CreateOrg />
 
-      <Card className="flex flex-col gap-3">
-        <CardTitle>Integrations</CardTitle>
-        <NotYetAvailable feature="GitHub App installation" phase="Phase 5" />
-        <NotYetAvailable feature="Schedules" phase="Phase 5" />
-        <NotYetAvailable feature="Email and Slack notifications" phase="Phase 5" />
-        <NotYetAvailable feature="API tokens" phase="Phase 5" />
-      </Card>
+      <GithubCard org={org} />
+      <TokensCard org={org} />
+      <p className="text-sm text-muted-foreground">
+        Schedules, notifications and the GitHub repository are set per project, under the project's
+        Settings.
+      </p>
+      <AuditCard org={org} />
     </div>
   );
 }

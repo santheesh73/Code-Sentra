@@ -97,6 +97,9 @@ export interface Project {
   repo_url: string | null;
   default_branch: string | null;
   platform: string | null;
+  /** owner/repo the GitHub App reports check runs for. */
+  github_repo: string | null;
+  check_on_push: boolean;
   environments: Environment[];
   latest_run: RunSummary | null;
   /** The latest finished Scan; null until one has run. */
@@ -338,4 +341,53 @@ export async function uploadZip(projectId: string, file: File): Promise<Snapshot
         (res.status === 413 ? "The zip is larger than this server accepts" : undefined),
     });
   return data;
+}
+
+export interface Schedule {
+  id: string;
+  project_id: string;
+  environment_id: string;
+  cron: string;
+  run_type: "pulse";
+  enabled: boolean;
+  next_run_at: string;
+  last_run_id: string | null;
+  last_run_at: string | null;
+  last_error: string | null;
+  created_at: string;
+}
+export interface NotificationChannel {
+  id: string;
+  project_id: string;
+  kind: "email" | "slack";
+  label: string;
+  enabled: boolean;
+  last_error: string | null;
+  created_at: string;
+}
+export interface ApiToken {
+  id: string;
+  org_id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+}
+export interface GithubInstallations {
+  configured: boolean;
+  installations: {
+    installation_id: number;
+    account: string | null;
+    repositories: string[];
+    suspended: boolean;
+  }[];
+}
+export interface AuditEntry {
+  id: string;
+  actor_id: string | null;
+  action: string;
+  target: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
 }

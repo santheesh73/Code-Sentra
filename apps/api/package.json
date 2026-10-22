@@ -28,7 +28,8 @@
     "fastify-type-provider-zod": "7.0.0",
     "pino": "10.4.0",
     "zod": "4.6.7",
-    "@codesentra/notify": "workspace:*"
+    "@codesentra/notify": "workspace:*",
+    "@codesentra/telemetry": "workspace:*"
   },
   "devDependencies": {
     "@codesentra/fixture-harness": "workspace:*",
@@ -38,6 +39,7 @@
     "@types/yazl": "3.3.1",
     "playwright-core": "1.64.1",
     "yazl": "3.3.1",
-    "@codesentra/cli": "workspace:*"
+    "@codesentra/cli": "workspace:*",
+    "@opentelemetry/sdk-trace-base": "2.11.0"
   }
 }

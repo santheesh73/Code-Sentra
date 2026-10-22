@@ -1,3 +1,4 @@
+import { reportError } from "@codesentra/telemetry";
 import type { FastifyError, FastifyInstance, FastifyReply } from "fastify";
 import {
   hasZodFastifySchemaValidationErrors,
@@ -103,7 +104,10 @@ export function registerErrorHandling(app: FastifyInstance): void {
     }
     const status =
       err.statusCode && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500;
-    if (status >= 500) req.log.error({ err }, "unhandled error");
+    if (status >= 500) {
+      req.log.error({ err }, "unhandled error");
+      reportError(err, { route: req.routeOptions.url ?? "unknown" });
+    }
     return sendProblem(reply, {
       type:
         TYPE_BASE + (status === 429 ? "rate-limited" : status >= 500 ? "internal" : "bad-request"),

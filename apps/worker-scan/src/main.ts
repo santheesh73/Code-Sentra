@@ -7,9 +7,17 @@ import { anthropicModel, apiSource, offlineSource, type ReportModel } from "@cod
 import { scanHandler } from "@codesentra/scan/job";
 import { defaultPolicy, type FetchPolicy, testPolicy } from "@codesentra/ssrf";
 import { objectStoreFromEnv } from "@codesentra/storage";
+import { initTelemetry } from "@codesentra/telemetry/init";
 import pino from "pino";
 
 const config = loadConfig("worker-scan");
+// Tracing (OTLP) and error reporting (Sentry), each only when configured (Section 19).
+const telemetry = initTelemetry({
+  service: "worker-scan",
+  environment: config.NODE_ENV,
+  otlpEndpoint: config.OTEL_EXPORTER_OTLP_ENDPOINT,
+  sentryDsn: config.SENTRY_DSN,
+});
 const log = pino({ level: config.LOG_LEVEL, base: { service: "worker-scan" } });
 
 const store = objectStoreFromEnv(config);
@@ -115,6 +123,7 @@ const shutdown = async (signal: string) => {
   await worker.stop();
   await queue.stop();
   await db.close();
+  await telemetry.shutdown();
   process.exit(0);
 };
 process.on("SIGTERM", () => void shutdown("SIGTERM"));

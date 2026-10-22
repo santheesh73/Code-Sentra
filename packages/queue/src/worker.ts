@@ -13,6 +13,7 @@ import {
   startStep,
   type TenantTx,
 } from "@codesentra/db";
+import { reportError, withSpan, withTraceparent } from "@codesentra/telemetry";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { JobWithMetadata } from "pg-boss";
 import type { QueueClient } from "./client.js";
@@ -122,7 +123,26 @@ export async function startWorker(opts: WorkerOptions): Promise<Worker> {
     }
   };
 
-  const runJob = async (type: JobType, handler: JobHandler, job: JobWithMetadata<unknown>) => {
+  const runJob = (type: JobType, handler: JobHandler, job: JobWithMetadata<unknown>) => {
+    const traceparent = (job.data as { traceparent?: string } | null)?.traceparent;
+    return withTraceparent(traceparent, () =>
+      withSpan(
+        `job ${type}`,
+        {
+          "codesentra.job": type,
+          "codesentra.run_id": String((job.data as { runId?: string } | null)?.runId ?? ""),
+          "codesentra.attempt": job.retryCount + 1,
+        },
+        () => runJobInSpan(type, handler, job),
+      ),
+    );
+  };
+
+  const runJobInSpan = async (
+    type: JobType,
+    handler: JobHandler,
+    job: JobWithMetadata<unknown>,
+  ) => {
     const payload = JOB_SPECS[type].payload.parse(job.data);
     const started = await db.withOrg(payload.orgId, async (tx) => {
       const ok = await markRunRunning(tx, payload.runId);
@@ -166,13 +186,22 @@ export async function startWorker(opts: WorkerOptions): Promise<Worker> {
       async step(name, fn) {
         declared(name);
         await emitStep(db, payload, name, (tx) => startStep(tx, payload.runId, name), "running");
-        let outcome: StepOutcome;
-        try {
-          if (job.signal.aborted) throw new Error("job timed out before the step started");
-          outcome = await fn({ signal: job.signal, run });
-        } catch (e) {
-          outcome = { status: "failed", error: (e as Error).message || String(e) };
-        }
+        const outcome = await withSpan(
+          `step ${name}`,
+          { "codesentra.run_id": payload.runId, "codesentra.step": name },
+          async (span): Promise<StepOutcome> => {
+            let o: StepOutcome;
+            try {
+              if (job.signal.aborted) throw new Error("job timed out before the step started");
+              o = await fn({ signal: job.signal, run });
+            } catch (e) {
+              o = { status: "failed", error: (e as Error).message || String(e) };
+            }
+            span.setAttribute("codesentra.step_status", o.status);
+            if (o.status === "skipped") span.setAttribute("codesentra.gap_reason", o.gapReason);
+            return o;
+          },
+        );
         await emitStep(
           db,
           payload,
@@ -213,6 +242,7 @@ export async function startWorker(opts: WorkerOptions): Promise<Worker> {
         "job failed",
       );
       if (finalAttempt) {
+        reportError(e, { job: type, run_id: payload.runId });
         await db.withOrg(payload.orgId, async (tx) => {
           await failRun(tx, payload.runId, (e as Error).message);
           await publishRunEvent(tx, { kind: "run", ...payload, status: "failed" });

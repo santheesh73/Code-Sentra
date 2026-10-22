@@ -401,6 +401,12 @@ importers:
         specifier: 0.31.11
         version: 0.31.11
 
+  packages/prompts:
+    dependencies:
+      '@codesentra/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/queue:
     dependencies:
       '@codesentra/core':

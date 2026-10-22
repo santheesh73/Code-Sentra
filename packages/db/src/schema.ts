@@ -1,4 +1,17 @@
-import { MembershipRole, RunStatus, RunStepStatus, RunTrigger, RunType } from "@codesentra/core";
+import {
+  EvidenceKind,
+  FindingCode,
+  IssueEventKind,
+  IssueStatus,
+  MembershipRole,
+  Module,
+  PromptType,
+  RunStatus,
+  RunStepStatus,
+  RunTrigger,
+  RunType,
+  Severity,
+} from "@codesentra/core";
 import { sql } from "drizzle-orm";
 import {
   check,
@@ -33,6 +46,13 @@ export const runType = pgEnum("run_type", values(RunType.options));
 export const runTrigger = pgEnum("run_trigger", values(RunTrigger.options));
 export const runStatus = pgEnum("run_status", values(RunStatus.options));
 export const runStepStatus = pgEnum("run_step_status", values(RunStepStatus.options));
+export const evidenceKind = pgEnum("evidence_kind", values(EvidenceKind.options));
+export const findingSource = pgEnum("finding_source", values(Module.options));
+export const findingCode = pgEnum("finding_code", values(FindingCode.options));
+export const severity = pgEnum("severity", values(Severity.options));
+export const issueStatus = pgEnum("issue_status", values(IssueStatus.options));
+export const issueEventKind = pgEnum("issue_event_kind", values(IssueEventKind.options));
+export const promptType = pgEnum("prompt_type", values(PromptType.options));
 
 // --- Identity (not tenant-owned) -------------------------------------------------
 
@@ -173,6 +193,8 @@ export const runs = pgTable(
     startedAt: tz("started_at"),
     finishedAt: tz("finished_at"),
     error: text("error"),
+    /** Module-specific result summary, e.g. { pulse_status, gaps, platform, final_url } for Pulse. */
+    outcome: jsonb("outcome"),
   },
   (t) => [
     foreignKey({
@@ -237,6 +259,171 @@ export const auditLog = pgTable(
   (t) => [index().on(t.orgId, t.createdAt)],
 );
 
+// --- Evidence, findings, issues (Phase 2) ---------------------------------------
+
+/** Rule 3: Scan and Pulse write to this one table. Payloads never contain secrets. */
+export const evidence = pgTable(
+  "evidence",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    kind: evidenceKind("kind").notNull(),
+    locator: text("locator").notNull(),
+    payload: jsonb("payload").notNull(),
+    /** sha256 of kind + locator + canonical payload. */
+    hash: text("hash").notNull(),
+  },
+  (t) => [
+    foreignKey({
+      name: "evidence_run_fk",
+      columns: [t.orgId, t.runId],
+      foreignColumns: [runs.orgId, runs.id],
+    }).onDelete("cascade"),
+    unique("evidence_org_id_id_key").on(t.orgId, t.id),
+    index().on(t.runId),
+  ],
+);
+
+export const findings = pgTable(
+  "findings",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    source: findingSource("source").notNull(),
+    code: findingCode("code").notNull(),
+    severity: severity("severity").notNull(),
+    evidenceId: uuid("evidence_id").notNull(),
+    locator: text("locator").notNull(),
+    discriminator: text("discriminator"),
+    message: text("message").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+  },
+  (t) => [
+    foreignKey({
+      name: "findings_run_fk",
+      columns: [t.orgId, t.runId],
+      foreignColumns: [runs.orgId, runs.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "findings_evidence_fk",
+      columns: [t.orgId, t.evidenceId],
+      foreignColumns: [evidence.orgId, evidence.id],
+    }).onDelete("cascade"),
+    unique("findings_org_id_id_key").on(t.orgId, t.id),
+    index().on(t.runId),
+  ],
+);
+
+export const issues = pgTable(
+  "issues",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    /** Pulse issues belong to the environment whose URL showed them. */
+    environmentId: uuid("environment_id"),
+    fingerprint: text("fingerprint").notNull(),
+    title: text("title").notNull(),
+    code: findingCode("code").notNull(),
+    /** Codes of findings merged into this issue because they share evidence (Section 10c). */
+    corroboratingCodes: text("corroborating_codes").array().notNull().default(sql`'{}'::text[]`),
+    severity: severity("severity").notNull(),
+    status: issueStatus("status").notNull().default("open"),
+    locator: text("locator").notNull(),
+    summary: text("summary").notNull(),
+    firstSeenRunId: uuid("first_seen_run_id").notNull(),
+    lastSeenRunId: uuid("last_seen_run_id").notNull(),
+    resolvedRunId: uuid("resolved_run_id"),
+    /** { module, check_group, target, expectation } (Section 10d). */
+    recheck: jsonb("recheck").notNull(),
+    dismissedReason: text("dismissed_reason"),
+  },
+  (t) => [
+    foreignKey({
+      name: "issues_project_fk",
+      columns: [t.orgId, t.projectId],
+      foreignColumns: [projects.orgId, projects.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "issues_environment_fk",
+      columns: [t.orgId, t.environmentId],
+      foreignColumns: [environments.orgId, environments.id],
+    }).onDelete("cascade"),
+    unique("issues_project_fingerprint_key").on(t.projectId, t.fingerprint),
+    unique("issues_org_id_id_key").on(t.orgId, t.id),
+    index().on(t.projectId, t.status),
+  ],
+);
+
+export const issueEvents = pgTable(
+  "issue_events",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    issueId: uuid("issue_id").notNull(),
+    runId: uuid("run_id"),
+    kind: issueEventKind("kind").notNull(),
+    actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
+    note: text("note"),
+  },
+  (t) => [
+    foreignKey({
+      name: "issue_events_issue_fk",
+      columns: [t.orgId, t.issueId],
+      foreignColumns: [issues.orgId, issues.id],
+    }).onDelete("cascade"),
+    index().on(t.issueId, t.createdAt),
+  ],
+);
+
+/** Links an issue to the findings that showed it in each run. */
+export const issueFindings = pgTable(
+  "issue_findings",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    issueId: uuid("issue_id").notNull(),
+    findingId: uuid("finding_id").notNull(),
+  },
+  (t) => [
+    foreignKey({
+      name: "issue_findings_issue_fk",
+      columns: [t.orgId, t.issueId],
+      foreignColumns: [issues.orgId, issues.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "issue_findings_finding_fk",
+      columns: [t.orgId, t.findingId],
+      foreignColumns: [findings.orgId, findings.id],
+    }).onDelete("cascade"),
+    unique("issue_findings_key").on(t.issueId, t.findingId),
+  ],
+);
+
+export const fixPrompts = pgTable(
+  "fix_prompts",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    issueId: uuid("issue_id").notNull(),
+    version: integer("version").notNull(),
+    type: promptType("type").notNull(),
+    body: text("body").notNull(),
+    blastRadius: jsonb("blast_radius").notNull().default([]),
+    templateVersion: text("template_version").notNull(),
+  },
+  (t) => [
+    foreignKey({
+      name: "fix_prompts_issue_fk",
+      columns: [t.orgId, t.issueId],
+      foreignColumns: [issues.orgId, issues.id],
+    }).onDelete("cascade"),
+    unique("fix_prompts_issue_version_key").on(t.issueId, t.version),
+  ],
+);
+
 /** Tables with an `org_id` column, protected by the tenant RLS policy. */
 export const TENANT_TABLES = [
   "memberships",
@@ -245,4 +432,10 @@ export const TENANT_TABLES = [
   "runs",
   "run_steps",
   "audit_log",
+  "evidence",
+  "findings",
+  "issues",
+  "issue_events",
+  "issue_findings",
+  "fix_prompts",
 ] as const;

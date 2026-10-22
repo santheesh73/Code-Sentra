@@ -419,6 +419,16 @@ importers:
         specifier: 12.2.1
         version: 12.2.1
 
+  packages/ssrf:
+    dependencies:
+      ipaddr.js:
+        specifier: 2.5.0
+        version: 2.5.0
+    devDependencies:
+      '@codesentra/fixture-harness':
+        specifier: workspace:*
+        version: link:../../fixtures/harness
+
   packages/storage:
     dependencies:
       '@aws-sdk/client-s3':

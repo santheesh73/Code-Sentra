@@ -536,6 +536,9 @@ importers:
       '@codesentra/parsers':
         specifier: workspace:*
         version: link:../parsers
+      '@codesentra/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
       '@codesentra/ssrf':
         specifier: workspace:*
         version: link:../ssrf

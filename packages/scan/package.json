@@ -23,6 +23,7 @@
     "@codesentra/core": "workspace:*",
     "@codesentra/graph": "workspace:*",
     "@codesentra/parsers": "workspace:*",
+    "@codesentra/sandbox": "workspace:*",
     "@codesentra/ssrf": "workspace:*",
     "yauzl": "3.4.0",
     "yazl": "3.3.1"

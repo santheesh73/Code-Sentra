@@ -231,17 +231,15 @@ describe("scan persistence", () => {
     const r = await scanRun("hash-5");
     await expect(
       t.db.withOrg(orgA, (tx) =>
-        tx
-          .insert(s.claims)
-          .values({
-            orgId: orgA,
-            reportId: r.reportId,
-            position: 9,
-            section: "x",
-            text: "x",
-            evidenceIds: [],
-            verified: false,
-          }),
+        tx.insert(s.claims).values({
+          orgId: orgA,
+          reportId: r.reportId,
+          position: 9,
+          section: "x",
+          text: "x",
+          evidenceIds: [],
+          verified: false,
+        }),
       ),
     ).rejects.toMatchObject({
       cause: expect.objectContaining({

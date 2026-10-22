@@ -180,39 +180,36 @@ export async function persistScanResult(
       } => !!e.from && !!e.to,
     );
   for (let i = 0; i < edgeRows.length; i += CHUNK)
-    await tx
-      .insert(codeEdges)
-      .values(
-        edgeRows
-          .slice(i, i + CHUNK)
-          .map((e) => ({
-            orgId: input.orgId,
-            snapshotId: input.snapshotId,
-            fromId: e.from,
-            toId: e.to,
-            kind: e.kind,
-            weight: e.weight,
-          })),
-      );
+    await tx.insert(codeEdges).values(
+      edgeRows.slice(i, i + CHUNK).map((e) => ({
+        orgId: input.orgId,
+        snapshotId: input.snapshotId,
+        fromId: e.from,
+        toId: e.to,
+        kind: e.kind,
+        weight: e.weight,
+      })),
+    );
 
   if (input.features.length)
-    await tx
-      .insert(features)
-      .values(
-        input.features.map((f) => ({
-          orgId: input.orgId,
-          snapshotId: input.snapshotId,
-          runId: input.runId,
-          name: f.name.slice(0, 200),
-          status: f.status,
-          reason: f.reason,
-          evidenceIds: ids(f.evidenceKeys),
-        })),
-      );
+    await tx.insert(features).values(
+      input.features.map((f) => ({
+        orgId: input.orgId,
+        snapshotId: input.snapshotId,
+        runId: input.runId,
+        name: f.name.slice(0, 200),
+        status: f.status,
+        reason: f.reason,
+        evidenceIds: ids(f.evidenceKeys),
+      })),
+    );
 
   const sections: Record<string, { text: string; evidence_ids: string[] }[]> = {};
-  for (const c of input.claims.filter((x) => x.verified))
-    (sections[c.section] ??= []).push({ text: c.text, evidence_ids: ids(c.evidenceKeys) });
+  for (const c of input.claims.filter((x) => x.verified)) {
+    const list = sections[c.section] ?? [];
+    list.push({ text: c.text, evidence_ids: ids(c.evidenceKeys) });
+    sections[c.section] = list;
+  }
   const [report] = await tx
     .insert(reports)
     .values({

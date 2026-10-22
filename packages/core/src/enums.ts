@@ -57,6 +57,9 @@ export type PulseCheckGroup = z.infer<typeof PulseCheckGroup>;
 
 /** Scan pipeline stages (Section 8); each is a run_step. */
 export const ScanStage = z.enum(["ingest", "map", "history", "probe", "inventory", "explain"]);
+/** Steps of a Link run (Section 10): trace, widen, prompt, verify. */
+export const LinkStep = z.enum(["trace", "widen", "prompt", "verify"]);
+export type LinkStep = z.infer<typeof LinkStep>;
 export type ScanStage = z.infer<typeof ScanStage>;
 
 /** Scan probes that can be re-checked individually. */

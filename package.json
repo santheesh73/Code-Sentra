@@ -21,6 +21,7 @@
     "start:api": "node --env-file=.env apps/api/dist/server.js",
     "start:worker-pulse": "node --env-file=.env apps/worker-pulse/dist/main.js",
     "start:worker-scan": "node --env-file=.env apps/worker-scan/dist/main.js",
+    "start:worker-link": "node --env-file=.env apps/worker-link/dist/main.js",
     "start:web": "node --env-file=.env apps/web/node_modules/next/dist/bin/next start apps/web --port 3000",
     "dev:web": "node --env-file=.env apps/web/node_modules/next/dist/bin/next dev apps/web --port 3000",
     "e2e": "pnpm --filter @codesentra/e2e e2e",

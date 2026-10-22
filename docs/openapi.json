@@ -413,6 +413,18 @@
               "null"
             ]
           },
+          "parent_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "error": {
             "type": [
               "string",
@@ -472,6 +484,7 @@
           "trigger",
           "status",
           "target_url",
+          "parent_run_id",
           "error",
           "created_at",
           "started_at",
@@ -551,6 +564,18 @@
               "null"
             ]
           },
+          "parent_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "error": {
             "type": [
               "string",
@@ -623,6 +648,12 @@
                 "reason"
               ]
             }
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunSummaryInput"
+            }
           }
         },
         "required": [
@@ -634,13 +665,15 @@
           "trigger",
           "status",
           "target_url",
+          "parent_run_id",
           "error",
           "created_at",
           "started_at",
           "finished_at",
           "outcome",
           "steps",
-          "gaps"
+          "gaps",
+          "children"
         ]
       },
       "ProjectInput": {
@@ -786,6 +819,26 @@
         },
         "required": [
           "run_id"
+        ]
+      },
+      "LinkedRunAcceptedInput": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "link_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "The Link run that follows it and updates the project's issues"
+          }
+        },
+        "required": [
+          "run_id",
+          "link_run_id"
         ]
       },
       "EvidenceInput": {
@@ -1363,6 +1416,94 @@
             "items": {
               "$ref": "#/components/schemas/FindingInput"
             }
+          },
+          "traces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "line": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "symbol": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "excerpt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "join_key": {
+                  "type": "string"
+                },
+                "env_vars": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "documented": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "documented"
+                    ]
+                  }
+                },
+                "run_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              "required": [
+                "path",
+                "line",
+                "symbol",
+                "excerpt",
+                "join_key",
+                "env_vars",
+                "run_id"
+              ]
+            }
+          },
+          "blast_radius": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "reason"
+              ]
+            }
           }
         },
         "required": [
@@ -1386,7 +1527,9 @@
           "updated_at",
           "prompt",
           "events",
-          "observed"
+          "observed",
+          "traces",
+          "blast_radius"
         ]
       },
       "RunFindingsInput": {
@@ -2428,6 +2571,18 @@
               "null"
             ]
           },
+          "parent_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "error": {
             "type": [
               "string",
@@ -2487,6 +2642,7 @@
           "trigger",
           "status",
           "target_url",
+          "parent_run_id",
           "error",
           "created_at",
           "started_at",
@@ -2567,6 +2723,18 @@
               "null"
             ]
           },
+          "parent_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "error": {
             "type": [
               "string",
@@ -2640,6 +2808,12 @@
               ],
               "additionalProperties": false
             }
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            }
           }
         },
         "required": [
@@ -2651,13 +2825,15 @@
           "trigger",
           "status",
           "target_url",
+          "parent_run_id",
           "error",
           "created_at",
           "started_at",
           "finished_at",
           "outcome",
           "steps",
-          "gaps"
+          "gaps",
+          "children"
         ],
         "additionalProperties": false
       },
@@ -2806,6 +2982,27 @@
         },
         "required": [
           "run_id"
+        ],
+        "additionalProperties": false
+      },
+      "LinkedRunAccepted": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "link_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "The Link run that follows it and updates the project's issues"
+          }
+        },
+        "required": [
+          "run_id",
+          "link_run_id"
         ],
         "additionalProperties": false
       },
@@ -3390,6 +3587,97 @@
             "items": {
               "$ref": "#/components/schemas/Finding"
             }
+          },
+          "traces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "line": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "symbol": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "excerpt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "join_key": {
+                  "type": "string"
+                },
+                "env_vars": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "documented": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "documented"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "run_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              "required": [
+                "path",
+                "line",
+                "symbol",
+                "excerpt",
+                "join_key",
+                "env_vars",
+                "run_id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "blast_radius": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -3413,7 +3701,9 @@
           "updated_at",
           "prompt",
           "events",
-          "observed"
+          "observed",
+          "traces",
+          "blast_radius"
         ],
         "additionalProperties": false
       },
@@ -5573,7 +5863,7 @@
         "tags": [
           "pulse"
         ],
-        "description": "Checks the environment's deploy URL: reachability, platform, rendering, routes and hygiene. Findings become issues with fix prompts.",
+        "description": "Checks the environment's deploy URL: reachability, platform, rendering, routes (including the latest Scan's routes) and hygiene. A Link run follows: findings become issues with fix prompts, traced to code when the project has a Scan, and earlier issues are re-checked.",
         "requestBody": {
           "required": true,
           "content": {
@@ -5612,7 +5902,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunAccepted"
+                  "$ref": "#/components/schemas/LinkedRunAccepted"
                 }
               }
             }
@@ -5862,7 +6152,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunAccepted"
+                  "$ref": "#/components/schemas/LinkedRunAccepted"
                 }
               }
             }
@@ -5935,6 +6225,154 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ScanReport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{id}/check": {
+      "post": {
+        "summary": "Full check: Scan + Pulse in parallel, then Link",
+        "tags": [
+          "link"
+        ],
+        "description": "Scans the given snapshot (else the project's repo_url, else its latest uploaded snapshot) and runs Pulse on every environment (or the one given), in parallel. When both finish, a Link run traces each issue to code, writes its prompt and re-checks earlier issues. Returns the Link run. A module that cannot run (no snapshot, no environment, no object storage) is a gap of the Link run.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "snapshot_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "environment_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/issues/{id}/recheck": {
+      "post": {
+        "summary": "Targeted re-check",
+        "tags": [
+          "issues"
+        ],
+        "description": "Re-runs just the check group the issue's re-check names (Pulse: that group, after reachability and platform; Scan: a new Scan of the project's repo_url), then Link re-evaluates the issue. Returns the Link run.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -6393,58 +6831,6 @@
         }
       }
     },
-    "/v1/projects/{id}/check": {
-      "post": {
-        "summary": "Full check: Scan + Pulse, then Link (Phase 4)",
-        "tags": [
-          "not yet available"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ],
-        "responses": {
-          "401": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v1/projects/{id}/schedules": {
       "post": {
         "summary": "Create a recurring Pulse (Phase 5)",
@@ -6548,58 +6934,6 @@
       },
       "delete": {
         "summary": "Delete a schedule (Phase 5)",
-        "tags": [
-          "not yet available"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ],
-        "responses": {
-          "401": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/issues/{id}/recheck": {
-      "post": {
-        "summary": "Targeted re-check (Phase 4)",
         "tags": [
           "not yet available"
         ],

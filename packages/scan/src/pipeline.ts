@@ -94,6 +94,20 @@ export interface ScanResult {
   };
 }
 
+/**
+ * The Scan check groups (finding-code re-check groups) that actually ran. Link resolves
+ * a Scan issue only when its group is in this list (Section 10d, Rule 2).
+ */
+export function scanGroupsRan(r: Pick<ScanResult, "checks" | "stages">): string[] {
+  const ran = (o: string | undefined) => o === "pass" || o === "fail";
+  const out: string[] = [];
+  if (ran(r.checks.install) || ran(r.checks.build)) out.push("build");
+  for (const g of ["tests", "typecheck", "lint", "dependency_audit", "secrets"])
+    if (ran(r.checks[g])) out.push(g);
+  for (const s of ["map", "history", "inventory"] as const) if (r.stages[s] === "done") out.push(s);
+  return out;
+}
+
 const BUNDLE_LIMIT = 150_000;
 const KIND_PRIORITY = [
   "manifest",

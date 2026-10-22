@@ -131,6 +131,8 @@ const attacks = (): Record<string, Attack> => {
       payload: { snapshot_id: B.snapshot },
     },
     "GET /v1/runs/:id/report": { url: `/v1/runs/${B.run}/report` },
+    "POST /v1/projects/:id/check": { url: `/v1/projects/${B.project}/check`, payload: {} },
+    "POST /v1/issues/:id/recheck": { url: `/v1/issues/${B.issue}/recheck` },
   };
   for (const r of UNBUILT) {
     if (r.scope === "project")

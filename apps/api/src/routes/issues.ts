@@ -116,6 +116,16 @@ export function issueRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             at: e.createdAt.toISOString(),
           })),
           observed: d.observed.map((o) => findingDto(o.finding, o.evidence)),
+          traces: d.traces.map((tr) => ({
+            path: tr.path,
+            line: tr.line,
+            symbol: tr.symbol,
+            excerpt: tr.excerpt,
+            join_key: tr.joinKey,
+            env_vars: tr.envVars as { name: string; documented: boolean }[],
+            run_id: tr.runId,
+          })),
+          blast_radius: d.prompt.blastRadius as { path: string; reason: string }[],
         };
       },
     );

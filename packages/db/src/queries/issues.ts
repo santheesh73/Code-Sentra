@@ -8,11 +8,20 @@ import {
 } from "@codesentra/core";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { TenantTx } from "../client.js";
-import { evidence, findings, fixPrompts, issueEvents, issueFindings, issues } from "../schema.js";
+import {
+  evidence,
+  findings,
+  fixPrompts,
+  issueEvents,
+  issueFindings,
+  issues,
+  traces,
+} from "../schema.js";
 
 export type IssueRow = typeof issues.$inferSelect;
 export type IssueEventRow = typeof issueEvents.$inferSelect;
 export type FixPromptRow = typeof fixPrompts.$inferSelect;
+export type TraceRow = typeof traces.$inferSelect;
 
 export interface IssueDraft {
   fingerprint: string;
@@ -25,6 +34,20 @@ export interface IssueDraft {
   findingIds: string[];
   recheck: RecheckSpec;
   prompt: { type: PromptType; body: string; templateVersion: string };
+  /** Sentra Link's verified trace and blast radius; absent leaves stored traces as they are. */
+  trace?: {
+    joinKey: string;
+    findingId: string | null;
+    sites: {
+      nodeId: string | null;
+      path: string;
+      line: number | null;
+      symbol: string | null;
+      excerpt: string | null;
+    }[];
+    envVars: { name: string; documented: boolean }[];
+    blastRadius: { path: string; reason: string }[];
+  } | null;
 }
 
 export interface SyncResult {
@@ -53,6 +76,8 @@ export async function syncIssues(
     /** Check groups that ran in this run. */
     ranGroups: string[];
     drafts: IssueDraft[];
+    /** The Link run writing the traces (defaults to runId). */
+    traceRunId?: string;
   },
 ): Promise<SyncResult> {
   const result: SyncResult = { opened: [], seen: [], regressed: [], resolved: [] };
@@ -138,8 +163,29 @@ export async function syncIssues(
         version: (latest?.version ?? 0) + 1,
         type: d.prompt.type,
         body: d.prompt.body,
+        blastRadius: d.trace?.blastRadius ?? latest?.blastRadius ?? [],
         templateVersion: d.prompt.templateVersion,
       });
+    }
+    if (d.trace) {
+      await tx.delete(traces).where(eq(traces.issueId, issue.id));
+      if (d.trace.sites.length)
+        await tx.insert(traces).values(
+          d.trace.sites.map((s) => ({
+            orgId: input.orgId,
+            issueId: issue.id,
+            findingId: d.trace?.findingId ?? null,
+            codeNodeId: s.nodeId,
+            runId: input.traceRunId ?? input.runId,
+            joinKey: d.trace?.joinKey ?? "",
+            verified: true,
+            path: s.path,
+            line: s.line,
+            symbol: s.symbol,
+            excerpt: s.excerpt,
+            envVars: d.trace?.envVars ?? [],
+          })),
+        );
     }
   }
 
@@ -190,7 +236,8 @@ export async function listIssues(
   const conds = [eq(issues.projectId, projectId)];
   if (filter.status?.length) conds.push(inArray(issues.status, filter.status));
   if (filter.severity?.length) conds.push(inArray(issues.severity, filter.severity));
-  if (filter.source?.length) conds.push(sql`${issues.recheck}->>'module' = any(${filter.source})`);
+  if (filter.source?.length)
+    conds.push(inArray(sql<string>`${issues.recheck}->>'module'`, filter.source));
   return tx
     .select()
     .from(issues)
@@ -214,7 +261,12 @@ export async function getIssueDetail(tx: TenantTx, issueId: string) {
     .where(and(eq(issueFindings.issueId, issueId), eq(findings.runId, issue.lastSeenRunId)))
     .orderBy(asc(findings.createdAt));
   const prompt = await getFixPrompt(tx, issueId);
-  return { issue, events, observed, prompt };
+  const traceRows = await tx
+    .select()
+    .from(traces)
+    .where(eq(traces.issueId, issueId))
+    .orderBy(asc(traces.path), asc(traces.line));
+  return { issue, events, observed, prompt, traces: traceRows };
 }
 
 export async function getFixPrompt(

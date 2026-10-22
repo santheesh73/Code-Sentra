@@ -1,9 +1,11 @@
+import type { PulseCheckGroup } from "@codesentra/core";
 import {
   persistRunData,
   type RunWithSteps,
   schema as s,
+  scanRoutePaths,
+  scanSourceFor,
   setRunOutcome,
-  syncIssues,
   type TenantTx,
 } from "@codesentra/db";
 import type { JobHandler } from "@codesentra/queue";
@@ -12,7 +14,7 @@ import type { ObjectStore } from "@codesentra/storage";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Browser } from "playwright-core";
 import { draftIssues, findingFingerprint } from "./issues.js";
-import { runPulse } from "./pulse.js";
+import { PULSE_GROUPS, runPulse } from "./pulse.js";
 import type { PulseResult } from "./types.js";
 
 export interface PulseJobDeps {
@@ -22,15 +24,11 @@ export interface PulseJobDeps {
   slowThresholdMs: number;
 }
 
-/** Steps of a project Pulse run; Quick Pulse runs have no project and no `issues` step. */
-export const PULSE_PROJECT_STEPS = [
-  "reachability",
-  "platform",
-  "render",
-  "routes",
-  "hygiene",
-  "issues",
-] as const;
+/**
+ * Steps of a Pulse run: one per check group. Issues are Sentra Link's job (its Link run
+ * opens, re-checks and resolves them, ADR 0019); Quick Pulse renders prompts on read.
+ */
+export const PULSE_STEPS: readonly PulseCheckGroup[] = PULSE_GROUPS;
 
 async function loadContext(tx: TenantTx, run: RunWithSteps["run"]) {
   const [project] = run.projectId
@@ -53,13 +51,21 @@ async function loadContext(tx: TenantTx, run: RunWithSteps["run"]) {
         .orderBy(desc(s.runs.finishedAt))
         .limit(1)
     : [];
-  return { project: project ?? null, env: env ?? null, lastLive: lastLive?.finishedAt ?? null };
+  // Route probes from Scan: static GET routes of the project's latest scanned snapshot.
+  const scan = run.projectId ? await scanSourceFor(tx, run.projectId, null) : null;
+  const scanRoutes = scan ? await scanRoutePaths(tx, scan.snapshotId) : [];
+  return {
+    project: project ?? null,
+    env: env ?? null,
+    lastLive: lastLive?.finishedAt ?? null,
+    scanRoutes,
+  };
 }
 
 /**
- * pulse.run: executes every Pulse check group (each one a run step), stores the
- * screenshot, persists evidence and findings, and for project runs turns them into
- * issues with prompts and re-checks older issues of the same environment.
+ * pulse.run (and issue.recheck): executes the Pulse check groups (each one a run step),
+ * stores the screenshot, and persists evidence and findings. A re-check run carries the
+ * group it targets in its initial outcome and runs only that (plus its prerequisites).
  */
 export function pulseHandler(deps: PulseJobDeps): JobHandler {
   return async (ctx) => {
@@ -67,6 +73,11 @@ export function pulseHandler(deps: PulseJobDeps): JobHandler {
     const orgId = ctx.payload.orgId;
     if (!run.targetUrl) throw new Error("pulse run has no target URL");
     const info = await ctx.db.withOrg(orgId, (tx) => loadContext(tx, run));
+    const recheck = (run.outcome as { recheck?: { check_group?: string } } | null)?.recheck;
+    const only =
+      run.type === "recheck" && recheck?.check_group
+        ? [recheck.check_group as PulseCheckGroup]
+        : undefined;
     const b = await deps.getBrowser();
 
     const result: PulseResult = await runPulse({
@@ -75,6 +86,8 @@ export function pulseHandler(deps: PulseJobDeps): JobHandler {
       browser: b.browser,
       browserUnavailableReason: b.browser ? undefined : b.reason,
       expectedEnvironment: info.env?.name,
+      scanRoutes: info.scanRoutes,
+      onlyGroups: only,
       slowThresholdMs: deps.slowThresholdMs,
       onGroup: async (group, state, detail) => {
         if (state === "running") await ctx.beginStep(group);
@@ -98,16 +111,16 @@ export function pulseHandler(deps: PulseJobDeps): JobHandler {
       }
     }
 
+    // Issues a Quick Pulse (or Link) would draft from these findings, for the outcome count.
     const drafts = draftIssues(result.findings, result.evidence, {
       target: { url: run.targetUrl, environment: info.env?.name ?? null },
-      project: info.project ? { name: info.project.name, repoUrl: info.project.repoUrl } : null,
+      project: null,
       platform: result.platform,
-      lastSuccessfulCheck: info.lastLive ? info.lastLive.toISOString() : null,
+      lastSuccessfulCheck: null,
       scanSummary: null,
     });
-
-    const persisted = await ctx.db.withOrg(orgId, async (tx) => {
-      const p = await persistRunData(tx, {
+    await ctx.db.withOrg(orgId, async (tx) => {
+      await persistRunData(tx, {
         orgId,
         runId: run.id,
         source: "pulse",
@@ -121,33 +134,9 @@ export function pulseHandler(deps: PulseJobDeps): JobHandler {
         final_url: result.finalUrl,
         duration_ms: result.durationMs,
         findings: { total: result.findings.length, issues: drafts.length },
+        groups_ran: result.groups.filter((g) => g.ran).map((g) => g.group),
+        ...(recheck ? { recheck } : {}),
       });
-      return p;
-    });
-
-    if (!run.projectId) return;
-    await ctx.step("issues", async () => {
-      const projectId = run.projectId as string;
-      const r = await ctx.db.withOrg(orgId, (tx) =>
-        syncIssues(tx, {
-          orgId,
-          projectId,
-          environmentId: run.environmentId,
-          runId: run.id,
-          module: "pulse",
-          ranGroups: result.groups.filter((g) => g.ran).map((g) => g.group),
-          drafts: drafts.map((d) => ({
-            ...d,
-            findingIds: d.findingIndexes
-              .map((i) => persisted.findingIds[i])
-              .filter((x): x is string => Boolean(x)),
-          })),
-        }),
-      );
-      return {
-        status: "done",
-        log: `opened ${r.opened.length}, still open ${r.seen.length}, resolved ${r.resolved.length}, regressed ${r.regressed.length}`,
-      };
     });
   };
 }

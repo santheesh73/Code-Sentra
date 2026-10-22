@@ -1,5 +1,5 @@
 import { isTerminalRunStatus } from "@codesentra/core";
-import { getRunWithSteps } from "@codesentra/db";
+import { childRuns, getRunWithSteps, type TenantTx } from "@codesentra/db";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
@@ -8,6 +8,12 @@ import { notFound, Problem } from "../errors.js";
 
 const RunParams = z.object({ id: z.uuid() });
 const HEARTBEAT_MS = 15_000;
+
+async function loadRun(tx: TenantTx, id: string) {
+  const run = await getRunWithSteps(tx, id);
+  if (!run) return null;
+  return { run, children: run.run.type === "link" ? await childRuns(tx, id) : [] };
+}
 
 export function runRoutes(ctx: AppContext): FastifyPluginAsyncZod {
   return async (app) => {
@@ -23,9 +29,9 @@ export function runRoutes(ctx: AppContext): FastifyPluginAsyncZod {
       },
       async (req) => {
         const access = await ctx.authz.requireRun(req, req.params.id);
-        const run = await ctx.db.withOrg(access.orgId, (tx) => getRunWithSteps(tx, req.params.id));
-        if (!run) throw notFound("Run");
-        return runDto(run);
+        const r = await ctx.db.withOrg(access.orgId, (tx) => loadRun(tx, req.params.id));
+        if (!r) throw notFound("Run");
+        return runDto(r.run, r.children);
       },
     );
 
@@ -70,15 +76,15 @@ export function runRoutes(ctx: AppContext): FastifyPluginAsyncZod {
 
         const pushSnapshot = async () => {
           if (closed) return;
-          const run = await ctx.db.withOrg(access.orgId, (tx) => getRunWithSteps(tx, runId));
+          const r = await ctx.db.withOrg(access.orgId, (tx) => loadRun(tx, runId));
           if (closed) return;
-          if (!run) {
+          if (!r) {
             res.write(`event: gone\ndata: {}\n\n`);
             close();
             return;
           }
-          res.write(`event: run\ndata: ${JSON.stringify(runDto(run))}\n\n`);
-          if (isTerminalRunStatus(run.run.status)) close();
+          res.write(`event: run\ndata: ${JSON.stringify(runDto(r.run, r.children))}\n\n`);
+          if (isTerminalRunStatus(r.run.run.status)) close();
         };
         const enqueue = () => {
           chain = chain.then(pushSnapshot).catch((e) => {

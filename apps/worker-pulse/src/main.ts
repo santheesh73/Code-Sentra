@@ -56,18 +56,21 @@ const db = createDatabase(config.DATABASE_URL, { applicationName: "codesentra-wo
 const queue = await startQueueClient(config.DATABASE_URL, {
   onError: (e) => log.error({ err: e.message }, "queue error"),
 });
+const pulse = pulseHandler({
+  policy,
+  store,
+  getBrowser,
+  slowThresholdMs: config.PULSE_SLOW_THRESHOLD_MS,
+});
 const worker = await startWorker({
   db,
   queue,
   log,
   handlers: {
     "system.diagnostic": diagnosticHandler({ store }),
-    "pulse.run": pulseHandler({
-      policy,
-      store,
-      getBrowser,
-      slowThresholdMs: config.PULSE_SLOW_THRESHOLD_MS,
-    }),
+    "pulse.run": pulse,
+    // Targeted re-checks (Section 10d) are Pulse runs of one check group.
+    "issue.recheck": pulse,
   },
 });
 log.info("worker-pulse ready");

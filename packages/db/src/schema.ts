@@ -526,6 +526,42 @@ export const codeEdges = pgTable(
   ],
 );
 
+/**
+ * Verified code locations for an issue (Section 10a), replaced on every Link run that
+ * re-traces it. `code_node_id` survives as null when a later Scan drops the node.
+ */
+export const traces = pgTable(
+  "traces",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    issueId: uuid("issue_id").notNull(),
+    /** The leading finding the join key came from. */
+    findingId: uuid("finding_id").references(() => findings.id, { onDelete: "set null" }),
+    codeNodeId: uuid("code_node_id").references(() => codeNodes.id, { onDelete: "set null" }),
+    /** The Link run that wrote it. */
+    runId: uuid("run_id").notNull(),
+    joinKey: text("join_key").notNull(),
+    verified: boolean("verified").notNull(),
+    path: text("path").notNull(),
+    line: integer("line"),
+    symbol: text("symbol"),
+    excerpt: text("excerpt"),
+    /** [{ name, documented }] for env vars interpolated at the site. */
+    envVars: jsonb("env_vars").notNull().default([]),
+  },
+  (t) => [
+    foreignKey({
+      name: "traces_issue_fk",
+      columns: [t.orgId, t.issueId],
+      foreignColumns: [issues.orgId, issues.id],
+    }).onDelete("cascade"),
+    // Never stored unverified (Rule 1): an untraced issue simply has no rows.
+    check("traces_verified", sql`${t.verified}`),
+    index().on(t.issueId),
+  ],
+);
+
 export const features = pgTable(
   "features",
   {
@@ -628,4 +664,5 @@ export const TENANT_TABLES = [
   "features",
   "reports",
   "claims",
+  "traces",
 ] as const;

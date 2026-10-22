@@ -20,5 +20,6 @@ export {
   type ScanClaim,
   type ScanOptions,
   type ScanResult,
+  scanGroupsRan,
 } from "./pipeline.js";
 export type { EvidenceDraft, FindingDraft } from "./recorder.js";

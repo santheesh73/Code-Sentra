@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "@codesentra/fixture-harness": "workspace:*",
+    "@codesentra/link": "workspace:*",
     "@codesentra/scan": "workspace:*",
     "@testcontainers/postgresql": "12.2.1",
     "@types/yazl": "3.3.1",

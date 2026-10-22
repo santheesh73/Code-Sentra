@@ -37,6 +37,12 @@ export async function runPulse(opts: PulseOptions): Promise<PulseResult> {
     groups.set(group, { group, ran: false, gapReason: reason });
     await opts.onGroup?.(group, "skipped", reason);
   };
+  const wanted = (group: PulseCheckGroup) =>
+    !opts.onlyGroups ||
+    group === "reachability" ||
+    group === "platform" ||
+    opts.onlyGroups.includes(group);
+  const notWanted = `not part of this targeted re-check (${opts.onlyGroups?.join(", ")})`;
   const start = async (group: PulseCheckGroup) => {
     mark = rec.findings.length;
     await opts.onGroup?.(group, "running");
@@ -105,7 +111,9 @@ export async function runPulse(opts: PulseOptions): Promise<PulseResult> {
     } else {
       let links: string[] = linksFromHtml(res.body.toString("utf8"), res.url);
       let screenshot: Buffer | null = null;
-      if (opts.browser) {
+      if (!wanted("render")) {
+        await skip("render", notWanted);
+      } else if (opts.browser) {
         await start("render");
         const r = await checkRender(opts.browser, res.url, opts, rec);
         if (r.ran) {
@@ -123,13 +131,17 @@ export async function runPulse(opts: PulseOptions): Promise<PulseResult> {
         );
       }
 
-      await start("routes");
-      await checkRoutes(res.url, links, opts, rec);
-      await done("routes");
+      if (wanted("routes")) {
+        await start("routes");
+        await checkRoutes(res.url, links, opts, rec);
+        await done("routes");
+      } else await skip("routes", notWanted);
 
-      await start("hygiene");
-      await checkHygiene(res, opts, rec);
-      await done("hygiene");
+      if (wanted("hygiene")) {
+        await start("hygiene");
+        await checkHygiene(res, opts, rec);
+        await done("hygiene");
+      } else await skip("hygiene", notWanted);
     }
   }
 

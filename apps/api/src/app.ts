@@ -13,6 +13,7 @@ import {
 import type { AppContext } from "./context.js";
 import { registerErrorHandling } from "./errors.js";
 import { authRoutes } from "./routes/auth.js";
+import { checkRoutes } from "./routes/check.js";
 import { healthRoutes } from "./routes/health.js";
 import { issueRoutes } from "./routes/issues.js";
 import { orgRoutes } from "./routes/orgs.js";
@@ -108,6 +109,7 @@ export async function buildApp(
   await app.register(runRoutes(ctx));
   await app.register(pulseRoutes(ctx));
   await app.register(scanRoutes(ctx));
+  await app.register(checkRoutes(ctx));
   await app.register(issueRoutes(ctx));
   await app.register(unbuiltRoutes(ctx));
 

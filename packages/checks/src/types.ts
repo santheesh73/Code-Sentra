@@ -47,6 +47,11 @@ export interface PulseOptions {
   expectedEnvironment?: string;
   /** Page and API routes discovered by Scan (Phase 3+). */
   scanRoutes?: string[];
+  /**
+   * A targeted re-check (Section 10d): run only these groups. Reachability and platform
+   * always run (everything depends on them); the rest are skipped with that reason.
+   */
+  onlyGroups?: PulseCheckGroup[];
   /** TTFB above this is SLOW_RESPONSE. Default 3000 ms. */
   slowThresholdMs?: number;
   /** Per-request timeout. Default 15 s. */

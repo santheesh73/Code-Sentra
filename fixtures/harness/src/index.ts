@@ -1,4 +1,5 @@
 export { createTestPki, type TestPki } from "./certs.js";
+export { type FakeCheckRun, type FakeGithubApp, startFakeGithubApp } from "./fake-github.js";
 export {
   type Harness,
   type HarnessOptions,

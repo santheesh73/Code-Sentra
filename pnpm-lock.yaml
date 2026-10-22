@@ -447,6 +447,9 @@ importers:
       node-forge:
         specifier: 1.4.0
         version: 1.4.0
+      yazl:
+        specifier: 3.3.1
+        version: 3.3.1
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -472,6 +475,9 @@ importers:
       '@types/node-forge':
         specifier: 1.3.14
         version: 1.3.14
+      '@types/yazl':
+        specifier: 3.3.1
+        version: 3.3.1
       playwright-core:
         specifier: 1.64.1
         version: 1.64.1
@@ -546,6 +552,16 @@ importers:
       drizzle-kit:
         specifier: 0.31.11
         version: 0.31.11
+
+  packages/github:
+    dependencies:
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@codesentra/fixture-harness':
+        specifier: workspace:*
+        version: link:../../fixtures/harness
 
   packages/graph:
     dependencies:

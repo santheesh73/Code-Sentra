@@ -351,6 +351,22 @@ importers:
         specifier: 1.64.1
         version: 1.64.1
 
+  packages/checks:
+    dependencies:
+      '@codesentra/core':
+        specifier: workspace:*
+        version: link:../core
+      '@codesentra/ssrf':
+        specifier: workspace:*
+        version: link:../ssrf
+      playwright-core:
+        specifier: 1.64.1
+        version: 1.64.1
+    devDependencies:
+      '@codesentra/fixture-harness':
+        specifier: workspace:*
+        version: link:../../fixtures/harness
+
   packages/config:
     dependencies:
       zod:

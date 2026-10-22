@@ -4,7 +4,15 @@ export type MainUrlOutcome =
   | { reachable: true; status: number }
   | {
       reachable: false;
-      failure: "dns" | "tls_invalid" | "timeout" | "server_error" | "connection" | "blocked";
+      failure:
+        | "dns"
+        | "tls_invalid"
+        | "timeout"
+        | "server_error"
+        | "connection"
+        | "redirect_loop"
+        | "too_many_redirects"
+        | "blocked";
       status?: number;
     };
 
@@ -30,7 +38,10 @@ export interface PulseStatusResult {
 
 /**
  * Section 9 status rule.
- * - down: main URL failed (DNS, TLS invalid, timeout, 5xx, connection failure).
+ * - down: main URL failed (DNS, TLS invalid, timeout, 5xx, connection failure,
+ *   redirect loop or an over-long chain: users cannot load the page).
+ * - unverified (not down): the target was refused by the SSRF policy. CodeSentra did
+ *   not check it, so it reports a gap instead of claiming the site is down.
  * - degraded: main URL loads and at least one error-severity finding exists.
  * - live: main URL loads, every check group ran, no error findings.
  * - unverified: main URL loads, no error findings, at least one group did not run.
@@ -44,6 +55,13 @@ export function computePulseStatus(input: PulseStatusInput): PulseStatusResult {
     }));
 
   const main = input.main;
+  if (!main.reachable && main.failure === "blocked") {
+    gaps.unshift({
+      group: "reachability",
+      reason: "the target resolves to a non-public address and was not contacted",
+    });
+    return { status: "unverified", gaps };
+  }
   if (!main.reachable || main.status >= 500) {
     return { status: "down", gaps };
   }

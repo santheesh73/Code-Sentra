@@ -14,7 +14,16 @@ import { as, seedEvidence, seedIssue, signIn, startTestApi, type TestApi } from 
 let api: TestApi;
 let attacker: string;
 let victim: string;
-const B = { org: "", user: "", project: "", run: "", env: "", issue: "", evidence: "" };
+const B = {
+  org: "",
+  user: "",
+  project: "",
+  run: "",
+  env: "",
+  issue: "",
+  evidence: "",
+  snapshot: "",
+};
 
 beforeAll(async () => {
   api = await startTestApi();
@@ -46,6 +55,11 @@ beforeAll(async () => {
   ).json().run_id;
   B.issue = await seedIssue(api, B.org, B.project, B.run);
   B.evidence = await seedEvidence(api, B.org, B.run);
+  const [snap] = await api.t.db.system
+    .insert(s.snapshots)
+    .values({ orgId: B.org, projectId: B.project, kind: "zip", storageKey: "snapshots/b.zip" })
+    .returning();
+  B.snapshot = snap!.id;
 }, 180_000);
 afterAll(async () => api?.close());
 
@@ -108,6 +122,15 @@ const attacks = (): Record<string, Attack> => {
       payload: { reason: "pwned by attacker" },
     },
     "GET /v1/evidence/:id": { url: `/v1/evidence/${B.evidence}` },
+    "POST /v1/projects/:id/snapshots": {
+      url: `/v1/projects/${B.project}/snapshots`,
+      payload: { kind: "git", url: "https://github.com/example/repo.git" },
+    },
+    "POST /v1/projects/:id/scan": {
+      url: `/v1/projects/${B.project}/scan`,
+      payload: { snapshot_id: B.snapshot },
+    },
+    "GET /v1/runs/:id/report": { url: `/v1/runs/${B.run}/report` },
   };
   for (const r of UNBUILT) {
     if (r.scope === "project")
@@ -140,7 +163,11 @@ async function snapshotB() {
     .from(s.projects)
     .where(eq(s.projects.orgId, B.org))) as [{ projects: number }];
   const [issue] = await sys.select().from(s.issues).where(eq(s.issues.id, B.issue));
-  return { name: project?.name, envs, runs, projects, members, issue: issue?.status };
+  const [{ snapshots }] = (await sys
+    .select({ snapshots: count() })
+    .from(s.snapshots)
+    .where(eq(s.snapshots.orgId, B.org))) as [{ snapshots: number }];
+  return { name: project?.name, envs, runs, projects, members, issue: issue?.status, snapshots };
 }
 
 describe("cross-org access", () => {

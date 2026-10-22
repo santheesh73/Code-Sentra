@@ -31,8 +31,8 @@ export class HttpError extends Error {
   }
 }
 
-export const notFound = (what = "Resource") =>
-  new HttpError(404, "not-found", "Not found", `${what} not found`);
+export const notFound = (what = "Resource", detail?: string) =>
+  new HttpError(404, "not-found", "Not found", detail ?? `${what} not found`);
 export const unauthorized = () =>
   new HttpError(401, "unauthorized", "Authentication required", "Sign in to continue");
 export const forbidden = (detail = "Your role does not allow this action") =>

@@ -17,7 +17,7 @@ const PROJECT_STEPS = [...PULSE_GROUPS, "issues"];
  * that resolve privately are refused by the worker's SSRF guard and the run reports a
  * gap; nothing private is ever contacted either way.
  */
-function assertPublicTarget(url: string, testAllowHosts: ReadonlySet<string>): void {
+export function assertPublicTarget(url: string, testAllowHosts: ReadonlySet<string>): void {
   const host = new URL(url).hostname
     .replace(/^\[|\]$/g, "")
     .replace(/\.$/, "")

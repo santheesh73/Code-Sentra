@@ -18,6 +18,7 @@ import { orgRoutes } from "./routes/orgs.js";
 import { projectRoutes } from "./routes/projects.js";
 import { pulseRoutes } from "./routes/pulse.js";
 import { runRoutes } from "./routes/runs.js";
+import { scanRoutes } from "./routes/scan.js";
 import { unbuiltRoutes } from "./routes/unbuilt.js";
 import { registerSession } from "./session-plugin.js";
 
@@ -103,6 +104,7 @@ export async function buildApp(
   await app.register(projectRoutes(ctx));
   await app.register(runRoutes(ctx));
   await app.register(pulseRoutes(ctx));
+  await app.register(scanRoutes(ctx));
   await app.register(issueRoutes(ctx));
   await app.register(unbuiltRoutes(ctx));
 

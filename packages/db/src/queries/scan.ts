@@ -286,3 +286,11 @@ export async function getSnapshot(tx: TenantTx, id: string): Promise<SnapshotRow
   const [row] = await tx.select().from(snapshots).where(eq(snapshots.id, id));
   return row ?? null;
 }
+
+/** Clears what an earlier attempt of this scan run stored, so a retry never duplicates evidence. */
+export async function resetScanRun(tx: TenantTx, runId: string, snapshotId: string): Promise<void> {
+  await tx.delete(reports).where(eq(reports.runId, runId));
+  await tx.delete(features).where(eq(features.runId, runId));
+  await tx.delete(evidence).where(eq(evidence.runId, runId));
+  await tx.delete(codeNodes).where(eq(codeNodes.snapshotId, snapshotId));
+}

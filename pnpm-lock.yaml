@@ -75,12 +75,21 @@ importers:
       '@codesentra/fixture-harness':
         specifier: workspace:*
         version: link:../../fixtures/harness
+      '@codesentra/scan':
+        specifier: workspace:*
+        version: link:../../packages/scan
       '@testcontainers/postgresql':
         specifier: 12.2.1
         version: 12.2.1
+      '@types/yazl':
+        specifier: 3.3.1
+        version: 3.3.1
       playwright-core:
         specifier: 1.64.1
         version: 1.64.1
+      yazl:
+        specifier: 3.3.1
+        version: 3.3.1
 
   apps/cli:
     dependencies:
@@ -182,6 +191,37 @@ importers:
       playwright-core:
         specifier: 1.64.1
         version: 1.64.1
+
+  apps/worker-scan:
+    dependencies:
+      '@codesentra/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@codesentra/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@codesentra/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@codesentra/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
+      '@codesentra/scan':
+        specifier: workspace:*
+        version: link:../../packages/scan
+      '@codesentra/ssrf':
+        specifier: workspace:*
+        version: link:../../packages/ssrf
+      '@codesentra/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      pino:
+        specifier: 10.4.0
+        version: 10.4.0
+    devDependencies:
+      '@codesentra/fixture-harness':
+        specifier: workspace:*
+        version: link:../../fixtures/harness
 
   e2e:
     devDependencies:
@@ -542,18 +582,30 @@ importers:
       '@codesentra/core':
         specifier: workspace:*
         version: link:../core
+      '@codesentra/db':
+        specifier: workspace:*
+        version: link:../db
       '@codesentra/graph':
         specifier: workspace:*
         version: link:../graph
       '@codesentra/parsers':
         specifier: workspace:*
         version: link:../parsers
+      '@codesentra/queue':
+        specifier: workspace:*
+        version: link:../queue
       '@codesentra/sandbox':
         specifier: workspace:*
         version: link:../sandbox
       '@codesentra/ssrf':
         specifier: workspace:*
         version: link:../ssrf
+      '@codesentra/storage':
+        specifier: workspace:*
+        version: link:../storage
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)
       yauzl:
         specifier: 3.4.0
         version: 3.4.0

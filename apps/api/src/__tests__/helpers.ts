@@ -14,6 +14,7 @@ import {
   startWorker,
   type Worker,
 } from "@codesentra/queue";
+import type { ObjectStore } from "@codesentra/storage";
 import type { FastifyInstance, LightMyRequestResponse } from "fastify";
 import { buildApp, type RegisteredRoute } from "../app.js";
 import { createAuthService } from "../auth/service.js";
@@ -112,6 +113,28 @@ export interface TestApi {
 export interface TestApiOptions {
   env?: Record<string, string>;
   handlers?: Partial<Record<JobType, JobHandler>>;
+  store?: ObjectStore;
+}
+
+/** An in-process object store for tests that need uploads (no MinIO in unit tests). */
+export function memoryStore(): ObjectStore & { objects: Map<string, Uint8Array> } {
+  const objects = new Map<string, Uint8Array>();
+  return {
+    bucket: "memory",
+    objects,
+    async put(key, body) {
+      objects.set(key, typeof body === "string" ? Buffer.from(body) : new Uint8Array(body));
+    },
+    async get(key) {
+      const v = objects.get(key);
+      if (!v) throw new Error(`no such key: ${key}`);
+      return v;
+    },
+    async delete(key) {
+      objects.delete(key);
+    },
+    async check() {},
+  };
 }
 
 export async function startTestApi(opts: TestApiOptions = {}): Promise<TestApi> {
@@ -146,7 +169,7 @@ export async function startTestApi(opts: TestApiOptions = {}): Promise<TestApi> 
     queue,
     events,
     email: mail,
-    store: null,
+    store: opts.store ?? null,
     cookie: { secure: false },
     fetch,
   });

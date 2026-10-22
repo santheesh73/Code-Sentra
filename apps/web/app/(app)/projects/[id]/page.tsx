@@ -5,7 +5,12 @@ import { Activity } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
-import { EnvironmentStatusBadge, RunStatusBadge } from "@/components/status";
+import {
+  IssueStatusBadge,
+  PulseStatusBadge,
+  RunStatusBadge,
+  SeverityBadge,
+} from "@/components/status";
 import {
   Button,
   Card,
@@ -16,7 +21,14 @@ import {
   NotYetAvailable,
   Spinner,
 } from "@/components/ui/primitives";
-import { api, type Project, problemMessage, type RunSummary } from "@/lib/api";
+import {
+  api,
+  type Issue,
+  isPulseOutcome,
+  type Project,
+  problemMessage,
+  type RunSummary,
+} from "@/lib/api";
 import { formatTime } from "@/lib/utils";
 
 export default function ProjectPage() {
@@ -30,6 +42,25 @@ export default function ProjectPage() {
   const runs = useQuery({
     queryKey: ["runs", id],
     queryFn: () => api<RunSummary[]>(`/v1/projects/${id}/runs`),
+  });
+
+  const [showAll, setShowAll] = useState(false);
+  const issues = useQuery({
+    queryKey: ["issues", id, showAll],
+    queryFn: () =>
+      api<Issue[]>(`/v1/projects/${id}/issues${showAll ? "" : "?status=open,regressed"}`),
+  });
+
+  const pulse = useMutation({
+    mutationFn: (environmentId: string) =>
+      api<{ run_id: string }>(`/v1/projects/${id}/pulse`, {
+        method: "POST",
+        body: { environment_id: environmentId },
+      }),
+    onSuccess: ({ run_id }) => {
+      void qc.invalidateQueries({ queryKey: ["runs", id] });
+      router.push(`/runs/${run_id}`);
+    },
   });
 
   const diagnostic = useMutation({
@@ -73,6 +104,7 @@ export default function ProjectPage() {
         </Button>
       </div>
       {diagnostic.isError && <Notice tone="danger">{problemMessage(diagnostic.error)}</Notice>}
+      {pulse.isError && <Notice tone="danger">{problemMessage(pulse.error)}</Notice>}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="flex flex-col gap-3">
@@ -83,8 +115,41 @@ export default function ProjectPage() {
           />
         </Card>
         <Card className="flex flex-col gap-3">
-          <CardTitle>Open issues</CardTitle>
-          <NotYetAvailable feature="Issues and fix prompts" phase="Phase 2" />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>{showAll ? "All issues" : "Open issues"}</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => setShowAll(!showAll)}>
+              {showAll ? "Show open only" : "Show all"}
+            </Button>
+          </div>
+          {issues.isPending ? (
+            <Spinner />
+          ) : issues.isError ? (
+            <Notice tone="danger">{problemMessage(issues.error)}</Notice>
+          ) : issues.data.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {p.environments.some((e) => e.status)
+                ? "No open issues from the latest checks."
+                : "No issues yet: run Pulse on an environment to check it."}
+            </p>
+          ) : (
+            <ul className="divide-y divide-border" aria-label="Issues">
+              {issues.data.map((i) => (
+                <li key={i.id}>
+                  <Link
+                    href={`/issues/${i.id}`}
+                    className="flex flex-col gap-1 py-2 text-sm hover:underline"
+                  >
+                    <span className="font-medium">{i.title}</span>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <SeverityBadge severity={i.severity} />
+                      <IssueStatusBadge status={i.status} />
+                      <code className="text-xs text-muted-foreground">{i.code}</code>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       </div>
 
@@ -110,7 +175,27 @@ export default function ProjectPage() {
                     {e.url}
                   </a>
                 </span>
-                <EnvironmentStatusBadge />
+                <span className="flex items-center gap-2">
+                  {e.status ? (
+                    <Link
+                      href={`/runs/${e.status.run_id}`}
+                      title={`Checked ${formatTime(e.status.checked_at)}`}
+                    >
+                      <PulseStatusBadge status={e.status.pulse_status} gaps={e.status.gaps} />
+                    </Link>
+                  ) : (
+                    <PulseStatusBadge status={null} />
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={pulse.isPending}
+                    onClick={() => pulse.mutate(e.id)}
+                    aria-label={`Check ${e.name} now`}
+                  >
+                    Check now
+                  </Button>
+                </span>
               </li>
             ))}
           </ul>
@@ -144,7 +229,11 @@ export default function ProjectPage() {
                     <span className="font-medium capitalize">{r.type}</span>{" "}
                     <span className="text-muted-foreground">{formatTime(r.created_at)}</span>
                   </span>
-                  <RunStatusBadge status={r.status} />
+                  {isPulseOutcome(r.outcome) ? (
+                    <PulseStatusBadge status={r.outcome.pulse_status} gaps={r.outcome.gaps} />
+                  ) : (
+                    <RunStatusBadge status={r.status} />
+                  )}
                 </Link>
               </li>
             ))}

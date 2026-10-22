@@ -2,12 +2,13 @@ import {
   CircleAlert,
   CircleCheck,
   CircleDashed,
+  CircleHelp,
   CircleMinus,
   CircleX,
   Clock,
   LoaderCircle,
 } from "lucide-react";
-import type { RunStatus, StepStatus } from "@/lib/api";
+import type { IssueStatus, PulseStatus, RunStatus, Severity, StepStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const chip =
@@ -50,17 +51,61 @@ export function StepStatusIcon({ status }: { status: StepStatus }) {
 }
 
 /**
- * Deployment status per environment. Pulse arrives in Phase 2; until an environment has
- * been checked it is shown as Not checked, never Live.
+ * Deployment status (Section 9). Only `live` is green. `unverified` means some check did
+ * not run, so it is never shown as healthy (Rule 2); `null` means never checked.
  */
-export function EnvironmentStatusBadge() {
+export function PulseStatusBadge({
+  status,
+  gaps = [],
+}: {
+  status: PulseStatus | null;
+  gaps?: { group: string; reason: string }[];
+}) {
+  const map: Record<
+    PulseStatus | "none",
+    { label: string; cls: string; Icon: typeof CircleCheck }
+  > = {
+    live: { label: "Live", cls: "bg-success-soft text-success", Icon: CircleCheck },
+    degraded: { label: "Degraded", cls: "bg-warning-soft text-warning", Icon: CircleAlert },
+    down: { label: "Down", cls: "bg-danger-soft text-danger", Icon: CircleX },
+    unverified: { label: "Unverified", cls: "bg-muted text-muted-foreground", Icon: CircleHelp },
+    none: { label: "Not checked", cls: "bg-muted text-muted-foreground", Icon: CircleDashed },
+  };
+  const { label, cls, Icon } = map[status ?? "none"];
+  const title =
+    status === "unverified" && gaps.length
+      ? `Not everything was checked: ${gaps.map((g) => `${g.group}: ${g.reason}`).join("; ")}`
+      : status === null
+        ? "No Pulse check has finished for this URL yet"
+        : undefined;
   return (
-    <span
-      className={cn(chip, "bg-muted text-muted-foreground")}
-      title="Sentra Pulse is not available yet (Phase 2)"
-    >
-      <CircleDashed aria-hidden className="size-3.5" />
-      Not checked
+    <span className={cn(chip, cls)} title={title} data-pulse-status={status ?? "none"}>
+      <Icon aria-hidden className="size-3.5" />
+      {label}
+    </span>
+  );
+}
+
+export function SeverityBadge({ severity }: { severity: Severity }) {
+  const cls = {
+    error: "bg-danger-soft text-danger",
+    warning: "bg-warning-soft text-warning",
+    info: "bg-info-soft text-info",
+  }[severity];
+  return <span className={cn(chip, cls, "capitalize")}>{severity}</span>;
+}
+
+export function IssueStatusBadge({ status }: { status: IssueStatus }) {
+  const map: Record<IssueStatus, { label: string; cls: string }> = {
+    open: { label: "Open", cls: "bg-danger-soft text-danger" },
+    regressed: { label: "Regressed", cls: "bg-danger-soft text-danger" },
+    resolved: { label: "Resolved", cls: "bg-success-soft text-success" },
+    dismissed: { label: "Dismissed", cls: "bg-muted text-muted-foreground" },
+  };
+  const { label, cls } = map[status];
+  return (
+    <span className={cn(chip, cls)} data-issue-status={status}>
+      {label}
     </span>
   );
 }

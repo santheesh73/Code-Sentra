@@ -710,6 +710,15 @@
               "null"
             ]
           },
+          "github_repo": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "check_on_push": {
+            "type": "boolean"
+          },
           "environments": {
             "type": "array",
             "items": {
@@ -800,6 +809,8 @@
           "repo_url",
           "default_branch",
           "platform",
+          "github_repo",
+          "check_on_push",
           "environments",
           "latest_run",
           "latest_scan",
@@ -1688,7 +1699,8 @@
             "type": "string",
             "enum": [
               "git",
-              "zip"
+              "zip",
+              "github"
             ]
           },
           "source_url": {
@@ -2871,6 +2883,15 @@
               "null"
             ]
           },
+          "github_repo": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "check_on_push": {
+            "type": "boolean"
+          },
           "environments": {
             "type": "array",
             "items": {
@@ -2962,6 +2983,8 @@
           "repo_url",
           "default_branch",
           "platform",
+          "github_repo",
+          "check_on_push",
           "environments",
           "latest_run",
           "latest_scan",
@@ -3865,7 +3888,8 @@
             "type": "string",
             "enum": [
               "git",
-              "zip"
+              "zip",
+              "github"
             ]
           },
           "source_url": {
@@ -5428,6 +5452,22 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "github_repo": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_.-]{1,100}\\/[A-Za-z0-9_.-]{1,100}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The repository this project follows through the org's GitHub App installation"
+                  },
+                  "check_on_push": {
+                    "type": "boolean",
+                    "description": "Run a full check on every push to the default branch"
                   }
                 }
               }
@@ -5468,6 +5508,16 @@
             }
           },
           "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "Default Response",
             "content": {
               "application/json": {
@@ -6831,6 +6881,352 @@
         }
       }
     },
+    "/v1/webhooks/github": {
+      "post": {
+        "summary": "GitHub App webhooks",
+        "tags": [
+          "github"
+        ],
+        "description": "Signed with GITHUB_WEBHOOK_SECRET (X-Hub-Signature-256) and deduplicated by X-GitHub-Delivery: a replayed delivery is acknowledged and does nothing. Handles installation, installation_repositories, pull_request (opened/synchronize/reopened), deployment_status (success) and push.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "processed",
+                        "ignored",
+                        "duplicate"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "detail"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/github/install": {
+      "get": {
+        "summary": "Install the GitHub App for an organization",
+        "tags": [
+          "github"
+        ],
+        "description": "Redirects an org admin to GitHub to install the App. The signed state ties the installation back to this org and user; GitHub's setup redirect returns to /v1/github/setup.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "org_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Default Response"
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/github/setup": {
+      "get": {
+        "summary": "GitHub App setup callback",
+        "tags": [
+          "github"
+        ],
+        "description": "GitHub redirects here after installation. installation_id is not trusted: the user-authorization code must show that this user can access the installation, and the signed state must name an org they administer.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "in": "query",
+            "name": "installation_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "in": "query",
+            "name": "setup_action",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 2000
+            },
+            "in": "query",
+            "name": "state",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            },
+            "in": "query",
+            "name": "code",
+            "required": true
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/orgs/{id}/github/installations": {
+      "get": {
+        "summary": "GitHub installations linked to the organization",
+        "tags": [
+          "github"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "configured": {
+                      "type": "boolean"
+                    },
+                    "installations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "installation_id": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "account": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "repositories": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "suspended": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "installation_id",
+                          "account",
+                          "repositories",
+                          "suspended"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "configured",
+                    "installations"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/projects/{id}/schedules": {
       "post": {
         "summary": "Create a recurring Pulse (Phase 5)",
@@ -6948,46 +7344,6 @@
             "name": "id",
             "required": true
           }
-        ],
-        "responses": {
-          "401": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "501": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/webhooks/github": {
-      "post": {
-        "summary": "GitHub App webhooks (Phase 5)",
-        "tags": [
-          "not yet available"
         ],
         "responses": {
           "401": {

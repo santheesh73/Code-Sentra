@@ -16,6 +16,7 @@
     "@codesentra/config": "workspace:*",
     "@codesentra/core": "workspace:*",
     "@codesentra/db": "workspace:*",
+    "@codesentra/github": "workspace:*",
     "@codesentra/queue": "workspace:*",
     "@codesentra/ssrf": "workspace:*",
     "@codesentra/storage": "workspace:*",

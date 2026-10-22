@@ -28,6 +28,7 @@
     "@codesentra/claims": "workspace:*",
     "@codesentra/core": "workspace:*",
     "@codesentra/db": "workspace:*",
+    "@codesentra/github": "workspace:*",
     "@codesentra/graph": "workspace:*",
     "@codesentra/parsers": "workspace:*",
     "@codesentra/queue": "workspace:*",

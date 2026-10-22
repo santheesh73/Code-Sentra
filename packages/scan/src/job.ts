@@ -1,5 +1,5 @@
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { type JsonValue, type ScanStage, ScanStage as ScanStageEnum } from "@codesentra/core";
@@ -14,6 +14,7 @@ import {
   setRunOutcome,
   updateSnapshot,
 } from "@codesentra/db";
+import type { GithubApp } from "@codesentra/github";
 import type { JobHandler } from "@codesentra/queue";
 import type { Sandbox } from "@codesentra/sandbox";
 import type { FetchPolicy } from "@codesentra/ssrf";
@@ -37,6 +38,10 @@ export interface ScanJobDeps {
   /** Plain http git for test hosts only (the harness has no TLS for git). */
   allowHttpGit: boolean;
   maxCommits: number;
+  /** The GitHub App, for `github` snapshots (repository zipballs); null when not configured. */
+  github?: GithubApp | null;
+  /** Largest repository archive accepted (compressed bytes). */
+  maxArchiveBytes?: number;
 }
 
 /** Steps of a scan run (Section 8): one per stage. */
@@ -69,7 +74,7 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
     try {
       // --- Ingest ------------------------------------------------------------------------
       await ctx.beginStep("ingest");
-      const root = join(scratch.path, "tree");
+      let root = join(scratch.path, "tree");
       let files: TreeEntry[];
       try {
         if (!deps.store)
@@ -79,6 +84,32 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
           const zipPath = join(scratch.path, "upload.zip");
           await writeFile(zipPath, await deps.store.get(snapshot.storageKey));
           await extractZip(zipPath, root, DEFAULT_ZIP_LIMITS);
+        } else if (snapshot.kind === "github") {
+          // A GitHub repository at a commit: the zipball, fetched with the installation's
+          // token and checked under the same zip limits as an upload (ADR 0021).
+          if (!deps.github)
+            throw new Error(
+              "the GitHub App is not configured (GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY)",
+            );
+          const [owner, repo] = (snapshot.sourceUrl ?? "").split("/");
+          if (!owner || !repo || !snapshot.ref || !snapshot.githubInstallationId)
+            throw new Error("github snapshot is missing its repository, commit or installation");
+          const zipPath = join(scratch.path, "zipball.zip");
+          const archive = await deps.github.zipball(
+            snapshot.githubInstallationId,
+            owner,
+            repo,
+            snapshot.ref,
+            deps.maxArchiveBytes ?? DEFAULT_ZIP_LIMITS.maxBytes,
+          );
+          await writeFile(zipPath, archive);
+          await extractZip(zipPath, root, DEFAULT_ZIP_LIMITS);
+          // GitHub wraps the tree in one `owner-repo-sha/` directory.
+          const top = await readdir(root, { withFileTypes: true });
+          if (top.length === 1 && top[0]?.isDirectory()) root = join(root, top[0].name);
+          snapshot.commitSha = snapshot.ref;
+          snapshot.storageKey = `snapshots/${orgId}/${snapshot.id}.zip`;
+          await deps.store.put(snapshot.storageKey, archive, "application/zip");
         } else {
           if (!snapshot.sourceUrl) throw new Error("git snapshot has no URL");
           const { commitSha } = await cloneRepo(snapshot.sourceUrl, root, {

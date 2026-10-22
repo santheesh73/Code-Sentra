@@ -1,5 +1,6 @@
 import { loadConfig } from "@codesentra/config";
 import { createDatabase } from "@codesentra/db";
+import { GithubApp } from "@codesentra/github";
 import { createRunEventListener, startQueueClient } from "@codesentra/queue";
 import { objectStoreFromEnv } from "@codesentra/storage";
 import pino from "pino";
@@ -52,6 +53,17 @@ const { app } = await buildApp(
     store: objectStoreFromEnv(config),
     cookie: { secure: new URL(config.PUBLIC_APP_URL).protocol === "https:" },
     fetch,
+    github:
+      config.integrations.github_app && config.GITHUB_APP_ID && config.GITHUB_APP_PRIVATE_KEY
+        ? new GithubApp({
+            appId: config.GITHUB_APP_ID,
+            privateKey: config.GITHUB_APP_PRIVATE_KEY,
+            apiBaseUrl: config.GITHUB_API_BASE_URL,
+            clientId: config.GITHUB_APP_CLIENT_ID,
+            clientSecret: config.GITHUB_APP_CLIENT_SECRET,
+            oauthBaseUrl: config.GITHUB_OAUTH_BASE_URL,
+          })
+        : null,
   },
   { logger: log },
 );

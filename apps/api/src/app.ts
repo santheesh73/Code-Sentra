@@ -14,6 +14,7 @@ import type { AppContext } from "./context.js";
 import { registerErrorHandling } from "./errors.js";
 import { authRoutes } from "./routes/auth.js";
 import { checkRoutes } from "./routes/check.js";
+import { githubRoutes } from "./routes/github.js";
 import { healthRoutes } from "./routes/health.js";
 import { issueRoutes } from "./routes/issues.js";
 import { orgRoutes } from "./routes/orgs.js";
@@ -60,7 +61,9 @@ export async function buildApp(
   // Only JSON bodies are accepted, which (with SameSite=Lax and the Origin check) blocks
   // form-based CSRF: browsers cannot send application/json cross-site without CORS.
   app.removeAllContentTypeParsers();
-  app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
+    // Webhook signatures are over the exact bytes received.
+    if (req.url.startsWith("/v1/webhooks/")) (req as { rawBody?: string }).rawBody = body as string;
     if (body === "") return done(null, undefined);
     try {
       done(null, JSON.parse(body as string));
@@ -111,6 +114,7 @@ export async function buildApp(
   await app.register(scanRoutes(ctx));
   await app.register(checkRoutes(ctx));
   await app.register(issueRoutes(ctx));
+  await app.register(githubRoutes(ctx));
   await app.register(unbuiltRoutes(ctx));
 
   app.get("/v1/openapi.json", { schema: { hide: true } }, async () => app.swagger());

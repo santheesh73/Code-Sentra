@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { loadConfig } from "@codesentra/config";
 import type { JobType } from "@codesentra/core";
 import { startTestDatabase, type TestDatabase } from "@codesentra/db/testing";
+import type { GithubApp } from "@codesentra/github";
 import {
   createRunEventListener,
   diagnosticHandler,
@@ -114,6 +115,8 @@ export interface TestApiOptions {
   env?: Record<string, string>;
   handlers?: Partial<Record<JobType, JobHandler>>;
   store?: ObjectStore;
+  /** The GitHub App client (pointed at a fake); null leaves the integration off. */
+  githubApp?: GithubApp | null;
 }
 
 /** An in-process object store for tests that need uploads (no MinIO in unit tests). */
@@ -172,6 +175,7 @@ export async function startTestApi(opts: TestApiOptions = {}): Promise<TestApi> 
     store: opts.store ?? null,
     cookie: { secure: false },
     fetch,
+    github: opts.githubApp ?? null,
   });
   return {
     app,

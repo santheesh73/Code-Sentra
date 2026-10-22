@@ -27,6 +27,10 @@ export interface FakeGithubApp {
   checkRuns: FakeCheckRun[];
   /** Calls the API made, as `METHOD path`. */
   calls: string[];
+  /** A user-authorization code whose user can access these installations. */
+  authorize(code: string, installationIds: number[]): void;
+  clientId: string;
+  clientSecret: string;
   deliver(
     target: string,
     event: string,
@@ -89,6 +93,10 @@ export async function startFakeGithubApp(): Promise<FakeGithubApp> {
   const commits = new Map<string, Map<string, Record<string, string | Buffer>>>();
   const checkRuns: FakeCheckRun[] = [];
   const calls: string[] = [];
+  const codes = new Map<string, number[]>();
+  const userTokens = new Map<string, number[]>();
+  const clientId = "Iv1.fakeapp00000001";
+  const clientSecret = randomBytes(16).toString("hex");
   let nextId = 1000;
 
   const server: Server = createServer(async (req, res) => {
@@ -109,6 +117,25 @@ export async function startFakeGithubApp(): Promise<FakeGithubApp> {
         token,
         expires_at: new Date(Date.now() + 3600_000).toISOString(),
       });
+    }
+    if (req.method === "POST" && url.pathname === "/login/oauth/access_token") {
+      const body = JSON.parse((await readBody(req)).toString() || "{}") as {
+        client_id?: string;
+        client_secret?: string;
+        code?: string;
+      };
+      const installs = body.code ? codes.get(body.code) : undefined;
+      if (body.client_id !== clientId || body.client_secret !== clientSecret || !installs)
+        return json(200, { error: "bad_verification_code" });
+      codes.delete(body.code as string);
+      const token = `ghu_${randomBytes(18).toString("hex")}`;
+      userTokens.set(token, installs);
+      return json(200, { access_token: token, token_type: "bearer" });
+    }
+    if (req.method === "GET" && url.pathname === "/user/installations") {
+      const ids = userTokens.get(auth.replace(/^token /, ""));
+      if (!ids) return json(401, { message: "Bad credentials" });
+      return json(200, { total_count: ids.length, installations: ids.map((id) => ({ id })) });
     }
     // The download host: zipballs (unauthenticated, as codeload is).
     m = /^\/__codeload\/([^/]+\/[^/]+)\/([0-9a-f]{40})$/.exec(url.pathname);
@@ -177,6 +204,11 @@ export async function startFakeGithubApp(): Promise<FakeGithubApp> {
     webhookSecret,
     checkRuns,
     calls,
+    clientId,
+    clientSecret,
+    authorize(code, installationIds) {
+      codes.set(code, installationIds);
+    },
     commit(repo, sha, files) {
       const m = commits.get(repo) ?? new Map();
       m.set(sha, files);

@@ -190,9 +190,19 @@ export function projectRoutes(ctx: AppContext): FastifyPluginAsyncZod {
               name: z.string().trim().min(1).max(100),
               repo_url: PublicHttpUrl.nullable(),
               default_branch: z.string().trim().min(1).max(255).nullable(),
+              github_repo: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/, "owner/repo")
+                .nullable()
+                .describe(
+                  "The repository this project follows through the org's GitHub App installation",
+                ),
+              check_on_push: z
+                .boolean()
+                .describe("Run a full check on every push to the default branch"),
             })
             .partial(),
-          response: { 200: ProjectDto, 401: Problem, 404: Problem },
+          response: { 200: ProjectDto, 401: Problem, 404: Problem, 409: Problem },
         },
       },
       async (req) => {
@@ -202,8 +212,18 @@ export function projectRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           if (req.body.name !== undefined) set.name = req.body.name;
           if (req.body.repo_url !== undefined) set.repoUrl = req.body.repo_url;
           if (req.body.default_branch !== undefined) set.defaultBranch = req.body.default_branch;
+          if (req.body.github_repo !== undefined) set.githubRepo = req.body.github_repo;
+          if (req.body.check_on_push !== undefined) set.checkOnPush = req.body.check_on_push;
           if (Object.keys(set).length > 0) {
-            await tx.update(s.projects).set(set).where(eq(s.projects.id, req.params.id));
+            try {
+              await tx.update(s.projects).set(set).where(eq(s.projects.id, req.params.id));
+            } catch (e) {
+              if (isUniqueViolation(e))
+                throw conflict(
+                  "Another project of this organization already follows that repository",
+                );
+              throw e;
+            }
           }
           const [dto] = await loadProjects(tx, [req.params.id]);
           if (!dto) throw notFound("Project");

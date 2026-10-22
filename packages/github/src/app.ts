@@ -7,6 +7,10 @@ export interface GithubAppConfig {
   /** https://api.github.com, or a GitHub Enterprise / test base URL. */
   apiBaseUrl: string;
   fetch?: typeof fetch;
+  /** The App's OAuth client and https://github.com (or a test base): to verify an installer. */
+  clientId?: string;
+  clientSecret?: string;
+  oauthBaseUrl?: string;
   /** Clock override for tests (ms since epoch). */
   now?: () => number;
   timeoutMs?: number;
@@ -152,6 +156,34 @@ export class GithubApp {
       body: input,
     });
     return this.json<{ id: number }>(res, "update check run");
+  }
+
+  /**
+   * Whether the user who just installed the App (the setup callback's `code`) can access
+   * `installationId`. The callback's installation_id alone is attacker-controlled, so an
+   * installation is only linked to an org after this returns true.
+   */
+  async userCanAccessInstallation(code: string, installationId: number): Promise<boolean> {
+    if (!this.cfg.clientId || !this.cfg.clientSecret)
+      throw new GithubError(501, "the App's OAuth client is not configured");
+    const base = (this.cfg.oauthBaseUrl ?? "https://github.com").replace(/\/$/, "");
+    const res = await this.f(`${base}/login/oauth/access_token`, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json" },
+      body: JSON.stringify({
+        client_id: this.cfg.clientId,
+        client_secret: this.cfg.clientSecret,
+        code,
+      }),
+      signal: AbortSignal.timeout(this.cfg.timeoutMs ?? 30_000),
+    });
+    const body = (await res.json().catch(() => ({}))) as { access_token?: string };
+    if (!body.access_token) return false;
+    const list = await this.call("/user/installations?per_page=100", {
+      auth: `token ${body.access_token}`,
+    });
+    const data = await this.json<{ installations: { id: number }[] }>(list, "user installations");
+    return data.installations.some((i) => i.id === installationId);
   }
 
   /** Files changed between two commits (a PR's base and head). */

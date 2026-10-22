@@ -79,6 +79,24 @@ describe("the App against a GitHub API", () => {
     await expect(app.zipball(7, "acme", "board", B, 10)).rejects.toThrow(/exceeds/);
   });
 
+  it("verifies who installed it through the user's own token, never the callback alone", async () => {
+    const withClient = new GithubApp({
+      appId: gh.appId,
+      privateKey: gh.privateKeyPem,
+      apiBaseUrl: gh.url,
+      oauthBaseUrl: gh.url,
+      clientId: gh.clientId,
+      clientSecret: gh.clientSecret,
+    });
+    gh.authorize("code-1", [7]);
+    expect(await withClient.userCanAccessInstallation("code-1", 7)).toBe(true);
+    gh.authorize("code-2", [7]);
+    expect(await withClient.userCanAccessInstallation("code-2", 8)).toBe(false);
+    expect(await withClient.userCanAccessInstallation("forged", 7)).toBe(false);
+    // A code is single use.
+    expect(await withClient.userCanAccessInstallation("code-1", 7)).toBe(false);
+  });
+
   it("refuses names and refs that are not GitHub's", async () => {
     await expect(app.changedFiles(7, "acme", "../x", A, B)).rejects.toThrow(/bad repository/);
     await expect(app.zipball(7, "acme", "board", "a b", 10)).rejects.toThrow(/bad ref/);

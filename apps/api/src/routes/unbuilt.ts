@@ -40,13 +40,6 @@ export const UNBUILT: Unbuilt[] = [
     phase: "Phase 5",
     scope: "project",
   },
-  {
-    method: "POST",
-    url: "/v1/webhooks/github",
-    summary: "GitHub App webhooks",
-    phase: "Phase 5",
-    scope: "none",
-  },
 ];
 
 export function unbuiltRoutes(ctx: AppContext): FastifyPluginAsyncZod {

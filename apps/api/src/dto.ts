@@ -104,6 +104,8 @@ export const ProjectDto = z
     repo_url: z.string().nullable(),
     default_branch: z.string().nullable(),
     platform: z.string().nullable(),
+    github_repo: z.string().nullable(),
+    check_on_push: z.boolean(),
     environments: z.array(EnvironmentDto),
     latest_run: RunSummaryDto.nullable(),
     latest_scan: z
@@ -222,6 +224,8 @@ export const projectDto = (
   repo_url: p.repoUrl,
   default_branch: p.defaultBranch,
   platform: p.platform,
+  github_repo: p.githubRepo,
+  check_on_push: p.checkOnPush,
   environments: envs.map((e) => environmentDto(e, latestPulseByEnv.get(e.id) ?? null)),
   latest_run: latest ? runSummaryDto(latest) : null,
   latest_scan: latestScan
@@ -420,7 +424,7 @@ export const SnapshotDto = z
   .object({
     id: z.uuid(),
     project_id: z.uuid(),
-    kind: z.enum(["git", "zip"]),
+    kind: z.enum(["git", "zip", "github"]),
     source_url: z.string().nullable(),
     ref: z.string().nullable(),
     commit_sha: z.string().nullable(),

@@ -76,7 +76,15 @@ export const EnvSchema = z.object({
   GITHUB_OAUTH_CLIENT_SECRET: secret(10),
   GITHUB_OAUTH_BASE_URL: url().default("https://github.com"),
   GITHUB_API_BASE_URL: url().default("https://api.github.com"),
+  /** The App's URL name (github.com/apps/<slug>), for the install link in Settings. */
+  GITHUB_APP_SLUG: z
+    .string()
+    .regex(/^[a-z0-9-]+$/)
+    .optional(),
   GITHUB_APP_ID: z.string().regex(/^\d+$/, "must be the numeric GitHub App id"),
+  /** The App's own OAuth client (not the sign-in OAuth app): proves who installed it. */
+  GITHUB_APP_CLIENT_ID: secret(1),
+  GITHUB_APP_CLIENT_SECRET: secret(8),
   GITHUB_APP_PRIVATE_KEY: pemKey(),
   GITHUB_WEBHOOK_SECRET: secret(16),
   EMAIL_TRANSPORT: z.enum(["resend", "outbox"]).default("resend"),
@@ -124,7 +132,13 @@ export type EnvKey = keyof Env;
 export const INTEGRATIONS = {
   s3: ["S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"],
   github_oauth: ["GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET"],
-  github_app: ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET"],
+  github_app: [
+    "GITHUB_APP_ID",
+    "GITHUB_APP_PRIVATE_KEY",
+    "GITHUB_WEBHOOK_SECRET",
+    "GITHUB_APP_CLIENT_ID",
+    "GITHUB_APP_CLIENT_SECRET",
+  ],
   email: ["EMAIL_FROM", "EMAIL_PROVIDER_API_KEY"],
   slack: ["SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET"],
   anthropic: ["ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"],
@@ -157,6 +171,7 @@ export const SERVICE_ENV = {
       "API_PORT",
       "GITHUB_OAUTH_BASE_URL",
       "GITHUB_API_BASE_URL",
+      "GITHUB_APP_SLUG",
       "EMAIL_TRANSPORT",
       "EMAIL_OUTBOX_DIR",
       "PULSE_TEST_ALLOW_HOSTS",
@@ -180,6 +195,8 @@ export const SERVICE_ENV = {
       "SCAN_MAX_COMMITS",
       "SCAN_TEST_MODEL",
       "PULSE_TEST_ALLOW_HOSTS",
+      "GITHUB_API_BASE_URL",
+      "SCAN_MAX_UPLOAD_BYTES",
     ],
     integrations: ["s3", "github_app", "anthropic"],
   },
@@ -189,8 +206,8 @@ export const SERVICE_ENV = {
     integrations: ["s3"],
   },
   "worker-link": {
-    required: ["DATABASE_URL", "PUBLIC_APP_URL"],
-    settings: ["EMAIL_TRANSPORT", "EMAIL_OUTBOX_DIR"],
+    required: ["DATABASE_URL", "PUBLIC_APP_URL", "ENCRYPTION_KEY"],
+    settings: ["EMAIL_TRANSPORT", "EMAIL_OUTBOX_DIR", "GITHUB_API_BASE_URL"],
     integrations: ["anthropic", "github_app", "email", "slack"],
   },
 } as const satisfies Record<string, ServiceSpec>;

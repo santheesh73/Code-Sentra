@@ -18,6 +18,7 @@ import {
 } from "@codesentra/core";
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   foreignKey,
@@ -157,8 +158,16 @@ export const projects = pgTable(
     repoUrl: text("repo_url"),
     defaultBranch: text("default_branch"),
     platform: text("platform"),
+    /** `owner/repo` the org's GitHub App installation covers (Section 16). */
+    githubRepo: text("github_repo"),
+    /** Run a full check on every push to the default branch. */
+    checkOnPush: boolean("check_on_push").notNull().default(false),
   },
-  (t) => [unique("projects_org_id_id_key").on(t.orgId, t.id), index().on(t.orgId)],
+  (t) => [
+    unique("projects_org_id_id_key").on(t.orgId, t.id),
+    unique("projects_org_github_repo_key").on(t.orgId, t.githubRepo),
+    index().on(t.orgId),
+  ],
 );
 
 export const environments = pgTable(
@@ -458,6 +467,8 @@ export const snapshots = pgTable(
     storageKey: text("storage_key"),
     sizeBytes: integer("size_bytes"),
     fileCount: integer("file_count"),
+    /** kind github: fetched as the repository zipball with this installation's token. */
+    githubInstallationId: bigint("github_installation_id", { mode: "number" }),
   },
   (t) => [
     foreignKey({
@@ -645,6 +656,61 @@ export const claims = pgTable(
 );
 
 /** Tables with an `org_id` column, protected by the tenant RLS policy. */
+/**
+ * GitHub App installations. The installation webhook can arrive before anyone links it
+ * to an org, so `org_id` is null until the setup callback does (with a signed state).
+ * The account and repository list are sealed at rest (Section 17).
+ */
+export const githubInstallations = pgTable("github_installations", {
+  ...base,
+  installationId: bigint("installation_id", { mode: "number" }).notNull().unique(),
+  orgId: uuid("org_id").references(() => organizations.id, { onDelete: "set null" }),
+  /** sealSecret(JSON { account, repositories }) with purpose "github-installation". */
+  sealed: text("sealed").notNull(),
+  suspended: boolean("suspended").notNull().default(false),
+});
+
+/** Every webhook delivery, once (X-GitHub-Delivery is unique): replays are no-ops. */
+export const webhookDeliveries = pgTable("webhook_deliveries", {
+  ...base,
+  provider: text("provider").notNull(),
+  deliveryId: text("delivery_id").notNull().unique(),
+  event: text("event").notNull(),
+  status: text("status").notNull(),
+  detail: text("detail"),
+});
+
+/** The CodeSentra check run of one commit (Section 16: matched by head SHA). */
+export const githubCheckRuns = pgTable(
+  "github_check_runs",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    repo: text("repo").notNull(),
+    headSha: text("head_sha").notNull(),
+    baseSha: text("base_sha"),
+    prNumber: integer("pr_number"),
+    installationId: bigint("installation_id", { mode: "number" }).notNull(),
+    /** GitHub's id; null until it could be created. */
+    checkRunId: bigint("check_run_id", { mode: "number" }),
+    /** The commit's Scan (Link traces the deployment's Pulse against it). */
+    scanRunId: uuid("scan_run_id"),
+    /** The latest Link run reporting into this check run. */
+    linkRunId: uuid("link_run_id"),
+    changedFiles: text("changed_files").array().notNull().default(sql`'{}'::text[]`),
+  },
+  (t) => [
+    foreignKey({
+      name: "github_check_runs_project_fk",
+      columns: [t.orgId, t.projectId],
+      foreignColumns: [projects.orgId, projects.id],
+    }).onDelete("cascade"),
+    unique("github_check_runs_project_sha_key").on(t.projectId, t.headSha),
+    index().on(t.linkRunId),
+  ],
+);
+
 export const TENANT_TABLES = [
   "memberships",
   "projects",
@@ -665,4 +731,5 @@ export const TENANT_TABLES = [
   "reports",
   "claims",
   "traces",
+  "github_check_runs",
 ] as const;

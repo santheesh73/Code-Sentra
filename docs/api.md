@@ -16,6 +16,8 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | POST | `/v1/auth/logout` | End the session | 204 |
 | GET | `/v1/auth/providers` | Which sign-in methods this server has configured | 200 |
 | GET | `/v1/evidence/{id}` | One evidence record | 200, 401, 404 |
+| GET | `/v1/github/install` | Install the GitHub App for an organization | 302, 401, 403, 404, 501 |
+| GET | `/v1/github/setup` | GitHub App setup callback | 302, 400, 401, 403, 404, 409, 501 |
 | GET | `/v1/issues/{id}` | Issue with history, evidence and its fix prompt | 200, 401, 404 |
 | POST | `/v1/issues/{id}/dismiss` | Dismiss an issue with a reason (audited) | 200, 401, 404 |
 | GET | `/v1/issues/{id}/fix-prompt` | The issue's fix prompt (latest, or ?version=) | 200, 401, 404 |
@@ -23,6 +25,7 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | GET | `/v1/me` | The signed-in user and their organizations | 200, 401 |
 | GET | `/v1/orgs` | Organizations you belong to | 200, 401 |
 | POST | `/v1/orgs` | Create an organization (you become its owner) | 201, 401 |
+| GET | `/v1/orgs/{id}/github/installations` | GitHub installations linked to the organization | 200, 401, 404 |
 | GET | `/v1/orgs/{orgId}/members` | Members of an organization | 200, 401, 404 |
 | POST | `/v1/orgs/{orgId}/members` | Add a member by email (admin or owner) | 201, 401, 403, 404, 409 |
 | PATCH | `/v1/orgs/{orgId}/members/{userId}` | Change a member's role (owner) | 200, 400, 401, 403, 404 |
@@ -30,7 +33,7 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | GET | `/v1/projects` | Projects in an organization | 200, 401, 404 |
 | POST | `/v1/projects` | Create a project with an optional repository and deploy URLs | 201, 400, 401, 404, 409 |
 | GET | `/v1/projects/{id}` | One project | 200, 401, 404 |
-| PATCH | `/v1/projects/{id}` | Update a project | 200, 401, 404 |
+| PATCH | `/v1/projects/{id}` | Update a project | 200, 401, 404, 409 |
 | DELETE | `/v1/projects/{id}` | Delete a project and its runs (admin or owner) | 204, 401, 403, 404 |
 | POST | `/v1/projects/{id}/check` | Full check: Scan + Pulse in parallel, then Link | 202, 400, 401, 404 |
 | POST | `/v1/projects/{id}/diagnostic` | Run a platform diagnostic (database, queue, object storage) | 202, 401, 404 |
@@ -49,4 +52,4 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | GET | `/v1/runs/{id}/report` | Scan report: verified claims with evidence, features, health breakdown, coverage | 200, 401, 404 |
 | GET | `/v1/runs/{id}/screenshot` | PNG screenshot captured by a Pulse render check | 200, 401, 404, 501 |
 | GET | `/v1/runs/{id}/stream` | Live run progress (Server-Sent Events) | 200, 401, 404 |
-| POST | `/v1/webhooks/github` | GitHub App webhooks (Phase 5) | 401, 404, 501 |
+| POST | `/v1/webhooks/github` | GitHub App webhooks | 200, 400, 401, 501 |

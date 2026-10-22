@@ -1,5 +1,6 @@
 import type { ServiceEnv } from "@codesentra/config";
 import type { Database } from "@codesentra/db";
+import type { GithubApp } from "@codesentra/github";
 import type { QueueClient, RunEventListener } from "@codesentra/queue";
 import type { ObjectStore } from "@codesentra/storage";
 import type { AuthService } from "./auth/service.js";
@@ -21,4 +22,6 @@ export interface AppContext {
   cookie: CookieSettings;
   /** Injected for GitHub OAuth so tests can point at a local fake. */
   fetch: typeof fetch;
+  /** null when the github_app integration is not configured. */
+  github?: GithubApp | null;
 }

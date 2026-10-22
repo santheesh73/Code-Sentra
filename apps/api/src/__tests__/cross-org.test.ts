@@ -79,7 +79,10 @@ const NOT_TENANT_SCOPED: Record<string, string> = {
   "GET /v1/orgs": "lists only the caller's memberships",
   "POST /v1/orgs": "creates a new org owned by the caller",
 
-  "POST /v1/webhooks/github": "unbuilt; HMAC-authenticated by GitHub, not by session",
+  "POST /v1/webhooks/github":
+    "HMAC-authenticated by GitHub, not by session; routed by installation",
+  "GET /v1/github/setup":
+    "the org comes from the signed state (bound to the caller) and is admin-checked",
 };
 
 const attacks = (): Record<string, Attack> => {
@@ -133,6 +136,8 @@ const attacks = (): Record<string, Attack> => {
     "GET /v1/runs/:id/report": { url: `/v1/runs/${B.run}/report` },
     "POST /v1/projects/:id/check": { url: `/v1/projects/${B.project}/check`, payload: {} },
     "POST /v1/issues/:id/recheck": { url: `/v1/issues/${B.issue}/recheck` },
+    "GET /v1/github/install": { url: `/v1/github/install?org_id=${B.org}` },
+    "GET /v1/orgs/:id/github/installations": { url: `/v1/orgs/${B.org}/github/installations` },
   };
   for (const r of UNBUILT) {
     if (r.scope === "project")

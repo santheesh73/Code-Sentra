@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@codesentra/config": "workspace:*",
+    "@codesentra/github": "workspace:*",
     "@codesentra/db": "workspace:*",
     "@codesentra/link": "workspace:*",
     "@codesentra/queue": "workspace:*",

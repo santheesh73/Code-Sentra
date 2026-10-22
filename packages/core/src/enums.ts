@@ -37,7 +37,7 @@ export type PulseStatus = z.infer<typeof PulseStatus>;
 export const MembershipRole = z.enum(["owner", "admin", "member"]);
 export type MembershipRole = z.infer<typeof MembershipRole>;
 
-export const SnapshotKind = z.enum(["git", "zip"]);
+export const SnapshotKind = z.enum(["git", "zip", "github"]);
 export type SnapshotKind = z.infer<typeof SnapshotKind>;
 
 export const JobType = z.enum([

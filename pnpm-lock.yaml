@@ -264,6 +264,9 @@ importers:
       '@codesentra/web':
         specifier: workspace:*
         version: link:../apps/web
+      '@codesentra/worker-link':
+        specifier: workspace:*
+        version: link:../apps/worker-link
       '@codesentra/worker-pulse':
         specifier: workspace:*
         version: link:../apps/worker-pulse

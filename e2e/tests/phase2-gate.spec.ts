@@ -2,7 +2,7 @@ import type { ChildProcess } from "node:child_process";
 import { loadFixtureApps } from "@codesentra/fixture-harness";
 import { expect, type Page, test } from "@playwright/test";
 import { startWorkerProcess, stop } from "../stack";
-import { APP, signIn } from "./helpers";
+import { APP, signIn, waitForLink } from "./helpers";
 
 /**
  * Phase 2 gate (Section 18) through the whole stack: web → API → pg-boss → worker-pulse
@@ -76,7 +76,12 @@ async function checkNow(page: Page, projectId: string, env: string) {
   const runId = page.url().split("/").at(-1) as string;
   const badge = page.locator("h1 ~ span [data-pulse-status]");
   await expect(badge).toBeVisible({ timeout: 60_000 });
-  return { runId, status: await badge.getAttribute("data-pulse-status") };
+  const status = await badge.getAttribute("data-pulse-status");
+  // Issues are opened by the Link run that follows; show the page once it has.
+  await waitForLink(page, runId);
+  await page.reload();
+  await expect(badge).toBeVisible();
+  return { runId, status };
 }
 
 async function runFindings(page: Page, runId: string): Promise<ApiRunFindings> {

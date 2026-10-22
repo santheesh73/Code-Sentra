@@ -8,7 +8,7 @@ import { PulseFindings } from "@/components/pulse-findings";
 import { ScanReportView } from "@/components/scan-report";
 import { PulseStatusBadge, RunStatusBadge, StepStatusIcon } from "@/components/status";
 import { Card, CardTitle, Notice, Spinner } from "@/components/ui/primitives";
-import { api, isPulseOutcome, problemMessage, type Run } from "@/lib/api";
+import { api, isLinkOutcome, isPulseOutcome, problemMessage, type Run } from "@/lib/api";
 import { cn, formatDuration, formatTime } from "@/lib/utils";
 
 const TERMINAL = new Set(["succeeded", "failed", "partial"]);
@@ -29,6 +29,15 @@ const STEP_LABELS: Record<string, string> = {
   probe: "Probes (install, build, tests in the sandbox; audit; secrets)",
   inventory: "Feature inventory",
   explain: "Report (claims verified against evidence)",
+  trace: "Trace (exact joins from evidence to code)",
+  widen: "Widen (blast radius)",
+  prompt: "Prompts",
+  verify: "Verify (open, resolve, regress issues)",
+};
+
+const TYPE_LABEL: Record<string, string> = {
+  link: "Check",
+  recheck: "Re-check",
 };
 
 /** Subscribes to the run's SSE stream and keeps the query cache in step with it. */
@@ -37,7 +46,13 @@ function useLiveRun(id: string) {
   const [connection, setConnection] = useState<"connecting" | "live" | "reconnecting" | "closed">(
     "connecting",
   );
-  const query = useQuery({ queryKey: ["run", id], queryFn: () => api<Run>(`/v1/runs/${id}`) });
+  const query = useQuery({
+    queryKey: ["run", id],
+    queryFn: () => api<Run>(`/v1/runs/${id}`),
+    // A Link run waits for its children; their progress is not on this run's stream.
+    refetchInterval: (q) =>
+      q.state.data?.type === "link" && !TERMINAL.has(q.state.data.status) ? 2000 : false,
+  });
   const terminal = query.data ? TERMINAL.has(query.data.status) : false;
 
   useEffect(() => {
@@ -107,7 +122,7 @@ export default function RunPage() {
           </Link>
         )}
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold capitalize">{r.type} run</h1>
+          <h1 className="text-2xl font-semibold capitalize">{TYPE_LABEL[r.type] ?? r.type} run</h1>
           <span aria-live="polite" className="flex items-center gap-2">
             <RunStatusBadge status={r.status} />
             {pulse && <PulseStatusBadge status={pulse.pulse_status} gaps={pulse.gaps} />}
@@ -137,6 +152,18 @@ export default function RunPage() {
           </p>
         )}
       </div>
+
+      {r.parent_run_id && (
+        <p className="text-sm text-muted-foreground">
+          Part of{" "}
+          <Link href={`/runs/${r.parent_run_id}`} className="underline">
+            a check
+          </Link>
+          : its Link run turns these findings into tracked issues.
+        </p>
+      )}
+
+      {r.type === "link" && <LinkSummary run={r} />}
 
       {r.error && (
         <Notice tone="danger" title="The run failed">
@@ -212,5 +239,48 @@ export default function RunPage() {
       {r.type === "pulse" && TERMINAL.has(r.status) && <PulseFindings runId={r.id} />}
       {r.type === "scan" && TERMINAL.has(r.status) && <ScanReportView runId={r.id} />}
     </div>
+  );
+}
+
+/** A Link run: the runs it combines, and what it did to the project's issues. */
+function LinkSummary({ run }: { run: Run }) {
+  const o = isLinkOutcome(run.outcome) ? run.outcome : null;
+  return (
+    <Card className="flex flex-col gap-3" data-testid="link-summary">
+      <CardTitle>What this check combines</CardTitle>
+      <ul className="divide-y divide-border">
+        {run.children.map((c) => (
+          <li key={c.id}>
+            <Link
+              href={`/runs/${c.id}`}
+              className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm hover:underline"
+              data-testid={`child-${c.type}`}
+            >
+              <span>
+                <span className="font-medium">{TYPE_LABEL[c.type] ?? c.type}</span>{" "}
+                <span className="break-all text-muted-foreground">{c.target_url ?? ""}</span>
+              </span>
+              <RunStatusBadge status={c.status} />
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {!TERMINAL.has(run.status) && (
+        <p className="text-sm text-muted-foreground">
+          Link starts when every run above has finished.
+        </p>
+      )}
+      {o && (
+        <p className="text-sm" data-testid="link-outcome">
+          {o.issues.opened} opened · {o.issues.seen} still open · {o.issues.resolved} resolved ·{" "}
+          {o.issues.regressed} regressed · {o.traced} of {o.traced + o.untraced} traced to code
+        </p>
+      )}
+      {run.project_id && TERMINAL.has(run.status) && (
+        <Link href={`/projects/${run.project_id}`} className="text-sm underline">
+          See the project's issues
+        </Link>
+      )}
+    </Card>
   );
 }

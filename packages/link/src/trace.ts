@@ -272,7 +272,9 @@ export function traceFinding(f: TraceFinding, graph: LinkGraph): Trace {
     default:
       break;
   }
-  // Scan findings already carry their file and line.
+  // Scan findings already carry their file and line; "." is the project as a whole.
+  if (f.locator === "." || f.locator.startsWith(".#"))
+    return result(graph, null, [], "a project-level finding: there is no single file to point at");
   const m = CODE_LOCATOR.exec(f.locator);
   if (m?.groups?.path && !/^https?:/i.test(f.locator)) {
     const path = m.groups.path;

@@ -70,7 +70,9 @@ async function loadSources(
   for (const kid of kids) {
     const isPulse = kid.type === "pulse" || kid.type === "recheck";
     const label = isPulse ? `Pulse of ${kid.targetUrl}` : "Scan";
-    if (!TERMINAL_OK.has(kid.status)) {
+    // A Scan whose model stages failed still stored its graph and findings: use them.
+    const usableScan = !isPulse && scan?.runId === kid.id;
+    if (!TERMINAL_OK.has(kid.status) && !usableScan) {
       gaps.push(
         `${label} ${kid.status}${kid.error ? `: ${kid.error}` : ""}; its issues were not re-checked`,
       );
@@ -137,7 +139,7 @@ export function linkHandler(): JobHandler {
     const loaded = await ctx.db.withOrg(orgId, async (tx) => {
       const kids = await childRuns(tx, run.id);
       const [project] = await tx.select().from(s.projects).where(eq(s.projects.id, projectId));
-      const scanKid = kids.find((k) => k.type === "scan" && TERMINAL_OK.has(k.status)) ?? null;
+      const scanKid = kids.find((k) => k.type === "scan") ?? null;
       const scan = await scanSourceFor(tx, projectId, scanKid?.id ?? null);
       const graph = scan ? await loadCodeGraph(tx, scan.snapshotId) : null;
       const documented = scan ? await documentedEnvVars(tx, scan.evidenceRunId) : new Set<string>();

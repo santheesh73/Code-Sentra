@@ -74,13 +74,16 @@ export default async function globalSetup() {
   );
   await waitFor(`${appUrl}/signin`);
 
+  // Link turns every project run's findings into issues; it runs for the whole suite.
+  const link = spawnService("worker-link", [join(ROOT, "apps/worker-link/dist/main.js")], env);
+
   process.env.CS_E2E_ENV = JSON.stringify(env);
   process.env.CS_E2E_APP_URL = appUrl;
   process.env.CS_E2E_OUTBOX = env.EMAIL_OUTBOX_DIR;
   process.env.CS_E2E_HARNESS = JSON.stringify(harness.targets);
 
   return async () => {
-    await Promise.all([stop(web), stop(api)]);
+    await Promise.all([stop(web), stop(api), stop(link)]);
     await Promise.all([pg.stop(), minio.stop(), harness.close()]);
   };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, FileArchive, GitBranch } from "lucide-react";
+import { Activity, FileArchive, GitBranch, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
@@ -57,6 +57,15 @@ export default function ProjectPage() {
     },
   });
 
+  const check = useMutation({
+    mutationFn: () =>
+      api<{ run_id: string }>(`/v1/projects/${id}/check`, { method: "POST", body: {} }),
+    onSuccess: ({ run_id }) => {
+      void qc.invalidateQueries({ queryKey: ["runs", id] });
+      router.push(`/runs/${run_id}`);
+    },
+  });
+
   const diagnostic = useMutation({
     mutationFn: () => api<{ run_id: string }>(`/v1/projects/${id}/diagnostic`, { method: "POST" }),
     onSuccess: ({ run_id }) => {
@@ -92,11 +101,22 @@ export default function ProjectPage() {
           <h1 className="text-2xl font-semibold">{p.name}</h1>
           {p.repo_url && <p className="truncate text-sm text-muted-foreground">{p.repo_url}</p>}
         </div>
-        <Button onClick={() => diagnostic.mutate()} disabled={diagnostic.isPending}>
-          <Activity aria-hidden className="size-4" />
-          {diagnostic.isPending ? "Starting…" : "Run diagnostic"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => check.mutate()} disabled={check.isPending}>
+            <ShieldCheck aria-hidden className="size-4" />
+            {check.isPending ? "Starting…" : "Run full check"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => diagnostic.mutate()}
+            disabled={diagnostic.isPending}
+          >
+            <Activity aria-hidden className="size-4" />
+            {diagnostic.isPending ? "Starting…" : "Run diagnostic"}
+          </Button>
+        </div>
       </div>
+      {check.isError && <Notice tone="danger">{problemMessage(check.error)}</Notice>}
       {diagnostic.isError && <Notice tone="danger">{problemMessage(diagnostic.error)}</Notice>}
       {pulse.isError && <Notice tone="danger">{problemMessage(pulse.error)}</Notice>}
 
@@ -222,7 +242,9 @@ export default function ProjectPage() {
                   className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm hover:underline"
                 >
                   <span>
-                    <span className="font-medium capitalize">{r.type}</span>{" "}
+                    <span className="font-medium capitalize">
+                      {r.type === "link" ? "check" : r.type}
+                    </span>{" "}
                     <span className="text-muted-foreground">{formatTime(r.created_at)}</span>
                   </span>
                   {isPulseOutcome(r.outcome) ? (

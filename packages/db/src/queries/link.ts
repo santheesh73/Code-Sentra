@@ -14,8 +14,9 @@ export async function childRuns(tx: TenantTx, parentRunId: string): Promise<RunR
 
 /**
  * The scan whose evidence and code graph a run of this project should use: the run's
- * own scan child if it produced a report, else the project's latest finished scan with
- * one. A cached scan points at the run whose evidence it reused.
+ * own scan child if it stored its results (a report row exists, even when a model stage
+ * failed), else the project's latest such scan. A cached scan points at the run whose
+ * evidence it reused.
  */
 export async function scanSourceFor(
   tx: TenantTx,
@@ -40,14 +41,7 @@ export async function scanSourceFor(
   const recent = await tx
     .select()
     .from(runs)
-    .where(
-      and(
-        eq(runs.projectId, projectId),
-        eq(runs.type, "scan"),
-        inArray(runs.status, ["succeeded", "partial"]),
-        isNotNull(runs.finishedAt),
-      ),
-    )
+    .where(and(eq(runs.projectId, projectId), eq(runs.type, "scan"), isNotNull(runs.finishedAt)))
     .orderBy(desc(runs.finishedAt))
     .limit(10);
   for (const r of recent) {

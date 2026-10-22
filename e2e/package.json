@@ -12,6 +12,7 @@
     "@codesentra/db": "workspace:*",
     "@codesentra/fixture-harness": "workspace:*",
     "@codesentra/web": "workspace:*",
+    "@codesentra/worker-link": "workspace:*",
     "@codesentra/worker-pulse": "workspace:*",
     "@codesentra/worker-scan": "workspace:*",
     "@playwright/test": "1.64.1",

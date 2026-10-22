@@ -54,6 +54,8 @@ export interface RunSummary {
   started_at: string | null;
   finished_at: string | null;
   outcome: PulseOutcome | Record<string, unknown> | null;
+  /** The Link run this run feeds. */
+  parent_run_id: string | null;
 }
 export interface PulseOutcome {
   pulse_status: PulseStatus;
@@ -76,6 +78,17 @@ export interface RunStep {
 export interface Run extends RunSummary {
   steps: RunStep[];
   gaps: { step: string; reason: string }[];
+  /** A Link run's Scan and Pulse runs. */
+  children: RunSummary[];
+}
+export interface LinkOutcome {
+  issues: { opened: number; seen: number; resolved: number; regressed: number };
+  traced: number;
+  untraced: number;
+  gaps: string[];
+}
+export function isLinkOutcome(o: unknown): o is LinkOutcome {
+  return typeof o === "object" && o !== null && "traced" in o && "issues" in o;
 }
 export interface Project {
   id: string;
@@ -150,10 +163,22 @@ export interface Issue {
   created_at: string;
   updated_at: string;
 }
+export interface Trace {
+  path: string;
+  line: number | null;
+  symbol: string | null;
+  excerpt: string | null;
+  join_key: string;
+  env_vars: { name: string; documented: boolean }[];
+  run_id: string;
+}
 export interface IssueDetail extends Issue {
   prompt: Prompt;
   events: { kind: string; run_id: string | null; note: string | null; at: string }[];
   observed: Finding[];
+  /** Verified code locations; empty when Link could not trace it (never a guess). */
+  traces: Trace[];
+  blast_radius: { path: string; reason: string }[];
 }
 export interface RunFindings {
   run_id: string;

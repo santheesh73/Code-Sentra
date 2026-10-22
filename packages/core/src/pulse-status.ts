@@ -56,10 +56,12 @@ export function computePulseStatus(input: PulseStatusInput): PulseStatusResult {
 
   const main = input.main;
   if (!main.reachable && main.failure === "blocked") {
-    gaps.unshift({
-      group: "reachability",
-      reason: "the target resolves to a non-public address and was not contacted",
-    });
+    // One gap per group: keep the reason the reachability group recorded, if any.
+    if (!gaps.some((g) => g.group === "reachability"))
+      gaps.unshift({
+        group: "reachability",
+        reason: "the target resolves to a non-public address and was not contacted",
+      });
     return { status: "unverified", gaps };
   }
   if (!main.reachable || main.status >= 500) {

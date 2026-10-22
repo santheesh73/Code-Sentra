@@ -82,6 +82,25 @@ importers:
         specifier: 1.64.1
         version: 1.64.1
 
+  apps/cli:
+    dependencies:
+      '@codesentra/checks':
+        specifier: workspace:*
+        version: link:../../packages/checks
+      '@codesentra/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@codesentra/ssrf':
+        specifier: workspace:*
+        version: link:../../packages/ssrf
+      playwright-core:
+        specifier: 1.64.1
+        version: 1.64.1
+    devDependencies:
+      '@codesentra/fixture-harness':
+        specifier: workspace:*
+        version: link:../../fixtures/harness
+
   apps/web:
     dependencies:
       '@codesentra/config':

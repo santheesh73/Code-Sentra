@@ -1,3 +1,7 @@
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matches ANSI escape sequences
+const ANSI = /\x1b\[[0-9;]*m/g;
+const stripAnsi = (s: string) => s.replace(ANSI, "");
+
 /** Parsed test run: counts and failing test names (as the runner printed them). */
 export interface TestSummary {
   runner: "node:test" | "pytest" | "vitest" | "jest" | "mocha" | "unknown";
@@ -17,7 +21,7 @@ const num = (re: RegExp, s: string) => {
  * summary is found, so an unparseable run is reported as unknown, never as passing.
  */
 export function parseTestOutput(output: string): TestSummary | null {
-  const s = output.replace(/\x1b\[[0-9;]*m/g, "");
+  const s = stripAnsi(output);
   // node:test (TAP reporter, the default without a TTY): "# pass 2", "not ok 3 - name".
   if (/^# (tests|pass) \d+/m.test(s)) {
     return {
@@ -108,7 +112,7 @@ export interface ErrorLine {
  * Paths outside the project (node_modules, absolute system paths) are skipped.
  */
 export function parseErrorLines(output: string, max = 20): ErrorLine[] {
-  const s = output.replace(/\x1b\[[0-9;]*m/g, "");
+  const s = stripAnsi(output);
   const out: ErrorLine[] = [];
   const push = (file: string, line: string, message: string) => {
     const f = file.replace(/^\.\//, "").replace(/^\/work\//, "");

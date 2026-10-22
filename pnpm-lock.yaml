@@ -428,6 +428,12 @@ importers:
         specifier: workspace:*
         version: link:../../fixtures/harness
 
+  packages/claims:
+    dependencies:
+      '@codesentra/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/config:
     dependencies:
       zod:

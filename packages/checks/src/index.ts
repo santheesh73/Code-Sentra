@@ -1,5 +1,13 @@
 export { chromiumExecutable, launchPulseBrowser } from "./browser.js";
 export {
+  type DraftContext,
+  draftIssues,
+  type EvidenceLike,
+  type FindingLike,
+  findingFingerprint,
+  type IssueDraftOut,
+} from "./issues.js";
+export {
   ADAPTERS,
   adapterByName,
   detectPlatform,

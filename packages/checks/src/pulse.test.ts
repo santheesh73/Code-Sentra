@@ -254,3 +254,41 @@ describe("helpers", () => {
     ]);
   });
 });
+
+describe("draftIssues", () => {
+  it("merges env-undefined's two findings into one issue led by UNDEFINED_IN_URL, with a prompt", async () => {
+    const { draftIssues } = await import("./issues.js");
+    const target = h.targets.apps["env-undefined"]?.url ?? "";
+    const r = await pulse(target);
+    const drafts = draftIssues(r.findings, r.evidence, {
+      target: { url: target, environment: "production" },
+      project: { name: "env-undefined", repoUrl: null },
+      platform: r.platform,
+      lastSuccessfulCheck: null,
+      scanSummary: null,
+    });
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]?.code).toBe("UNDEFINED_IN_URL");
+    expect(drafts[0]?.corroboratingCodes).toEqual(["SAME_ORIGIN_FAILURE"]);
+    expect(drafts[0]?.prompt.type).toBe("investigate");
+    expect(drafts[0]?.prompt.body).toContain('git grep -n -F "/api/ping"');
+    expect(drafts[0]?.recheck).toMatchObject({ module: "pulse", check_group: "render" });
+  });
+
+  it("gives every issue on every fixture a prompt (Rule 4)", async () => {
+    const { draftIssues } = await import("./issues.js");
+    for (const app of loadFixtureApps()) {
+      const url = h.targets.apps[app.manifest.name]?.url ?? "";
+      const r = await pulse(url);
+      const drafts = draftIssues(r.findings, r.evidence, {
+        target: { url, environment: null },
+        project: null,
+        platform: r.platform,
+        lastSuccessfulCheck: null,
+        scanSummary: null,
+      });
+      expect(drafts.length, app.manifest.name).toBe(app.manifest.name === "healthy" ? 0 : 1);
+      for (const d of drafts) expect(d.prompt.body.length).toBeGreaterThan(200);
+    }
+  });
+});

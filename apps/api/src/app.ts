@@ -13,8 +13,10 @@ import type { AppContext } from "./context.js";
 import { registerErrorHandling } from "./errors.js";
 import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
+import { issueRoutes } from "./routes/issues.js";
 import { orgRoutes } from "./routes/orgs.js";
 import { projectRoutes } from "./routes/projects.js";
+import { pulseRoutes } from "./routes/pulse.js";
 import { runRoutes } from "./routes/runs.js";
 import { unbuiltRoutes } from "./routes/unbuilt.js";
 import { registerSession } from "./session-plugin.js";
@@ -100,6 +102,8 @@ export async function buildApp(
   await app.register(orgRoutes(ctx));
   await app.register(projectRoutes(ctx));
   await app.register(runRoutes(ctx));
+  await app.register(pulseRoutes(ctx));
+  await app.register(issueRoutes(ctx));
   await app.register(unbuiltRoutes(ctx));
 
   app.get("/v1/openapi.json", { schema: { hide: true } }, async () => app.swagger());

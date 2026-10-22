@@ -2,10 +2,12 @@ import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { loadConfig } from "@codesentra/config";
+import type { JobType } from "@codesentra/core";
 import { startTestDatabase, type TestDatabase } from "@codesentra/db/testing";
 import {
   createRunEventListener,
   diagnosticHandler,
+  type JobHandler,
   type QueueClient,
   type RunEventListener,
   startQueueClient,
@@ -107,7 +109,12 @@ export interface TestApi {
   close(): Promise<void>;
 }
 
-export async function startTestApi(): Promise<TestApi> {
+export interface TestApiOptions {
+  env?: Record<string, string>;
+  handlers?: Partial<Record<JobType, JobHandler>>;
+}
+
+export async function startTestApi(opts: TestApiOptions = {}): Promise<TestApi> {
   const t = await startTestDatabase();
   const github = await startFakeGithub();
   const config = loadConfig("api", {
@@ -121,13 +128,14 @@ export async function startTestApi(): Promise<TestApi> {
     GITHUB_OAUTH_BASE_URL: github.url,
     GITHUB_API_BASE_URL: github.url,
     EMAIL_TRANSPORT: "outbox",
+    ...opts.env,
   });
   const queue = await startQueueClient(t.url, { retryDelaySeconds: 1 });
   const events = await createRunEventListener(t.url);
   const worker = await startWorker({
     db: t.db,
     queue,
-    handlers: { "system.diagnostic": diagnosticHandler({ store: null }) },
+    handlers: { "system.diagnostic": diagnosticHandler({ store: null }), ...opts.handlers },
   });
   const mail = memoryTransport();
   const { app, routes } = await buildApp({
@@ -138,6 +146,7 @@ export async function startTestApi(): Promise<TestApi> {
     queue,
     events,
     email: mail,
+    store: null,
     cookie: { secure: false },
     fetch,
   });
@@ -192,4 +201,67 @@ export async function signIn(api: TestApi, email: string): Promise<string> {
 
 export function as(cookie: string) {
   return { cookie, ...ORIGIN };
+}
+
+/** Inserts an issue with evidence, a finding and a prompt directly (for authz tests). */
+export async function seedIssue(api: TestApi, orgId: string, projectId: string, runId: string) {
+  const { schema: s } = await import("@codesentra/db");
+  const sys = api.t.db.system;
+  const [ev] = await sys
+    .insert(s.evidence)
+    .values({
+      orgId,
+      runId,
+      kind: "render_summary",
+      locator: "https://seed.example/",
+      payload: { text_length: 0 },
+      hash: "0".repeat(64),
+    })
+    .returning();
+  const [issue] = await sys
+    .insert(s.issues)
+    .values({
+      orgId,
+      projectId,
+      fingerprint: `seed-${Math.random()}`,
+      title: "Page renders blank — seed.example",
+      code: "BLANK_PAGE",
+      severity: "error",
+      locator: "https://seed.example/",
+      summary: "seeded",
+      firstSeenRunId: runId,
+      lastSeenRunId: runId,
+      recheck: {
+        module: "pulse",
+        check_group: "render",
+        target: "https://seed.example/",
+        expectation: "x",
+      },
+    })
+    .returning();
+  await sys.insert(s.fixPrompts).values({
+    orgId,
+    issueId: issue!.id,
+    version: 1,
+    type: "investigate",
+    body: "seed prompt",
+    templateVersion: "investigate@1",
+  });
+  return issue!.id as string;
+}
+
+export async function seedEvidence(api: TestApi, orgId: string, runId: string) {
+  const { schema: s } = await import("@codesentra/db");
+  const [ev] = await api.t.db.system
+    .insert(s.evidence)
+    .values({
+      orgId,
+      runId,
+      kind: "http_response",
+      locator: "https://secret.example.com/",
+      payload: { secret: "secret.example.com" },
+      hash: "1".repeat(64),
+    })
+    .returning();
+  return ev!.id as string;
 }

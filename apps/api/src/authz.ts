@@ -45,7 +45,7 @@ export function createAuthz(db: Database) {
   }
 
   async function orgOf(
-    table: typeof s.projects | typeof s.runs,
+    table: typeof s.projects | typeof s.runs | typeof s.issues | typeof s.evidence,
     id: string,
   ): Promise<string | null> {
     const [row] = await db.system
@@ -67,6 +67,18 @@ export function createAuthz(db: Database) {
       const orgId = await orgOf(s.projects, projectId);
       if (!orgId) throw notFound("Project");
       return requireOrg(req, orgId, minRole, "Project");
+    },
+    async requireIssue(req: FastifyRequest, issueId: string) {
+      requireUser(req);
+      const orgId = await orgOf(s.issues, issueId);
+      if (!orgId) throw notFound("Issue");
+      return requireOrg(req, orgId, "member", "Issue");
+    },
+    async requireEvidence(req: FastifyRequest, evidenceId: string) {
+      requireUser(req);
+      const orgId = await orgOf(s.evidence, evidenceId);
+      if (!orgId) throw notFound("Evidence");
+      return requireOrg(req, orgId, "member", "Evidence");
     },
     async requireRun(req: FastifyRequest, runId: string) {
       requireUser(req);

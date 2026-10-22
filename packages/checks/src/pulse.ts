@@ -22,15 +22,25 @@ export async function runPulse(opts: PulseOptions): Promise<PulseResult> {
   const started = performance.now();
   const rec = new Recorder();
   const groups = new Map<PulseCheckGroup, CheckGroupOutcome>();
+  let mark = 0;
   const done = async (group: PulseCheckGroup) => {
     groups.set(group, { group, ran: true });
-    await opts.onGroup?.(group, "done");
+    const added = rec.findings.slice(mark);
+    mark = rec.findings.length;
+    const detail =
+      added.length === 0
+        ? "no problems found"
+        : added.map((f) => `${f.severity.toUpperCase()} ${f.code}: ${f.message}`).join("\n");
+    await opts.onGroup?.(group, "done", detail);
   };
   const skip = async (group: PulseCheckGroup, reason: string) => {
     groups.set(group, { group, ran: false, gapReason: reason });
     await opts.onGroup?.(group, "skipped", reason);
   };
-  const start = async (group: PulseCheckGroup) => opts.onGroup?.(group, "running");
+  const start = async (group: PulseCheckGroup) => {
+    mark = rec.findings.length;
+    await opts.onGroup?.(group, "running");
+  };
 
   await start("reachability");
   const reach = await checkReachability(opts, rec);

@@ -26,6 +26,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@codesentra/checks':
+        specifier: workspace:*
+        version: link:../../packages/checks
       '@codesentra/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -38,6 +41,9 @@ importers:
       '@codesentra/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@codesentra/ssrf':
+        specifier: workspace:*
+        version: link:../../packages/ssrf
       '@codesentra/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -66,9 +72,15 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      '@codesentra/fixture-harness':
+        specifier: workspace:*
+        version: link:../../fixtures/harness
       '@testcontainers/postgresql':
         specifier: 12.2.1
         version: 12.2.1
+      playwright-core:
+        specifier: 1.64.1
+        version: 1.64.1
 
   apps/web:
     dependencies:
@@ -124,6 +136,9 @@ importers:
 
   apps/worker-pulse:
     dependencies:
+      '@codesentra/checks':
+        specifier: workspace:*
+        version: link:../../packages/checks
       '@codesentra/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -133,12 +148,21 @@ importers:
       '@codesentra/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@codesentra/ssrf':
+        specifier: workspace:*
+        version: link:../../packages/ssrf
       '@codesentra/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)
       pino:
         specifier: 10.4.0
         version: 10.4.0
+      playwright-core:
+        specifier: 1.64.1
+        version: 1.64.1
 
   e2e:
     devDependencies:
@@ -356,9 +380,24 @@ importers:
       '@codesentra/core':
         specifier: workspace:*
         version: link:../core
+      '@codesentra/db':
+        specifier: workspace:*
+        version: link:../db
+      '@codesentra/prompts':
+        specifier: workspace:*
+        version: link:../prompts
+      '@codesentra/queue':
+        specifier: workspace:*
+        version: link:../queue
       '@codesentra/ssrf':
         specifier: workspace:*
         version: link:../ssrf
+      '@codesentra/storage':
+        specifier: workspace:*
+        version: link:../storage
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)
       playwright-core:
         specifier: 1.64.1
         version: 1.64.1

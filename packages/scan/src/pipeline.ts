@@ -15,7 +15,7 @@ import {
   type ReportSection,
   type ScanStage,
 } from "@codesentra/core";
-import { analyzeHistory, parseGitLog } from "@codesentra/graph";
+import { analyzeHistory, type GraphEdge, type GraphNode, parseGitLog } from "@codesentra/graph";
 import type { Sandbox } from "@codesentra/sandbox";
 import { isLockfile, type LockedPackage, parseLockfile } from "./audit/lockfiles.js";
 import { auditPackages, type OsvSource } from "./audit/osv.js";
@@ -80,6 +80,8 @@ export interface ScanResult {
   gaps: { stage: ScanStage; reason: string }[];
   stages: Record<ScanStage, "done" | "skipped" | "failed">;
   usage: Usage[];
+  /** The code graph, for code_nodes / code_edges. */
+  graph: { nodes: GraphNode[]; edges: GraphEdge[] };
   summary: {
     languages: Record<string, number>;
     frameworks: string[];
@@ -505,6 +507,7 @@ export async function runScan(o: ScanOptions): Promise<ScanResult> {
     gaps,
     stages,
     usage,
+    graph: { nodes: [...map.graph.nodes.values()], edges: map.graph.edges },
     summary: {
       languages: map.languages,
       frameworks: map.frameworks,

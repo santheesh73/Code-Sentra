@@ -4,6 +4,7 @@
   "private": true,
   "description": "CodeSentra command line: check a deployed URL with Sentra Pulse",
   "type": "module",
+  "files": ["dist"],
   "bin": {
     "codesentra": "./dist/main.js"
   },

@@ -14,9 +14,12 @@
   IPv4-mapped, 6to4, Teredo and NAT64 forms, which could carry a private IPv4. The names
   `localhost` and `*.localhost` are refused before DNS (RFC 6761), with or without a
   trailing dot.
-- **DNS pinning.** A host is resolved once. _Every_ returned address must pass, and the
-  connection is made to the first one through a custom `lookup`, so a second, rebinding
-  answer is never used. TLS still verifies against the host name.
+- **DNS pinning.** A host is resolved once. _Every_ returned address must pass. The socket
+  gets exactly those addresses through a custom `lookup` and tries them in order (Node's
+  `autoSelectFamily`), so an unreachable first record such as `::1` falls back to the next
+  one. Nothing outside the checked set is reachable, and no second (rebinding) answer is
+  ever requested. TLS still verifies against the host name. The hop records the address
+  actually connected to.
 - **Redirects are manual.** Each hop is parsed, checked against the address rule, and
   resolved and pinned again. Loops and chains longer than 10 hops are failures
   (`redirect_loop`, `too_many_redirects`). Only http and https are followed. Cookies are

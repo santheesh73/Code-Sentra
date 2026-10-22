@@ -202,6 +202,22 @@ describe("safeFetch against local servers", () => {
     expect(calls).toBe(1);
   });
 
+  it("falls back to the next checked address when the first is unreachable", async () => {
+    // GitHub runners map localhost to ::1 before 127.0.0.1; this server listens on IPv4 only.
+    let calls = 0;
+    const resolver: Resolver = async () => {
+      calls++;
+      return [
+        { address: "::1", family: 6 },
+        { address: "127.0.0.1", family: 4 },
+      ];
+    };
+    const p = testPolicy(["dual.codesentra.test"], { resolver });
+    const res = await safeFetch(`http://dual.codesentra.test:${port}/`, { policy: p });
+    expect(res.status).toBe(200);
+    expect(calls).toBe(1);
+  });
+
   it("caps the body", async () => {
     const res = await safeFetch(`${base}/big`, { policy: policy(), maxBodyBytes: 1000 });
     expect(res.truncated).toBe(true);

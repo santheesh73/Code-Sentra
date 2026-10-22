@@ -115,14 +115,15 @@ const bareHost = (u: URL) =>
 const isLocalhostName = (host: string) => host === "localhost" || host.endsWith(".localhost");
 
 /**
- * Resolves a URL's host once and checks every address. Returns the address to pin.
+ * Resolves a URL's host once and checks every address. Returns the checked addresses
+ * to pin, in resolver order; the socket may try each of them and nothing else.
  * Any blocked address fails the whole host: a name that resolves to both a public and
  * a private address is treated as hostile (DNS rebinding).
  */
 export async function resolveTarget(
   raw: string | URL,
   policy: FetchPolicy,
-): Promise<ResolvedAddress> {
+): Promise<ResolvedAddress[]> {
   const u = parseTarget(raw);
   const host = bareHost(u);
   const exempt = policy.allowHosts.has(host);
@@ -161,7 +162,7 @@ export async function resolveTarget(
       }
     }
   }
-  return addresses[0] as ResolvedAddress;
+  return addresses;
 }
 
 function tlsInfo(socket: TLSSocket): TlsInfo {
@@ -188,6 +189,7 @@ interface HopResult {
 async function requestOnce(u: URL, opts: SafeFetchOptions, readBody: boolean): Promise<HopResult> {
   const t0 = performance.now();
   const pinned = await resolveTarget(u, opts.policy);
+  const first = pinned[0] as ResolvedAddress;
   const dnsMs = Math.round(performance.now() - t0);
   const timeoutMs = opts.timeoutMs ?? 15_000;
   const maxBody = opts.maxBodyBytes ?? 2 * 1024 * 1024;
@@ -195,9 +197,11 @@ async function requestOnce(u: URL, opts: SafeFetchOptions, readBody: boolean): P
 
   const lookup: LookupFunction = (_hostname, options, cb) => {
     if ((options as { all?: boolean }).all) {
-      (cb as unknown as (e: null, a: ResolvedAddress[]) => void)(null, [pinned]);
+      // With autoSelectFamily (Node's default since 20), Node tries these in turn (an unreachable ::1 falls back to
+      // 127.0.0.1); all of them were checked, so no address outside the pin is reachable.
+      (cb as unknown as (e: null, a: ResolvedAddress[]) => void)(null, pinned);
     } else {
-      cb(null, pinned.address, pinned.family);
+      cb(null, first.address, first.family);
     }
   };
 
@@ -248,7 +252,7 @@ async function requestOnce(u: URL, opts: SafeFetchOptions, readBody: boolean): P
           resolve({
             hop: {
               url: u.href,
-              ip: pinned.address,
+              ip: res.socket?.remoteAddress ?? first.address,
               status: res.statusCode ?? 0,
               headers,
               location: typeof res.headers.location === "string" ? res.headers.location : null,

@@ -131,8 +131,58 @@ describe("renderPrompt", () => {
     expect(renderPrompt(ctx())).toEqual(renderPrompt(ctx()));
   });
 
-  it("refuses code_fix without a trace", () => {
+  it("refuses code_fix without a trace or a code location", () => {
     expect(() => renderPrompt(ctx({ hasVerifiedTrace: true }))).toThrow(/verified trace/);
+  });
+
+  it("writes a code_fix prompt for a Scan finding at its file and line", () => {
+    const p = renderPrompt(
+      ctx({
+        code: "STUB_IMPLEMENTATION",
+        title: "Stub implementation — src/lib/csv.ts:4",
+        severity: "warning",
+        locator: "src/lib/csv.ts:4",
+        message: 'exportCsv in src/lib/csv.ts only throws "not implemented" (line 4).',
+        corroborating: [],
+        evidence: [
+          {
+            kind: "code_fact",
+            locator: "src/lib/csv.ts:4",
+            payload: { kind: "stub", text: 'throw new Error("not implemented");' },
+          },
+        ],
+        target: { url: "", environment: null },
+        platform: null,
+      }),
+    );
+    expect(p.type).toBe("code_fix");
+    expect(p.templateVersion).toBe("code_fix@1");
+    expect(p.body).toContain("**Location:** `src/lib/csv.ts:4`");
+    expect(p.body).toContain('throw new Error("not implemented");');
+    expect(p.body).toContain("On the next Scan of this project");
+    expect(p.body).not.toContain("later check of");
+  });
+
+  it("never puts more than the masked preview of a secret in a prompt", () => {
+    const p = renderPrompt(
+      ctx({
+        code: "SECRET_EXPOSED",
+        title: "Secret committed",
+        locator: "src/config/defaults.ts:4",
+        message: "A aws-access-token secret pattern is committed (value redacted).",
+        corroborating: [],
+        evidence: [
+          {
+            kind: "secret_match",
+            locator: "src/config/defaults.ts:4",
+            payload: { type: "aws-access-token", preview: "AKIA…" },
+          },
+        ],
+        target: { url: "", environment: null },
+      }),
+    );
+    expect(p.body).toContain("Rotate the credential first");
+    expect(p.body).toContain("AKIA…");
   });
 });
 

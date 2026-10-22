@@ -102,6 +102,15 @@ export const ProjectDto = z
     platform: z.string().nullable(),
     environments: z.array(EnvironmentDto),
     latest_run: RunSummaryDto.nullable(),
+    latest_scan: z
+      .object({
+        run_id: z.uuid(),
+        status: RunStatus,
+        health_score: z.number().int().nullable(),
+        finished_at: ts,
+      })
+      .nullable()
+      .describe("The latest finished Scan; null until one has run"),
     open_issues: z.number().int(),
     created_at: ts,
     updated_at: ts,
@@ -190,6 +199,7 @@ export const projectDto = (
   latest: RunRow | null,
   latestPulseByEnv: Map<string, RunRow> = new Map(),
   openIssues = 0,
+  latestScan: RunRow | null = null,
 ): z.infer<typeof ProjectDto> => ({
   id: p.id,
   org_id: p.orgId,
@@ -199,6 +209,15 @@ export const projectDto = (
   platform: p.platform,
   environments: envs.map((e) => environmentDto(e, latestPulseByEnv.get(e.id) ?? null)),
   latest_run: latest ? runSummaryDto(latest) : null,
+  latest_scan: latestScan
+    ? {
+        run_id: latestScan.id,
+        status: latestScan.status,
+        health_score:
+          (latestScan.outcome as { health_score?: number | null } | null)?.health_score ?? null,
+        finished_at: (latestScan.finishedAt ?? latestScan.createdAt).toISOString(),
+      }
+    : null,
   open_issues: openIssues,
   created_at: p.createdAt.toISOString(),
   updated_at: p.updatedAt.toISOString(),
@@ -365,3 +384,102 @@ export const issueDto = (i: IssueRow): z.infer<typeof IssueDto> => ({
   created_at: i.createdAt.toISOString(),
   updated_at: i.updatedAt.toISOString(),
 });
+
+// --- Scan (Phase 3) -----------------------------------------------------------------
+
+export const SnapshotDto = z
+  .object({
+    id: z.uuid(),
+    project_id: z.uuid(),
+    kind: z.enum(["git", "zip"]),
+    source_url: z.string().nullable(),
+    ref: z.string().nullable(),
+    commit_sha: z.string().nullable(),
+    tree_hash: z.string().nullable().describe("Set once ingest has extracted the tree"),
+    has_history: z.boolean(),
+    size_bytes: z.number().int().nullable(),
+    file_count: z.number().int().nullable(),
+    created_at: z.iso.datetime(),
+  })
+  .meta({ id: "Snapshot" });
+
+type SnapshotRow = typeof schema.snapshots.$inferSelect;
+export const snapshotDto = (r: SnapshotRow): z.infer<typeof SnapshotDto> => ({
+  id: r.id,
+  project_id: r.projectId,
+  kind: r.kind,
+  source_url: r.sourceUrl,
+  ref: r.ref,
+  commit_sha: r.commitSha,
+  tree_hash: r.treeHash,
+  has_history: r.hasHistory,
+  size_bytes: r.sizeBytes,
+  file_count: r.fileCount,
+  created_at: r.createdAt.toISOString(),
+});
+
+const ClaimOut = z.object({ text: z.string(), evidence_ids: z.array(z.uuid()) });
+
+export const ReportDto = z
+  .object({
+    run_id: z.uuid(),
+    source_run_id: z
+      .uuid()
+      .describe(
+        "The run whose evidence the report rests on (differs when a cached report is reused)",
+      ),
+    cached: z.boolean(),
+    health: z.object({
+      score: z.number().int().nullable(),
+      excluded: z
+        .array(z.string())
+        .describe("Components that could not be measured; weights were renormalized"),
+      components: z.array(
+        z.object({
+          component: z.string(),
+          weight: z.number(),
+          measured: z.boolean(),
+          not_measured: z.array(z.string()),
+          ratio: z.number(),
+          deductions: z.array(
+            z.object({ reason: z.string(), points: z.number(), evidence_ids: z.array(z.uuid()) }),
+          ),
+        }),
+      ),
+    }),
+    sections: z.object({
+      summary: z.array(ClaimOut),
+      value: z.array(ClaimOut),
+      features: z.array(ClaimOut),
+      issues: z.array(ClaimOut),
+      remaining: z.array(ClaimOut),
+    }),
+    features: z.array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["complete", "partial", "planned"]),
+        reason: z.string(),
+        evidence_ids: z.array(z.uuid()),
+      }),
+    ),
+    claims_total: z.number().int(),
+    claims_dropped: z.number().int(),
+    dropped_claims: z.array(
+      z.object({
+        section: z.string(),
+        text: z.string(),
+        reason: z.string(),
+        detail: z.string().nullable(),
+        evidence_ids: z.array(z.uuid()),
+      }),
+    ),
+    coverage: z.object({
+      gaps: z.array(z.object({ stage: z.string(), reason: z.string() })),
+      checks: z.record(z.string(), z.string()),
+      stages: z.record(z.string(), z.string()),
+    }),
+    summary: z.record(z.string(), z.unknown()),
+    model: z.string().nullable(),
+    created_at: z.iso.datetime(),
+  })
+  .meta({ id: "ScanReport" });

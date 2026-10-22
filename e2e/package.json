@@ -13,9 +13,12 @@
     "@codesentra/fixture-harness": "workspace:*",
     "@codesentra/web": "workspace:*",
     "@codesentra/worker-pulse": "workspace:*",
+    "@codesentra/worker-scan": "workspace:*",
     "@playwright/test": "1.64.1",
     "@testcontainers/postgresql": "12.2.1",
     "@types/node": "22.20.5",
-    "testcontainers": "12.2.1"
+    "@types/yazl": "3.3.1",
+    "testcontainers": "12.2.1",
+    "yazl": "3.3.1"
   }
 }

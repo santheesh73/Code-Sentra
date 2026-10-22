@@ -31,6 +31,7 @@ export interface CreateRunInput {
   parentRunId?: string | null;
   /** Ordered step names; each becomes a pending run_step. */
   steps: readonly string[];
+  snapshotId?: string | null;
 }
 
 export async function createRun(tx: TenantTx, input: CreateRunInput): Promise<RunWithSteps> {
@@ -48,6 +49,7 @@ export async function createRun(tx: TenantTx, input: CreateRunInput): Promise<Ru
       requestedBy: input.requestedBy ?? null,
       targetUrl: input.targetUrl ?? null,
       parentRunId: input.parentRunId ?? null,
+      snapshotId: input.snapshotId ?? null,
     })
     .returning();
   if (!run) throw new Error("createRun: insert returned no row");

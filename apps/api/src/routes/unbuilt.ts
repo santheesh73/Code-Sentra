@@ -21,20 +21,6 @@ interface Unbuilt {
 export const UNBUILT: Unbuilt[] = [
   {
     method: "POST",
-    url: "/v1/projects/:id/snapshots",
-    summary: "Upload a zip or register a git ref",
-    phase: "Phase 3",
-    scope: "project",
-  },
-  {
-    method: "POST",
-    url: "/v1/projects/:id/scan",
-    summary: "Start Sentra Scan",
-    phase: "Phase 3",
-    scope: "project",
-  },
-  {
-    method: "POST",
     url: "/v1/projects/:id/check",
     summary: "Full check: Scan + Pulse, then Link",
     phase: "Phase 4",
@@ -60,13 +46,6 @@ export const UNBUILT: Unbuilt[] = [
     summary: "Delete a schedule",
     phase: "Phase 5",
     scope: "project",
-  },
-  {
-    method: "GET",
-    url: "/v1/runs/:id/report",
-    summary: "Scan report",
-    phase: "Phase 3",
-    scope: "run",
   },
   {
     method: "POST",

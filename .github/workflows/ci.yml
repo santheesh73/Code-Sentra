@@ -55,13 +55,21 @@ jobs:
       - name: Install Chromium for the fixture self-test
         run: pnpm --filter @codesentra/fixture-harness exec playwright-core install --with-deps chromium
       - run: pnpm build
+      # Scan probes run in this image (runc on the runner: there is no gVisor; ADR 0016).
+      - name: Build the sandbox image and pull gitleaks
+        run: |
+          docker build -t codesentra/sandbox:ci infra/sandbox
+          docker pull zricethezav/gitleaks:v8.30.1
       # Integration tests start Postgres/MinIO with Testcontainers (Docker is available on the runner).
       - run: pnpm test
+        env:
+          SANDBOX_IMAGE: codesentra/sandbox:ci
       - name: OpenAPI docs are up to date
         run: pnpm openapi && git diff --exit-code docs/openapi.json docs/api.md
 
-  # Phase 1 and 2 gates: real Postgres + MinIO (Testcontainers), API, worker-pulse (real
-  # Chromium), web and the fixture harness on loopback, driven in Chromium.
+  # Phase 1–3 gates: real Postgres + MinIO (Testcontainers), API, worker-pulse (real
+  # Chromium), worker-scan (sandbox, gitleaks, offline OSV), web and the fixture harness on
+  # loopback, driven in Chromium.
   e2e:
     runs-on: ubuntu-24.04
     steps:
@@ -76,7 +84,13 @@ jobs:
         run: pnpm --filter @codesentra/e2e exec playwright install --with-deps chromium
       # Everything e2e depends on, including the fixture harness and the fixture app exports.
       - run: pnpm turbo run build --filter=@codesentra/e2e...
+      - name: Build the sandbox image and pull gitleaks
+        run: |
+          docker build -t codesentra/sandbox:ci infra/sandbox
+          docker pull zricethezav/gitleaks:v8.30.1
       - run: pnpm e2e
+        env:
+          SANDBOX_IMAGE: codesentra/sandbox:ci
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

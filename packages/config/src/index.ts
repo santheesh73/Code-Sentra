@@ -86,6 +86,23 @@ export const EnvSchema = z.object({
   SLACK_CLIENT_ID: secret(1),
   SLACK_CLIENT_SECRET: secret(8),
   SANDBOX_RUNTIME: z.enum(["runsc", "runc"]),
+  /** Image the probes run in (infra/sandbox). */
+  SANDBOX_IMAGE: z.string().min(1).default("codesentra/sandbox:latest"),
+  /** Docker network for dependency downloads only (ADR 0016); "host" where egress needs a host proxy. */
+  SANDBOX_FETCH_NETWORK: z.string().min(1).default("bridge"),
+  SANDBOX_FETCH_PROXY: url().optional(),
+  SANDBOX_FETCH_CA_FILE: z.string().optional(),
+  /** Directory with an OSV dump (osv-scanner offline format); unset uses the OSV API. */
+  OSV_OFFLINE_DIR: z.string().optional(),
+  SCAN_MAX_COMMITS: z.coerce.number().int().min(1).max(50_000).default(2000),
+  /** Largest accepted zip upload (compressed), bytes. */
+  SCAN_MAX_UPLOAD_BYTES: z.coerce
+    .number()
+    .int()
+    .min(1024)
+    .default(200 * 1024 * 1024),
+  /** Test only: "fixture" uses the scripted fixture-repo model instead of Anthropic (ADR 0017). */
+  SCAN_TEST_MODEL: z.enum(["fixture"]).optional(),
   PULSE_SLOW_THRESHOLD_MS: z.coerce.number().int().min(100).max(60_000).default(3000),
   /** Test only (fixture harness on loopback): comma-separated hosts exempt from the SSRF address check. */
   PULSE_TEST_ALLOW_HOSTS: z.string().optional(),
@@ -143,6 +160,7 @@ export const SERVICE_ENV = {
       "EMAIL_TRANSPORT",
       "EMAIL_OUTBOX_DIR",
       "PULSE_TEST_ALLOW_HOSTS",
+      "SCAN_MAX_UPLOAD_BYTES",
     ],
     integrations: ["s3", "github_oauth", "github_app", "email", "slack"],
   },
@@ -153,8 +171,17 @@ export const SERVICE_ENV = {
   },
   "worker-scan": {
     required: ["DATABASE_URL", "ENCRYPTION_KEY", "SANDBOX_RUNTIME"],
-    settings: [],
-    integrations: ["s3", "github_app"],
+    settings: [
+      "SANDBOX_IMAGE",
+      "SANDBOX_FETCH_NETWORK",
+      "SANDBOX_FETCH_PROXY",
+      "SANDBOX_FETCH_CA_FILE",
+      "OSV_OFFLINE_DIR",
+      "SCAN_MAX_COMMITS",
+      "SCAN_TEST_MODEL",
+      "PULSE_TEST_ALLOW_HOSTS",
+    ],
+    integrations: ["s3", "github_app", "anthropic"],
   },
   "worker-pulse": {
     required: ["DATABASE_URL", "ENCRYPTION_KEY"],
@@ -222,6 +249,13 @@ export function loadConfig<S extends Service>(
         message: "is only allowed when NODE_ENV=test (it weakens SSRF protection)",
       });
     }
+  }
+  if (present(env, "SCAN_TEST_MODEL") && env.NODE_ENV !== "test") {
+    problems.push({
+      key: "SCAN_TEST_MODEL",
+      message:
+        "is only allowed when NODE_ENV=test (it replaces the report model with a scripted one)",
+    });
   }
   const outbox = env.EMAIL_TRANSPORT === "outbox";
   if (production && outbox && spec.settings.includes("EMAIL_TRANSPORT")) {

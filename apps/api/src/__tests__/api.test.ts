@@ -355,4 +355,13 @@ describe("OpenAPI", () => {
     ).toEqual(JSON.parse(JSON.stringify(generated)));
     expect(readFileSync(`${docs}api.md`, "utf8")).toBe(renderApiMarkdown(generated));
   });
+
+  it("defines every schema it references", async () => {
+    const doc = JSON.parse(JSON.stringify(await generateOpenApi()));
+    const refs = new Set(
+      [...JSON.stringify(doc).matchAll(/#\/components\/schemas\/([\w.-]+)/g)].map((m) => m[1]),
+    );
+    expect(refs.size).toBeGreaterThan(10);
+    expect([...refs].filter((r) => !doc.components.schemas?.[r as string])).toEqual([]);
+  });
 });

@@ -3,6 +3,7 @@ import {
   type FindingCode,
   type JsonObject,
   type PromptType,
+  parseCodeLocator,
   promptTypeFor,
   recheckFor,
   type Severity,
@@ -13,7 +14,7 @@ export const TEMPLATE_VERSIONS: Record<PromptType, string> = {
   outage_triage: "outage_triage@1",
   config_fix: "config_fix@1",
   investigate: "investigate@1",
-  code_fix: "code_fix@0",
+  code_fix: "code_fix@1",
 };
 
 export type HintTopic =
@@ -66,6 +67,8 @@ const str = (v: unknown): string | null => (typeof v === "string" && v.length > 
 const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
 
 function targetLine(ctx: PromptContext): string {
+  if (!ctx.target.url)
+    return ctx.project ? `the ${ctx.project.name} repository` : "the scanned repository";
   const env = ctx.target.environment ? `${ctx.target.environment} — ` : "";
   const platform =
     ctx.platform && ctx.platform.name !== "generic" ? ` (hosted on ${ctx.platform.name})` : "";
@@ -74,6 +77,8 @@ function targetLine(ctx: PromptContext): string {
 
 function fixedWhen(ctx: PromptContext): string {
   const r = recheckFor(ctx.code, ctx.locator, ctx.target.url);
+  if (r.module === "scan")
+    return `## How CodeSentra will confirm the fix\nOn the next Scan of this project, CodeSentra re-runs its **${r.check_group}** checks and expects: _${r.expectation}_. When that holds, this issue closes on its own; if it comes back later, the issue reopens as regressed.`;
   return `## How CodeSentra will confirm the fix\nOn every later check of ${ctx.target.url}, CodeSentra re-runs its **${r.check_group}** checks and expects: _${r.expectation}_. When that holds, this issue closes on its own; if it comes back later, the issue reopens as regressed.`;
 }
 
@@ -157,6 +162,39 @@ function observations(ctx: PromptContext): string[] {
         );
         break;
       }
+      case "marker":
+      case "code_fact":
+      case "env_var_read":
+      case "env_var_documented":
+      case "doc_excerpt":
+        if (str(p.text)) out.push(`${e.locator}: \`${quote(str(p.text) as string, 160)}\``);
+        break;
+      case "test_result":
+        out.push(
+          `Test ${str(p.name) ? `"${str(p.name)}" ` : ""}at ${e.locator}: ${str(p.status) ?? "unknown"}${str(p.message) ? ` — ${quote(str(p.message) as string, 200)}` : ""}`,
+        );
+        break;
+      case "probe_result":
+        out.push(
+          `Sandbox step \`${str(p.command) ?? e.locator}\`: ${str(p.status) ?? "?"}${num(p.exit_code) !== null ? ` (exit ${num(p.exit_code)})` : ""}`,
+        );
+        for (const err of (Array.isArray(p.errors) ? (p.errors as JsonObject[]) : []).slice(0, 5))
+          out.push(`${str(err.file)}:${num(err.line)}: ${quote(str(err.message) ?? "", 200)}`);
+        break;
+      case "dependency_advisory": {
+        const advisories = Array.isArray(p.advisories) ? (p.advisories as JsonObject[]) : [];
+        for (const a of advisories)
+          out.push(
+            `${str(p.package)}@${str(p.version)} (${e.locator}): ${str(a.id)} ${str(a.severity) ? `[${str(a.severity)}] ` : ""}${str(a.summary) ?? ""}${Array.isArray(a.fixed_versions) && a.fixed_versions.length ? `; fixed in ${a.fixed_versions.join(", ")}` : ""}`.trim(),
+          );
+        break;
+      }
+      case "secret_match":
+        // The preview is masked at capture; the value itself is never stored.
+        out.push(
+          `A ${str(p.type) ?? "secret"} pattern at ${e.locator} (redacted: \`${str(p.preview) ?? "…"}\`)`,
+        );
+        break;
       default:
         break;
     }
@@ -185,7 +223,9 @@ function outageTriage(ctx: PromptContext): string {
     `**Certificate** — \`openssl s_client -connect ${hostOf(ctx.target.url)}:443 -servername ${hostOf(ctx.target.url)} </dev/null | openssl x509 -noout -subject -issuer -dates\`; renew or re-issue if expired, for the wrong host, or from an untrusted issuer.`,
     "**Runtime logs** — look for crashes, unhandled errors, exhausted memory, or failing dependencies (database, upstream APIs) at the time of the check.",
   ];
-  const startAt = OUTAGE_STEP[ctx.code] ?? 0;
+  // A Scan finding has no deployed URL: DNS and certificate steps do not apply.
+  if (!ctx.target.url) steps.splice(2, 2);
+  const startAt = Math.min(OUTAGE_STEP[ctx.code] ?? 0, steps.length - 1);
   return [
     `# Outage triage: ${ctx.title}`,
     "",
@@ -398,6 +438,71 @@ function investigate(ctx: PromptContext): string {
   ].join("\n");
 }
 
+// --- code_fix -----------------------------------------------------------------------
+
+const CODE_FIX_STEPS: Partial<Record<FindingCode, string[]>> = {
+  TESTS_FAILING: [
+    "Run the failing test locally and read the assertion that fails.",
+    "Decide whether the code or the test is wrong; fix the code unless the test encodes outdated behaviour.",
+  ],
+  TYPECHECK_ERRORS: [
+    "Run the type checker and fix the error at the location without casting it away.",
+  ],
+  LINT_ERRORS: ["Run the linter and fix the reported rule at the location."],
+  VULNERABLE_DEPENDENCY: [
+    "Upgrade the package to a fixed version (or a newer release line), then regenerate the lockfile with the package manager.",
+    "If it is a transitive dependency, upgrade the direct dependency that pulls it in, or use the package manager's override mechanism.",
+    "Run the tests after upgrading.",
+  ],
+  SECRET_EXPOSED: [
+    "**Rotate the credential first**: it is in the repository, so treat it as leaked.",
+    "Remove it from the code and read it from an environment variable (documented in .env.example without its value).",
+    "If the repository is shared, consider purging it from history; rotation is what actually protects you.",
+  ],
+  ENV_VAR_UNDOCUMENTED: [
+    "Add the variable to .env.example (no real value) and to the setup section of the README, with what it is for.",
+  ],
+  ENV_VAR_UNUSED: [
+    "Either read the variable where it is meant to be used, or remove it from the docs.",
+  ],
+  TODO_MARKER: ["Do what the marker asks, or turn it into a tracked issue and remove the marker."],
+  STUB_IMPLEMENTATION: [
+    "Implement the function so it does what its callers and the docs expect.",
+    "Add a test that exercises it.",
+  ],
+  SKIPPED_TESTS: [
+    "Find out why the test is skipped; fix what it needs and remove the skip, or delete the test if the behaviour is gone.",
+  ],
+  NO_TESTS: ["Add a test runner and at least one test for the main behaviour."],
+  MISSING_BUILD_SCRIPT: ["Declare a build script (or document that the project needs no build)."],
+  HOTSPOT: [
+    "This file changes often and many modules depend on it; consider splitting it along the lines that change together, and add tests before refactoring.",
+  ],
+  DOCUMENTED_FEATURE_MISSING: [
+    "Implement the documented feature, or remove it from the docs if it is not planned.",
+  ],
+};
+
+function codeFix(ctx: PromptContext, where: string): string {
+  return [
+    `# Fix: ${ctx.title}`,
+    "",
+    `**Location:** \`${where}\``,
+    "",
+    "## What CodeSentra observed",
+    bullet([`Source: ${targetLine(ctx)}`, ctx.message, ...observations(ctx), corroboration(ctx)]),
+    "",
+    "## What to change",
+    (CODE_FIX_STEPS[ctx.code] ?? ["Fix the problem at the location above."])
+      .map((s, i) => `${i + 1}. ${s}`)
+      .join("\n"),
+    "",
+    "Keep the change minimal and confined to what the observation needs. If the code at the location does not match the observation, report that instead of editing.",
+    "",
+    fixedWhen(ctx),
+  ].join("\n");
+}
+
 /**
  * Renders the fix prompt for an issue. Pure string templating over stored facts; no
  * LLM call (Section 10c). Every finding code maps to a template.
@@ -415,10 +520,15 @@ export function renderPrompt(ctx: PromptContext): RenderedPrompt {
     case "investigate":
       body = investigate(ctx);
       break;
-    case "code_fix":
-      throw new Error(
-        `code_fix prompts need a verified trace or a Scan location (Phases 3–4); ${ctx.code} has none yet`,
-      );
+    case "code_fix": {
+      const at = parseCodeLocator(ctx.locator);
+      if (!at)
+        throw new Error(
+          `code_fix prompts need a verified trace or a Scan location (Phase 4 links Pulse findings to code); ${ctx.code} has none yet`,
+        );
+      body = codeFix(ctx, at.line ? `${at.path}:${at.line}` : at.path);
+      break;
+    }
   }
   return { type, body: `${body.trim()}\n`, templateVersion: TEMPLATE_VERSIONS[type] };
 }

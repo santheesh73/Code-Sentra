@@ -1,5 +1,129 @@
 # Progress
 
+## Phase 3 — Sentra Scan (2026-10-22)
+
+### Built
+
+- **`packages/parsers`:** web-tree-sitter 0.27.1 with the official TypeScript, TSX,
+  JavaScript and Python grammars. For each file it extracts imports, exports, symbols,
+  routes (Express/Fastify/Koa-style calls, FastAPI/Flask decorators), CLI commands, env-var reads, TODO/FIXME
+  markers, stubs and tests (with skips).
+- **`packages/graph`:**
+  - The code graph: files, symbols, routes, handlers, env vars and tests; edges for
+    imports, calls, `defines_route`, `reads_env`, `tests` and `co_changes`.
+  - Module resolution, including Python package members.
+  - History: churn, contributors, co-change pairs and top-decile hotspots.
+- **`packages/sandbox`** (ADR 0016): Docker with `runsc` when present, else `runc`.
+  - Isolation: no network, read-only root, `cap-drop ALL`, no-new-privileges, uid 10001,
+    pid/CPU/memory limits.
+  - Network only for a separate dependency fetch step that runs no project code.
+  - `infra/sandbox/Dockerfile`.
+- **`packages/claims`:** the claim verifier.
+  - Every claim must cite evidence of this run.
+  - Each concrete token and number must appear in the cited evidence.
+  - Status words must match the evidence-based feature status.
+  - Results of checks that did not run cannot be asserted.
+- **`packages/core`:** the Section 8a health score, with renormalization when a component
+  could not be measured. Every deduction lists its evidence.
+- **`packages/scan`:**
+  - Ingest: zip with safety limits, or git through the SSRF pin; tree hash.
+  - Map: manifests, docs, the graph, routes, env vars, markers, tests and language coverage.
+  - History.
+  - Probe: install, build, typecheck, lint and tests in the sandbox. Output parsers for
+    node:test, vitest, jest, mocha and pytest.
+  - Dependency audit: npm and PyPI lockfiles against OSV, with offline-snapshot coverage.
+  - gitleaks, with masked previews.
+  - Inventory: model-proposed features, with statuses set by rules.
+  - Explain: the report model, then the verifier.
+  - `./job` is the `scan.run` handler. It reuses a scan of an identical tree.
+- **`packages/db`:** `snapshots`, `code_nodes`, `code_edges`, `features`, `reports`, `claims`
+  (a dropped claim must have a reason), all under RLS; `runs.snapshot_id`.
+- **`apps/worker-scan`:** `scan.run`, with one step per stage (live over SSE). The report
+  model is Anthropic when configured, else a gap. `SCAN_TEST_MODEL=fixture` works only
+  under `NODE_ENV=test` (ADR 0017).
+- **`apps/api`** (ADR 0018):
+  - `POST /v1/projects/{id}/snapshots`: a raw `application/zip` body, or a public https git ref.
+  - `POST /v1/projects/{id}/scan` answers 202.
+  - `GET /v1/runs/{id}/report`: verified sections with evidence ids, features, the health
+    breakdown, dropped claims with reasons, and coverage.
+  - Projects carry `latest_scan`.
+  - Cross-org tests cover the new routes.
+  - Fix: `docs/openapi.json` has had no component schemas since Phase 1, so every `$ref`
+    dangled. The 42 schemas are now emitted, and a test checks that every reference
+    resolves.
+- **`packages/prompts`:** `code_fix@1`, for findings with a file and line. Scan findings now
+  get prompts in `GET /v1/runs/{id}/findings`. Before this, that route failed for scan runs.
+- **`apps/web`:**
+  - The run page shows the Scan report:
+    - the health breakdown with cited deductions;
+    - verified sections, each claim with evidence links;
+    - the feature inventory with status chips;
+    - the dropped claims and why;
+    - gaps, project facts, and issues with prompts.
+  - Project page: a Scan card (zip upload or "Scan repository") with the latest summary,
+    features and health.
+  - Projects list: the health score.
+- **`apps/cli`:** `codesentra scan [path|git-url] [--json] [--fix-prompt]` runs in-process,
+  with the same sandbox, OSV and model rules. It exits 1 on error findings or anything not
+  checked.
+- **CI:** builds the sandbox image and pulls gitleaks for the test and e2e jobs. Turbo
+  passes `SANDBOX_*` through to the tests.
+
+### Gate output (2026-10-22, this machine; sandbox runtime `runc`)
+
+```
+pnpm lint / typecheck / build                  clean
+pnpm test                                      all packages pass, including:
+  sandbox safety suite                         10 passed (no network, read-only root,
+                                               caps dropped, limits, no env leak, …)
+  zip + git ingest safety suite                24 passed (traversal, symlinks, bombs,
+                                               encrypted, limits; SSRF-pinned clone)
+  claims (adversarial suite)                   36 passed: 23/23 fabrications dropped (100%),
+                                               10/10 true claims kept
+  scan (gate + probes + audit + ingest)        64 passed
+  db 27 · api 43 (incl. Scan API + cross-org)  · cli 20 · prompts 9 · core 57 · …
+pnpm e2e                                       11 passed (Phase 1–3 gates; desktop + 375 px)
+```
+
+Per fixture repo (real sandbox, real gitleaks, the offline OSV snapshot, the scripted
+fixture model):
+
+|                               | ts-taskboard                                                                                                                                                                                                            | py-notes-api                                                                                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Health                        | 80                                                                                                                                                                                                                      | 78                                                                                                                                |
+| Probes                        | install ✓, build ✓, typecheck ✓, tests 2 pass / 1 fail / 1 skip; lint not checked (no script)                                                                                                                           | install ✓, tests 2 / 1 / 1; typecheck and lint not checked (no tools in requirements)                                             |
+| Features                      | Create tasks, List tasks **complete**; Mark tasks done, Export tasks to CSV **partial**; Email reminders **planned**                                                                                                    | Create notes, List notes **complete**; Search notes, Export a note as Markdown **partial**; Share notes via link **planned**      |
+| Findings at expected locators | TESTS_FAILING, SKIPPED_TESTS, TODO_MARKER, STUB_IMPLEMENTATION, ENV_VAR_UNDOCUMENTED, ENV_VAR_UNUSED, SECRET_EXPOSED (aws-access-token, value never stored), VULNERABLE_DEPENDENCY lodash 4.17.15 (GHSA-p6mc-m468-83gw) | the same set; VULNERABLE_DEPENDENCY jinja2 3.1.2, plus a real pytest 8.3.4 advisory (GHSA-6w46-j5rx-g56g) in requirements-dev.txt |
+| Claims                        | 16 drafted, 9 verified, **7/7 forbidden dropped**                                                                                                                                                                       | 16 drafted, 9 verified, **7/7 forbidden dropped**                                                                                 |
+| Gaps                          | history (zip), lint                                                                                                                                                                                                     | history (zip), typecheck, lint, transitive deps (requirements pin direct deps only)                                               |
+
+The e2e gate runs both repos through the web: zip upload → API → MinIO → worker-scan →
+report page. The page and API must match `expected.json` (features, statuses, findings,
+absent findings). No forbidden claim may be shown. Every dropped claim must be listed
+with a reason. A secret's value must never reach the API or the page.
+
+**Phase 3 gate: passed locally.**
+
+### Deferred or partial
+
+- **No real-model run.** No `ANTHROPIC_API_KEY` is available here, so Inventory and Explain
+  were exercised only with the scripted fixture model (ADR 0017). `anthropicModel` is
+  built and type-checked against SDK 1.1.0, but it has not called the API. Without a key,
+  both stages are reported as gaps.
+- **gVisor.** Neither this machine nor the CI runners have `runsc`, so the sandbox ran on
+  `runc` with the same isolation flags. Production should install gVisor and set
+  `SANDBOX_RUNTIME=runsc`, which refuses to fall back.
+- **Scan issues.** Scan findings get prompts on read (ADR 0018) but are not stored as issues.
+  Opening, re-checking and resolving them is Link's job (Phase 4), as is the trace for
+  Pulse `code_fix` prompts.
+- **Git scans through the stack.** The clone path (SSRF pin, hardened config, a smart-HTTP
+  test server) and History are tested in `packages/scan`. The API and e2e tests scan
+  zips. A git scan through worker-scan is covered only by the shared ingest code.
+- **Private repositories, `scan.incremental` and PR check runs** need the GitHub App
+  (Phase 5).
+- **Typecheck and lint probes** run only when the project declares the tool. Otherwise
+  they are gaps.
+
 ## Phase 2 — Sentra Pulse (2026-10-22)
 
 ### Built

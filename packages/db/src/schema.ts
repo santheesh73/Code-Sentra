@@ -1,5 +1,8 @@
 import {
+  CodeEdgeKind,
+  CodeNodeKind,
   EvidenceKind,
+  FeatureStatus,
   FindingCode,
   IssueEventKind,
   IssueStatus,
@@ -11,9 +14,11 @@ import {
   RunTrigger,
   RunType,
   Severity,
+  SnapshotKind,
 } from "@codesentra/core";
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   foreignKey,
   index,
@@ -53,6 +58,10 @@ export const severity = pgEnum("severity", values(Severity.options));
 export const issueStatus = pgEnum("issue_status", values(IssueStatus.options));
 export const issueEventKind = pgEnum("issue_event_kind", values(IssueEventKind.options));
 export const promptType = pgEnum("prompt_type", values(PromptType.options));
+export const snapshotKind = pgEnum("snapshot_kind", values(SnapshotKind.options));
+export const codeNodeKind = pgEnum("code_node_kind", values(CodeNodeKind.options));
+export const codeEdgeKind = pgEnum("code_edge_kind", values(CodeEdgeKind.options));
+export const featureStatus = pgEnum("feature_status", values(FeatureStatus.options));
 
 // --- Identity (not tenant-owned) -------------------------------------------------
 
@@ -202,6 +211,11 @@ export const runs = pgTable(
       columns: [t.orgId, t.projectId],
       foreignColumns: [projects.orgId, projects.id],
     }).onDelete("cascade"),
+    foreignKey({
+      name: "runs_snapshot_fk",
+      columns: [t.orgId, t.snapshotId],
+      foreignColumns: [snapshots.orgId, snapshots.id],
+    }).onDelete("set null"),
     foreignKey({
       name: "runs_environment_fk",
       columns: [t.orgId, t.environmentId],
@@ -424,6 +438,176 @@ export const fixPrompts = pgTable(
   ],
 );
 
+// --- Scan (Phase 3) ------------------------------------------------------------------
+
+/** An ingested tree: a zip upload or a git clone, archived in object storage. */
+export const snapshots = pgTable(
+  "snapshots",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    kind: snapshotKind("kind").notNull(),
+    /** Git: the URL and ref requested; null for zips. */
+    sourceUrl: text("source_url"),
+    ref: text("ref"),
+    commitSha: text("commit_sha"),
+    /** Set once ingest has extracted the tree; content identity for cache reuse. */
+    treeHash: text("tree_hash"),
+    hasHistory: boolean("has_history").notNull().default(false),
+    storageKey: text("storage_key"),
+    sizeBytes: integer("size_bytes"),
+    fileCount: integer("file_count"),
+  },
+  (t) => [
+    foreignKey({
+      name: "snapshots_project_fk",
+      columns: [t.orgId, t.projectId],
+      foreignColumns: [projects.orgId, projects.id],
+    }).onDelete("cascade"),
+    unique("snapshots_org_id_id_key").on(t.orgId, t.id),
+    index().on(t.projectId, t.treeHash),
+  ],
+);
+
+export const codeNodes = pgTable(
+  "code_nodes",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    snapshotId: uuid("snapshot_id").notNull(),
+    /** Stable key within the snapshot (`file:src/a.ts`, `env:PORT`). */
+    key: text("key").notNull(),
+    kind: codeNodeKind("kind").notNull(),
+    path: text("path"),
+    name: text("name").notNull(),
+    line: integer("line"),
+    meta: jsonb("meta").notNull().default({}),
+  },
+  (t) => [
+    foreignKey({
+      name: "code_nodes_snapshot_fk",
+      columns: [t.orgId, t.snapshotId],
+      foreignColumns: [snapshots.orgId, snapshots.id],
+    }).onDelete("cascade"),
+    unique("code_nodes_org_id_id_key").on(t.orgId, t.id),
+    unique("code_nodes_snapshot_key_key").on(t.snapshotId, t.key),
+  ],
+);
+
+export const codeEdges = pgTable(
+  "code_edges",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    snapshotId: uuid("snapshot_id").notNull(),
+    fromId: uuid("from_id").notNull(),
+    toId: uuid("to_id").notNull(),
+    kind: codeEdgeKind("kind").notNull(),
+    weight: integer("weight").notNull().default(1),
+  },
+  (t) => [
+    foreignKey({
+      name: "code_edges_snapshot_fk",
+      columns: [t.orgId, t.snapshotId],
+      foreignColumns: [snapshots.orgId, snapshots.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "code_edges_from_fk",
+      columns: [t.orgId, t.fromId],
+      foreignColumns: [codeNodes.orgId, codeNodes.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "code_edges_to_fk",
+      columns: [t.orgId, t.toId],
+      foreignColumns: [codeNodes.orgId, codeNodes.id],
+    }).onDelete("cascade"),
+    index().on(t.snapshotId, t.kind),
+  ],
+);
+
+export const features = pgTable(
+  "features",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    snapshotId: uuid("snapshot_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    name: text("name").notNull(),
+    status: featureStatus("status").notNull(),
+    reason: text("reason").notNull(),
+    evidenceIds: uuid("evidence_ids").array().notNull(),
+  },
+  (t) => [
+    foreignKey({
+      name: "features_snapshot_fk",
+      columns: [t.orgId, t.snapshotId],
+      foreignColumns: [snapshots.orgId, snapshots.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "features_run_fk",
+      columns: [t.orgId, t.runId],
+      foreignColumns: [runs.orgId, runs.id],
+    }).onDelete("cascade"),
+    index().on(t.runId),
+  ],
+);
+
+export const reports = pgTable(
+  "reports",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    /** Verified claims by section, in order: { summary: [{ text, evidence_ids }], … }. */
+    sections: jsonb("sections").notNull(),
+    healthScore: integer("health_score"),
+    healthBreakdown: jsonb("health_breakdown").notNull(),
+    claimsTotal: integer("claims_total").notNull(),
+    claimsDropped: integer("claims_dropped").notNull(),
+    /** Stages and checks that did not run, with reasons (Rule 2). */
+    coverage: jsonb("coverage").notNull(),
+    /** Map summary: languages, frameworks, routes, env vars, probe results. */
+    summary: jsonb("summary").notNull(),
+    model: text("model"),
+    usage: jsonb("usage").notNull().default([]),
+  },
+  (t) => [
+    foreignKey({
+      name: "reports_run_fk",
+      columns: [t.orgId, t.runId],
+      foreignColumns: [runs.orgId, runs.id],
+    }).onDelete("cascade"),
+    unique("reports_org_id_id_key").on(t.orgId, t.id),
+    unique("reports_run_key").on(t.runId),
+  ],
+);
+
+export const claims = pgTable(
+  "claims",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    reportId: uuid("report_id").notNull(),
+    position: integer("position").notNull(),
+    section: text("section").notNull(),
+    text: text("text").notNull(),
+    evidenceIds: uuid("evidence_ids").array().notNull(),
+    verified: boolean("verified").notNull(),
+    dropReason: text("drop_reason"),
+    dropDetail: text("drop_detail"),
+  },
+  (t) => [
+    foreignKey({
+      name: "claims_report_fk",
+      columns: [t.orgId, t.reportId],
+      foreignColumns: [reports.orgId, reports.id],
+    }).onDelete("cascade"),
+    index().on(t.reportId),
+    check("claims_dropped_has_reason", sql`${t.verified} OR ${t.dropReason} IS NOT NULL`),
+  ],
+);
+
 /** Tables with an `org_id` column, protected by the tenant RLS policy. */
 export const TENANT_TABLES = [
   "memberships",
@@ -438,4 +622,10 @@ export const TENANT_TABLES = [
   "issue_events",
   "issue_findings",
   "fix_prompts",
+  "snapshots",
+  "code_nodes",
+  "code_edges",
+  "features",
+  "reports",
+  "claims",
 ] as const;

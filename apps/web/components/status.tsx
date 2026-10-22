@@ -8,7 +8,14 @@ import {
   Clock,
   LoaderCircle,
 } from "lucide-react";
-import type { IssueStatus, PulseStatus, RunStatus, Severity, StepStatus } from "@/lib/api";
+import type {
+  FeatureStatus,
+  IssueStatus,
+  PulseStatus,
+  RunStatus,
+  Severity,
+  StepStatus,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const chip =
@@ -105,6 +112,21 @@ export function IssueStatusBadge({ status }: { status: IssueStatus }) {
   const { label, cls } = map[status];
   return (
     <span className={cn(chip, cls)} data-issue-status={status}>
+      {label}
+    </span>
+  );
+}
+
+/** Feature inventory status (Section 8): decided by evidence rules, never by the model. */
+export function FeatureStatusBadge({ status }: { status: FeatureStatus }) {
+  const map: Record<FeatureStatus, { label: string; cls: string }> = {
+    complete: { label: "Complete", cls: "bg-success-soft text-success" },
+    partial: { label: "Partial", cls: "bg-warning-soft text-warning" },
+    planned: { label: "Planned", cls: "bg-muted text-muted-foreground" },
+  };
+  const { label, cls } = map[status];
+  return (
+    <span className={cn(chip, cls)} data-feature-status={status}>
       {label}
     </span>
   );

@@ -1,26 +1,18 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity } from "lucide-react";
+import { Activity, FileArchive, GitBranch } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import {
+  FeatureStatusBadge,
   IssueStatusBadge,
   PulseStatusBadge,
   RunStatusBadge,
   SeverityBadge,
 } from "@/components/status";
-import {
-  Button,
-  Card,
-  CardTitle,
-  Input,
-  Label,
-  Notice,
-  NotYetAvailable,
-  Spinner,
-} from "@/components/ui/primitives";
+import { Button, Card, CardTitle, Input, Label, Notice, Spinner } from "@/components/ui/primitives";
 import {
   api,
   type Issue,
@@ -28,6 +20,8 @@ import {
   type Project,
   problemMessage,
   type RunSummary,
+  type ScanReport,
+  uploadZip,
 } from "@/lib/api";
 import { formatTime } from "@/lib/utils";
 
@@ -107,13 +101,15 @@ export default function ProjectPage() {
       {pulse.isError && <Notice tone="danger">{problemMessage(pulse.error)}</Notice>}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="flex flex-col gap-3">
-          <CardTitle>Scan report</CardTitle>
-          <NotYetAvailable
-            feature="Sentra Scan (summary, feature inventory, health score)"
-            phase="Phase 3"
-          />
-        </Card>
+        <ScanCard
+          projectId={id}
+          repoUrl={p.repo_url}
+          latest={p.latest_scan}
+          onStarted={(runId) => {
+            void qc.invalidateQueries({ queryKey: ["runs", id] });
+            router.push(`/runs/${runId}`);
+          }}
+        />
         <Card className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>{showAll ? "All issues" : "Open issues"}</CardTitle>
@@ -293,5 +289,134 @@ function AddEnvironment({ projectId, onAdded }: { projectId: string; onAdded: ()
         </p>
       )}
     </form>
+  );
+}
+
+/** Sentra Scan: upload a zip or scan the repository; links the latest scan's report. */
+function ScanCard({
+  projectId,
+  repoUrl,
+  latest,
+  onStarted,
+}: {
+  projectId: string;
+  repoUrl: string | null;
+  latest: Project["latest_scan"];
+  onStarted: (runId: string) => void;
+}) {
+  const report = useQuery({
+    queryKey: ["report", latest?.run_id],
+    queryFn: () => api<ScanReport>(`/v1/runs/${latest?.run_id}/report`),
+    enabled: !!latest,
+    retry: false,
+  });
+  const [file, setFile] = useState<File | null>(null);
+  const start = useMutation({
+    mutationFn: async (source: "zip" | "repo") => {
+      const snapshotId =
+        source === "zip" && file ? (await uploadZip(projectId, file)).id : undefined;
+      return api<{ run_id: string }>(`/v1/projects/${projectId}/scan`, {
+        method: "POST",
+        body: snapshotId ? { snapshot_id: snapshotId } : {},
+      });
+    },
+    onSuccess: ({ run_id }) => onStarted(run_id),
+  });
+  return (
+    <Card className="flex flex-col gap-3" data-testid="scan-card">
+      <CardTitle>Scan report</CardTitle>
+      {latest ? (
+        <>
+          <Link
+            href={`/runs/${latest.run_id}`}
+            className="flex flex-wrap items-center justify-between gap-2 text-sm hover:underline"
+          >
+            <span>
+              Latest scan{" "}
+              <span className="text-muted-foreground">{formatTime(latest.finished_at)}</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="font-medium" data-testid="project-health">
+                Health {latest.health_score ?? "not measured"}
+                {latest.health_score !== null && "/100"}
+              </span>
+              <RunStatusBadge status={latest.status} />
+            </span>
+          </Link>
+          {report.data && (
+            <>
+              {[...report.data.sections.summary, ...report.data.sections.value].map((c) => (
+                <p key={c.text} className="text-sm">
+                  {c.text}
+                </p>
+              ))}
+              {report.data.features.length > 0 && (
+                <ul className="divide-y divide-border" aria-label="Feature inventory">
+                  {report.data.features.map((f) => (
+                    <li
+                      key={f.name}
+                      className="flex items-center justify-between gap-2 py-1.5 text-sm"
+                    >
+                      <span className="min-w-0 truncate">{f.name}</span>
+                      <FeatureStatusBadge status={f.status} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {report.data.coverage.gaps.length > 0 && (
+                <p className="text-xs text-warning">
+                  Not checked: {report.data.coverage.gaps.map((g) => g.stage).join(", ")} (see the
+                  report)
+                </p>
+              )}
+            </>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No scan yet. Sentra Scan maps the code, runs install, build and tests in a sandbox, audits
+          dependencies and secrets, and writes a report whose every claim cites evidence.
+        </p>
+      )}
+      <form
+        className="flex flex-col gap-2"
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          start.mutate("zip");
+        }}
+      >
+        <Label htmlFor="scan-zip">Upload a zip of the source</Label>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            id="scan-zip"
+            type="file"
+            accept=".zip,application/zip"
+            className="max-w-xs"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <Button type="submit" variant="outline" disabled={!file || start.isPending}>
+            <FileArchive aria-hidden className="size-4" />
+            Scan zip
+          </Button>
+          {repoUrl && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={start.isPending}
+              onClick={() => start.mutate("repo")}
+            >
+              <GitBranch aria-hidden className="size-4" />
+              Scan repository
+            </Button>
+          )}
+          {start.isPending && <Spinner label="Starting scan" />}
+        </div>
+      </form>
+      {start.isError && (
+        <p role="alert" className="text-sm text-danger">
+          {problemMessage(start.error)}
+        </p>
+      )}
+    </Card>
   );
 }

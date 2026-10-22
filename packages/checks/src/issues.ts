@@ -1,4 +1,5 @@
 import {
+  FINDING_CODE_DECLARATIONS,
   type FindingCode,
   groupFindings,
   type JsonObject,
@@ -54,11 +55,12 @@ const RANK: Record<Severity, number> = { error: 0, warning: 1, info: 2 };
 export function findingFingerprint(
   f: Pick<FindingLike, "code" | "locator" | "discriminator">,
 ): string {
-  return fingerprint(f.code, "pulse", f.locator, f.discriminator ?? undefined);
+  const module = FINDING_CODE_DECLARATIONS[f.code].recheck.module;
+  return fingerprint(f.code, module, f.locator, f.discriminator ?? undefined);
 }
 
 /**
- * Turns one Pulse run's findings into issue drafts: merge by shared evidence (Section
+ * Turns one run's findings (Pulse or Scan) into issue drafts: merge by shared evidence (Section
  * 10c), fingerprint by the leading finding, attach the stored re-check, and render the
  * prompt. Info findings never become issues. Every draft has a prompt (Rule 4).
  */

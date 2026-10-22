@@ -66,6 +66,13 @@ async function loadProjects(tx: TenantTx, ids?: string[]) {
         .orderBy(s.runs.environmentId, desc(s.runs.createdAt))
     : [];
   const pulseByEnv = new Map(pulses.map((r) => [r.environmentId as string, r]));
+  const scans = await tx
+    .selectDistinctOn([s.runs.projectId])
+    .from(s.runs)
+    .where(
+      and(inArray(s.runs.projectId, pids), eq(s.runs.type, "scan"), isNotNull(s.runs.finishedAt)),
+    )
+    .orderBy(s.runs.projectId, desc(s.runs.createdAt));
   const openIssues = await countOpenIssues(tx, pids);
   return projects.map((p) =>
     projectDto(
@@ -74,6 +81,7 @@ async function loadProjects(tx: TenantTx, ids?: string[]) {
       latest.find((r) => r.projectId === p.id) ?? null,
       pulseByEnv,
       openIssues.get(p.id) ?? 0,
+      scans.find((r) => r.projectId === p.id) ?? null,
     ),
   );
 }

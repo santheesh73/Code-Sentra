@@ -38,15 +38,15 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | GET | `/v1/projects/{id}/issues` | Issues for a project, most severe first | 200, 401, 404 |
 | POST | `/v1/projects/{id}/pulse` | Start Sentra Pulse on an environment | 202, 400, 401, 404 |
 | GET | `/v1/projects/{id}/runs` | Recent runs for a project | 200, 401, 404 |
-| POST | `/v1/projects/{id}/scan` | Start Sentra Scan (Phase 3) | 401, 404, 501 |
+| POST | `/v1/projects/{id}/scan` | Start Sentra Scan | 202, 400, 401, 404, 501 |
 | GET | `/v1/projects/{id}/schedules` | List schedules (Phase 5) | 401, 404, 501 |
 | POST | `/v1/projects/{id}/schedules` | Create a recurring Pulse (Phase 5) | 401, 404, 501 |
 | DELETE | `/v1/projects/{id}/schedules` | Delete a schedule (Phase 5) | 401, 404, 501 |
-| POST | `/v1/projects/{id}/snapshots` | Upload a zip or register a git ref (Phase 3) | 401, 404, 501 |
+| POST | `/v1/projects/{id}/snapshots` | Upload a zip or register a git ref | 201, 400, 401, 404, 413, 501 |
 | POST | `/v1/pulse` | Quick Pulse: check any public URL, no project needed | 202, 400, 401, 404, 429 |
 | GET | `/v1/runs/{id}` | A run with its steps and coverage gaps | 200, 401, 404 |
 | GET | `/v1/runs/{id}/findings` | Findings for a run, grouped into issues with fix prompts | 200, 401, 404 |
-| GET | `/v1/runs/{id}/report` | Scan report (Phase 3) | 401, 404, 501 |
+| GET | `/v1/runs/{id}/report` | Scan report: verified claims with evidence, features, health breakdown, coverage | 200, 401, 404 |
 | GET | `/v1/runs/{id}/screenshot` | PNG screenshot captured by a Pulse render check | 200, 401, 404, 501 |
 | GET | `/v1/runs/{id}/stream` | Live run progress (Server-Sent Events) | 200, 401, 404 |
 | POST | `/v1/webhooks/github` | GitHub App webhooks (Phase 5) | 401, 404, 501 |

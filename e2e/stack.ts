@@ -72,6 +72,25 @@ export function startWorkerProcess(): ChildProcess {
   return spawnService("worker-pulse", [join(ROOT, "apps/worker-pulse/dist/main.js")], env);
 }
 
+/**
+ * Starts worker-scan with the stack's env plus the scan settings: the scripted fixture
+ * model (TEST ONLY, ADR 0017), the repo's offline OSV snapshot, and the sandbox image.
+ */
+export function startScanWorkerProcess(sandboxImage: string): ChildProcess {
+  const env = JSON.parse(process.env.CS_E2E_ENV ?? "{}") as Record<string, string>;
+  const pass = (k: string) => (process.env[k] ? { [k]: process.env[k] as string } : {});
+  return spawnService("worker-scan", [join(ROOT, "apps/worker-scan/dist/main.js")], {
+    ...env,
+    SCAN_TEST_MODEL: "fixture",
+    OSV_OFFLINE_DIR: join(ROOT, "fixtures/osv"),
+    SANDBOX_IMAGE: sandboxImage,
+    SANDBOX_RUNTIME: process.env.SANDBOX_RUNTIME ?? "runc",
+    ...pass("SANDBOX_FETCH_NETWORK"),
+    ...pass("SANDBOX_FETCH_PROXY"),
+    ...pass("SANDBOX_FETCH_CA_FILE"),
+  });
+}
+
 export async function stop(child: ChildProcess | undefined): Promise<void> {
   if (!child || child.exitCode !== null) return;
   await new Promise<void>((ok) => {

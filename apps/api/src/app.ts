@@ -5,6 +5,7 @@ import type { FastifyBaseLogger } from "fastify";
 import Fastify, { type FastifyInstance } from "fastify";
 import {
   jsonSchemaTransform,
+  jsonSchemaTransformObject,
   serializerCompiler,
   validatorCompiler,
   type ZodTypeProvider,
@@ -18,6 +19,7 @@ import { orgRoutes } from "./routes/orgs.js";
 import { projectRoutes } from "./routes/projects.js";
 import { pulseRoutes } from "./routes/pulse.js";
 import { runRoutes } from "./routes/runs.js";
+import { scanRoutes } from "./routes/scan.js";
 import { unbuiltRoutes } from "./routes/unbuilt.js";
 import { registerSession } from "./session-plugin.js";
 
@@ -89,6 +91,8 @@ export async function buildApp(
       security: [{ session: [] }],
     },
     transform: jsonSchemaTransform,
+    // Emits the `.meta({ id })` schemas as components, so every $ref resolves.
+    transformObject: jsonSchemaTransformObject,
   });
 
   registerSession(app, ctx.auth, {
@@ -103,6 +107,7 @@ export async function buildApp(
   await app.register(projectRoutes(ctx));
   await app.register(runRoutes(ctx));
   await app.register(pulseRoutes(ctx));
+  await app.register(scanRoutes(ctx));
   await app.register(issueRoutes(ctx));
   await app.register(unbuiltRoutes(ctx));
 

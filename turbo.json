@@ -9,7 +9,17 @@
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "passThroughEnv": [
+        "SANDBOX_*",
+        "DOCKER_HOST",
+        "TESTCONTAINERS_*",
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "NO_PROXY",
+        "PLAYWRIGHT_BROWSERS_PATH",
+        "CHROMIUM_EXECUTABLE"
+      ]
     },
     "@codesentra/web#typecheck": {
       "dependsOn": ["^build", "build"]

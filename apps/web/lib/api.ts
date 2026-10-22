@@ -86,6 +86,13 @@ export interface Project {
   platform: string | null;
   environments: Environment[];
   latest_run: RunSummary | null;
+  /** The latest finished Scan; null until one has run. */
+  latest_scan: {
+    run_id: string;
+    status: RunStatus;
+    health_score: number | null;
+    finished_at: string;
+  } | null;
   open_issues: number;
   created_at: string;
   updated_at: string;
@@ -219,4 +226,91 @@ export function problemMessage(e: unknown): string {
     return fields?.length ? `${e.message} (${fields.join("; ")})` : e.message;
   }
   return e instanceof Error ? e.message : "Something went wrong";
+}
+
+export type FeatureStatus = "complete" | "partial" | "planned";
+export interface Snapshot {
+  id: string;
+  project_id: string;
+  kind: "git" | "zip";
+  source_url: string | null;
+  ref: string | null;
+  commit_sha: string | null;
+  tree_hash: string | null;
+  has_history: boolean;
+  size_bytes: number | null;
+  file_count: number | null;
+  created_at: string;
+}
+export interface ReportClaim {
+  text: string;
+  evidence_ids: string[];
+}
+export interface ScanReport {
+  run_id: string;
+  source_run_id: string;
+  cached: boolean;
+  health: {
+    score: number | null;
+    excluded: string[];
+    components: {
+      component: string;
+      weight: number;
+      measured: boolean;
+      not_measured: string[];
+      ratio: number;
+      deductions: { reason: string; points: number; evidence_ids: string[] }[];
+    }[];
+  };
+  sections: Record<"summary" | "value" | "features" | "issues" | "remaining", ReportClaim[]>;
+  features: { name: string; status: FeatureStatus; reason: string; evidence_ids: string[] }[];
+  claims_total: number;
+  claims_dropped: number;
+  dropped_claims: {
+    section: string;
+    text: string;
+    reason: string;
+    detail: string | null;
+    evidence_ids: string[];
+  }[];
+  coverage: {
+    gaps: { stage: string; reason: string }[];
+    checks: Record<string, string>;
+    stages: Record<string, string>;
+  };
+  summary: Record<string, unknown>;
+  model: string | null;
+  created_at: string;
+}
+export interface ScanOutcome {
+  cached: boolean;
+  source_run_id?: string;
+  health_score?: number | null;
+  features?: Record<FeatureStatus, number>;
+  claims?: { total: number; dropped: number };
+}
+
+export function isScanOutcome(o: unknown): o is ScanOutcome {
+  return typeof o === "object" && o !== null && "cached" in o;
+}
+
+/** Uploads a zip as the raw request body (ADR 0018). */
+export async function uploadZip(projectId: string, file: File): Promise<Snapshot> {
+  const res = await fetch(`/api/v1/projects/${projectId}/snapshots`, {
+    method: "POST",
+    headers: { "content-type": "application/zip" },
+    body: file,
+    credentials: "same-origin",
+  });
+  const data = (await res.json().catch(() => ({}))) as Partial<Problem> & Snapshot;
+  if (!res.ok)
+    throw new ApiError({
+      type: data.type ?? "about:blank",
+      title: data.title ?? res.statusText,
+      status: res.status,
+      detail:
+        data.detail ??
+        (res.status === 413 ? "The zip is larger than this server accepts" : undefined),
+    });
+  return data;
 }

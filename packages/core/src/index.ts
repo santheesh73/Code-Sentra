@@ -6,3 +6,4 @@ export * from "./issue-lifecycle.js";
 export * from "./json.js";
 export * from "./pulse-status.js";
 export * from "./report.js";
+export * from "./run-status.js";

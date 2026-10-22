@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* Design tokens (shadcn/ui convention). Light by default; dark follows the OS. */
+:root {
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.21 0.02 260);
+  --muted: oklch(0.96 0.005 260);
+  --muted-foreground: oklch(0.47 0.02 260);
+  --card: oklch(1 0 0);
+  --border: oklch(0.91 0.005 260);
+  --input: oklch(0.88 0.008 260);
+  --primary: oklch(0.45 0.12 190);
+  --primary-foreground: oklch(0.99 0 0);
+  --ring: oklch(0.55 0.13 190);
+  --success: oklch(0.52 0.13 150);
+  --success-soft: oklch(0.95 0.05 150);
+  --warning: oklch(0.55 0.13 70);
+  --warning-soft: oklch(0.96 0.06 85);
+  --danger: oklch(0.53 0.19 25);
+  --danger-soft: oklch(0.95 0.04 25);
+  --info: oklch(0.5 0.14 250);
+  --info-soft: oklch(0.95 0.03 250);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.17 0.01 260);
+    --foreground: oklch(0.95 0.005 260);
+    --muted: oklch(0.23 0.012 260);
+    --muted-foreground: oklch(0.72 0.015 260);
+    --card: oklch(0.2 0.012 260);
+    --border: oklch(0.3 0.012 260);
+    --input: oklch(0.36 0.012 260);
+    --primary: oklch(0.74 0.12 190);
+    --primary-foreground: oklch(0.17 0.01 260);
+    --ring: oklch(0.74 0.12 190);
+    --success: oklch(0.76 0.14 150);
+    --success-soft: oklch(0.28 0.05 150);
+    --warning: oklch(0.82 0.13 85);
+    --warning-soft: oklch(0.3 0.05 80);
+    --danger: oklch(0.72 0.16 25);
+    --danger-soft: oklch(0.3 0.06 25);
+    --info: oklch(0.75 0.11 250);
+    --info-soft: oklch(0.28 0.05 250);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

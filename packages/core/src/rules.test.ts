@@ -3,6 +3,7 @@ import type { PulseCheckGroup } from "./enums.js";
 import { nextIssueStatus } from "./issue-lifecycle.js";
 import { type CheckGroupOutcome, computePulseStatus } from "./pulse-status.js";
 import { ReportDraftSchema } from "./report.js";
+import { deriveRunStatus } from "./run-status.js";
 
 const ALL: PulseCheckGroup[] = ["reachability", "platform", "render", "routes", "hygiene"];
 const allRan = (): CheckGroupOutcome[] => ALL.map((group) => ({ group, ran: true }));
@@ -151,5 +152,25 @@ describe("ReportDraftSchema", () => {
       remaining: [],
     });
     expect(bad.success).toBe(false);
+  });
+});
+
+describe("deriveRunStatus", () => {
+  it("fails on any failed step", () => {
+    expect(deriveRunStatus([{ status: "done" }, { status: "failed" }, { status: "skipped" }])).toBe(
+      "failed",
+    );
+  });
+  it("is partial when a step was skipped, never succeeded", () => {
+    expect(deriveRunStatus([{ status: "done" }, { status: "skipped" }])).toBe("partial");
+  });
+  it("succeeds only when every step is done", () => {
+    expect(deriveRunStatus([{ status: "done" }, { status: "done" }])).toBe("succeeded");
+  });
+  it("fails a run with no steps", () => {
+    expect(deriveRunStatus([])).toBe("failed");
+  });
+  it("refuses unfinished steps", () => {
+    expect(() => deriveRunStatus([{ status: "running" }])).toThrow();
   });
 });

@@ -11,3 +11,4 @@ coverage/
 .DS_Store
 next-env.d.ts
 out-fixed/
+.outbox/

@@ -7,8 +7,8 @@ an exact, verifiable fix:
 - **Sentra Link:** where in the code does each problem come from, how do we fix it, and how
   do we prove the fix?
 
-**Status:** Phase 0 (fixtures and skeleton). The product modules are not built yet; see
-[`docs/progress.md`](docs/progress.md).
+**Status:** Phase 1 (foundation): sign-in, orgs, projects, runs with live progress. Scan,
+Pulse and Link are not built yet; see [`docs/progress.md`](docs/progress.md).
 
 ```sh
 pnpm install

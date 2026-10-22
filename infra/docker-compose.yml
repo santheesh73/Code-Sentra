@@ -7,8 +7,9 @@
 # Behind a TLS-intercepting proxy, prebuild the harness image with the optional
 # `extra_ca` secret (see docs/architecture.md), then run without --build.
 #
-# api, web, worker-scan, worker-pulse and worker-link are added here as each is
-# built (Phase 1+); they do not exist yet, so they are not listed (Rule 6).
+# Infrastructure only. api, web and worker-pulse run from `pnpm start:*` (see
+# docs/architecture.md); containerised app services arrive with the production
+# Dockerfiles in Phase 5.
 name: codesentra
 
 services:

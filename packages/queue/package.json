@@ -1,0 +1,33 @@
+{
+  "name": "@codesentra/queue",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@codesentra/core": "workspace:*",
+    "@codesentra/db": "workspace:*",
+    "pg": "8.23.1",
+    "pg-boss": "12.38.0",
+    "zod": "4.6.7",
+    "drizzle-orm": "0.45.4",
+    "@codesentra/storage": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1",
+    "testcontainers": "12.2.1",
+    "@testcontainers/postgresql": "12.2.1"
+  }
+}

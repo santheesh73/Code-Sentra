@@ -1,0 +1,32 @@
+{
+  "name": "@codesentra/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "start": "node dist/server.js",
+    "openapi": "node dist/openapi-cli.js"
+  },
+  "dependencies": {
+    "@codesentra/config": "workspace:*",
+    "@codesentra/core": "workspace:*",
+    "@codesentra/db": "workspace:*",
+    "@codesentra/queue": "workspace:*",
+    "@codesentra/storage": "workspace:*",
+    "@fastify/cookie": "11.1.3",
+    "@fastify/rate-limit": "11.2.1",
+    "@fastify/swagger": "9.9.2",
+    "drizzle-orm": "0.45.4",
+    "fastify": "5.12.7",
+    "fastify-type-provider-zod": "7.0.0",
+    "pino": "10.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "12.2.1"
+  }
+}

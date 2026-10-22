@@ -10,6 +10,27 @@
     },
     "test": {
       "dependsOn": ["^build"]
+    },
+    "@codesentra/web#typecheck": {
+      "dependsOn": ["^build", "build"]
+    },
+    "@fixtures/blank#typecheck": {
+      "dependsOn": ["^build", "build"]
+    },
+    "@fixtures/broken-route#typecheck": {
+      "dependsOn": ["^build", "build"]
+    },
+    "@fixtures/console-throw#typecheck": {
+      "dependsOn": ["^build", "build"]
+    },
+    "@fixtures/env-undefined#typecheck": {
+      "dependsOn": ["^build", "build"]
+    },
+    "@fixtures/healthy#typecheck": {
+      "dependsOn": ["^build", "build"]
+    },
+    "@fixtures/localhost-leak#typecheck": {
+      "dependsOn": ["^build", "build"]
     }
   }
 }

@@ -1,0 +1,33 @@
+{
+  "name": "@codesentra/link",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@codesentra/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@codesentra/checks": "workspace:*",
+    "@codesentra/fixture-harness": "workspace:*",
+    "@codesentra/graph": "workspace:*",
+    "@codesentra/parsers": "workspace:*",
+    "@codesentra/ssrf": "workspace:*",
+    "playwright-core": "1.64.1"
+  }
+}

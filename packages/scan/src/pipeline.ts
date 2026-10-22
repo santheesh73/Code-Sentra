@@ -184,6 +184,15 @@ export async function runScan(o: ScanOptions): Promise<ScanResult> {
     try {
       const commits = parseGitLog(await gitLog(o.root, o.maxCommits ?? 2000));
       const h = analyzeHistory(commits, new Set(map.paths));
+      // Co-change pairs become graph edges: Link's blast radius follows them (Section 10b).
+      for (const c of h.coChanges)
+        if (map.graph.nodes.has(`file:${c.a}`) && map.graph.nodes.has(`file:${c.b}`))
+          map.graph.edges.push({
+            from: `file:${c.a}`,
+            to: `file:${c.b}`,
+            kind: "co_changes",
+            weight: c.count,
+          });
       const spots = recordHistory(rec, map, h);
       hotspotEvidence = spots.map(
         (s) =>

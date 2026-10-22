@@ -529,6 +529,31 @@ importers:
         specifier: workspace:*
         version: link:../parsers
 
+  packages/link:
+    dependencies:
+      '@codesentra/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@codesentra/checks':
+        specifier: workspace:*
+        version: link:../checks
+      '@codesentra/fixture-harness':
+        specifier: workspace:*
+        version: link:../../fixtures/harness
+      '@codesentra/graph':
+        specifier: workspace:*
+        version: link:../graph
+      '@codesentra/parsers':
+        specifier: workspace:*
+        version: link:../parsers
+      '@codesentra/ssrf':
+        specifier: workspace:*
+        version: link:../ssrf
+      playwright-core:
+        specifier: 1.64.1
+        version: 1.64.1
+
   packages/parsers:
     dependencies:
       tree-sitter-javascript:

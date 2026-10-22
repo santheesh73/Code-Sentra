@@ -224,7 +224,7 @@ describe("fixture apps behave as documented in a real browser", () => {
         try {
           const spec = app.manifest.selfTest[variant];
           if (!spec) throw new Error(`no selfTest for ${variant}`);
-          const obs = await observe(browser, target.url);
+          const obs = await observe(browser, target.url, spec.requests);
           expect(compare(spec, obs, target.url)).toEqual([]);
         } finally {
           harness.setVariant(app.manifest.name, app.manifest.defaultVariant);

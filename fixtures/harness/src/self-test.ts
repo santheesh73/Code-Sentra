@@ -33,8 +33,16 @@ export async function launchChromium(): Promise<Browser> {
   return chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
 }
 
-/** Loads a page in a fresh context and records what a browser actually sees. */
-export async function observe(browser: Browser, url: string): Promise<Observation> {
+/**
+ * Loads a page in a fresh context and records what a browser actually sees. Requests the
+ * spec expects are waited for (up to 10 s, until answered): apps fire them after
+ * hydration, which a busy machine can finish after network idle.
+ */
+export async function observe(
+  browser: Browser,
+  url: string,
+  expected: SelfTestVariant["requests"] = [],
+): Promise<Observation> {
   const context = await browser.newContext({ viewport: { width: 1366, height: 768 } });
   const page = await context.newPage();
   const byRequest = new Map<object, ObservedRequest>();
@@ -71,6 +79,16 @@ export async function observe(browser: Browser, url: string): Promise<Observatio
   }
   // Let zero-delay timers (console-throw) and late fetches settle.
   await page.waitForTimeout(500);
+  const origin0 = new URL(url).origin;
+  const answered = (want: SelfTestVariant["requests"][number]) =>
+    obs.requests.some((r) => {
+      const u = new URL(r.url);
+      const match =
+        "path" in want ? u.origin === origin0 && u.pathname === want.path : r.url === want.url;
+      return match && (r.status !== null || r.failure !== null);
+    });
+  for (let waited = 0; waited < 10_000 && !expected.every(answered); waited += 100)
+    await page.waitForTimeout(100);
 
   obs.textLength = (await page.evaluate(
     // biome-ignore lint/performance/useDomNodeTextContent: rendered (visible) text is the point; textContent includes hidden nodes

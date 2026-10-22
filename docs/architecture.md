@@ -4,7 +4,7 @@ The kickoff document (Sections 1–20) is the source of truth. This file records
 exists in the repository now and how the pieces fit together. Decisions are in
 [`decisions/`](decisions/), and the HTTP API is in [`api.md`](api.md) and [`openapi.json`](openapi.json).
 
-## Current state: Phase 3 (Sentra Scan)
+## Current state: Phase 4 (Sentra Link)
 
 ```
 Browser ──► apps/web (Next.js) ──/api/* proxy──► apps/api (Fastify) ──► Postgres 16
@@ -27,6 +27,13 @@ Browser ──► apps/web (Next.js) ──/api/* proxy──► apps/api (Fasti
                                                ├── gitleaks container, OSV (API or snapshot)
                                                └── report model (Anthropic) → claim verifier
 
+                                             apps/worker-link ── step runner ── NOTIFY
+                                               │  link.run: trace → widen → prompt → verify
+                                               │  (stored evidence + code graph → traces,
+                                               │  blast radius, prompts, issue lifecycle)
+                                               └── started by the completion hook when every
+                                                   child Scan/Pulse run of a check finished
+
 codesentra pulse <url> ── runPulse in-process (no account, no database)
 codesentra scan [path|git-url] ── runScan in-process (same sandbox and model rules)
 ```
@@ -41,6 +48,7 @@ apps/
                   gaps, issues with prompts), issue, Quick Pulse, settings
   worker-pulse/   `system.diagnostic` and `pulse.run`
   worker-scan/    `scan.run`
+  worker-link/    `link.run` (Pulse also serves `issue.recheck`)
   cli/            `codesentra pulse`, `codesentra scan` (Section 15 exit codes)
 packages/
   core/           finding codes, schemas, fingerprints, Pulse status rule, issue grouping,
@@ -61,13 +69,14 @@ packages/
   claims/         claim verifier: evidence, tokens, numbers, statuses, check assertions
   scan/           ingest (zip, git), map, probes and output parsers, OSV audit, gitleaks,
                   inventory, report model, pipeline; `./job` is the scan.run handler
+  link/           exact-join trace rules, blast radius; `./job` is the link.run handler
 infra/pulse/      worker-pulse image on Playwright 1.64.1 (pinned Chromium)
 infra/sandbox/    the probe image (Python 3.12.15 + Node 22.23.4, uid 10001)
 e2e/              Playwright gates: real Postgres + MinIO + API + worker + web + fixture harness
 fixtures/         Phase 0 fixture apps, harness and repos
 ```
 
-Not built yet: `apps/worker-link` (Phase 4).
+Not built yet: the GitHub App, schedules, notifications and API tokens (Phase 5).
 
 ## A Pulse run
 
@@ -80,8 +89,33 @@ Not built yet: `apps/worker-link` (Phase 4).
    `unverified`. A blocked target or any skipped group is never `live`. The result is
    stored as `runs.outcome`, and the environment shows its latest one.
 4. Evidence and findings are stored, and the screenshot goes to object storage. For project
-   runs, `syncIssues` opens, re-sees, regresses or resolves issues by fingerprint, and
-   versions their prompts. It resolves an issue only when the group its re-check names ran.
+   runs, the Link run that follows opens, re-sees, regresses or resolves issues by
+   fingerprint, and versions their prompts. It resolves an issue only when the group its
+   re-check names ran.
+
+## A full check (Link)
+
+1. `POST /v1/projects/{id}/check` creates a Link run with these children:
+   - a Scan of the given snapshot (else a clone of `repo_url`, else the latest upload);
+   - a Pulse run per environment.
+     Children carry `parent_run_id` = the Link run. Project Pulse (`/pulse`), Scan (`/scan`)
+     and re-checks (`/issues/{id}/recheck`) create a Link run the same way, with a single
+     child (ADR 0019).
+2. Each child runs in its own worker. Pulse also probes the latest Scan's static GET
+   routes. When the last child finishes, `startLinkIfReady` enqueues `link.run`. A child
+   that failed still triggers it, and its gap is recorded.
+3. **trace:** each issue's leading finding is joined exactly to a stored code fact:
+   - URL templates by static suffix;
+   - URL literals by host and port;
+   - routes and handlers by path. No route means `ROUTE_MISSING`, traced to the href;
+   - throw/Error/console.error literals by message;
+   - the page component;
+   - Scan locators directly (ADR 0020).
+     **widen:** importers up to 2 hops, plus the top 5 co-change partners.
+4. **prompt:** `code_fix` when traced, with the file, line, symbol, env vars and the
+   blast radius; else the Phase 2 types. **verify:** `syncIssues` per child opens,
+   re-sees, resolves (only when the check group ran) and regresses issues, and stores
+   traces and the blast radius.
 
 ## A Scan run
 
@@ -129,12 +163,12 @@ with a `pg_notify`, and the API's single listener pushes full run snapshots over
 `partial`. A final failed attempt marks unstarted steps skipped with the reason. A sweep
 fails runs whose job died (ADR 0012).
 
-## Data model (Phase 1–3 tables)
+## Data model (Phase 1–4 tables)
 
 `organizations`, `users`, `memberships`, `auth_identities`, `sessions`, `magic_link_tokens`,
 `projects`, `environments`, `runs`, `run_steps`, `audit_log`, `evidence`, `findings`,
 `issues`, `issue_findings`, `issue_events` (append-only under RLS), `fix_prompts`, `snapshots`,
-`code_nodes`, `code_edges`, `features`, `reports`, `claims`. All tables have `id`,
+`code_nodes`, `code_edges`, `features`, `reports`, `claims`, `traces`. All tables have `id`,
 `created_at` and `updated_at`. Tenant tables have `org_id` with RLS, and children use composite
 `(org_id, parent_id)` foreign keys. The other Section 6 tables arrive with the phases that use them.
 
@@ -148,7 +182,7 @@ pnpm infra:up            # postgres + minio + bucket
 pnpm build
 pnpm db:migrate
 docker build -t codesentra/sandbox:latest infra/sandbox   # Scan probes run in it
-pnpm start:api & pnpm start:worker-pulse & pnpm start:worker-scan & pnpm start:web
+pnpm start:api & pnpm start:worker-pulse & pnpm start:worker-scan & pnpm start:worker-link & pnpm start:web
 # sign in at http://localhost:3000/signin; the link is written to .outbox/*.json
 ```
 
@@ -157,7 +191,7 @@ pnpm start:api & pnpm start:worker-pulse & pnpm start:worker-scan & pnpm start:w
 - `pnpm test`: unit tests, plus integration tests on Testcontainers Postgres and MinIO (db
   RLS attacks, queue end to end, API including cross-org access on every route), plus the
   Phase 0 fixture gate.
-- `pnpm e2e`: the Phase 1–3 gates in Chromium against the real stack. The Phase 3 gate
+- `pnpm e2e`: the Phase 1–4 gates in Chromium against the real stack. The Phase 3 gate
   builds the sandbox image unless `SANDBOX_IMAGE` names one. The fixture
   harness runs on 127.0.0.1 and is reachable only through the `NODE_ENV=test` allowance
   (ADR 0013).

@@ -67,8 +67,8 @@ jobs:
       - name: OpenAPI docs are up to date
         run: pnpm openapi && git diff --exit-code docs/openapi.json docs/api.md
 
-  # Phase 1–3 gates: real Postgres + MinIO (Testcontainers), API, worker-pulse (real
-  # Chromium), worker-scan (sandbox, gitleaks, offline OSV), web and the fixture harness on
+  # Phase 1–4 gates: real Postgres + MinIO (Testcontainers), API, worker-pulse (real
+  # Chromium), worker-scan (sandbox, gitleaks, offline OSV), worker-link, web and the fixture harness on
   # loopback, driven in Chromium.
   e2e:
     runs-on: ubuntu-24.04

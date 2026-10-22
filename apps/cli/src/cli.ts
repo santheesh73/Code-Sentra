@@ -65,11 +65,11 @@ Options:
 Exit codes: 0 live / no errors, 1 degraded, unverified, Scan errors or checks not
 run, 2 down, 3 usage or CLI error.
 
-Not available yet: check and login (Phase 4).`;
+Not available yet: check and login (Phase 5, with API tokens).`;
 
 const UNBUILT: Record<string, string> = {
-  check: "Phase 4",
-  login: "Phase 4",
+  check: "Phase 5",
+  login: "Phase 5",
 };
 
 class UsageError extends Error {}

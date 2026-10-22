@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PulseFindings } from "@/components/pulse-findings";
+import { ScanReportView } from "@/components/scan-report";
 import { PulseStatusBadge, RunStatusBadge, StepStatusIcon } from "@/components/status";
 import { Card, CardTitle, Notice, Spinner } from "@/components/ui/primitives";
 import { api, isPulseOutcome, problemMessage, type Run } from "@/lib/api";
@@ -22,6 +23,12 @@ const STEP_LABELS: Record<string, string> = {
   routes: "Linked routes",
   hygiene: "Headers and hygiene",
   issues: "Issue tracking",
+  ingest: "Ingest (extract or clone, limits)",
+  map: "Map (manifests, code graph, routes, env vars)",
+  history: "History (commits, hotspots, co-change)",
+  probe: "Probes (install, build, tests in the sandbox; audit; secrets)",
+  inventory: "Feature inventory",
+  explain: "Report (claims verified against evidence)",
 };
 
 /** Subscribes to the run's SSE stream and keeps the query cache in step with it. */
@@ -203,6 +210,7 @@ export default function RunPage() {
       </Card>
 
       {r.type === "pulse" && TERMINAL.has(r.status) && <PulseFindings runId={r.id} />}
+      {r.type === "scan" && TERMINAL.has(r.status) && <ScanReportView runId={r.id} />}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { useOrg } from "@/components/app-shell";
-import { Button, Card, CardTitle, Input, Label, NotYetAvailable } from "@/components/ui/primitives";
+import { Button, Card, CardTitle, Input, Label } from "@/components/ui/primitives";
 import { api, type Project, problemMessage } from "@/lib/api";
 
 interface EnvRow {
@@ -72,16 +72,16 @@ export default function NewProjectPage() {
               onChange={(e) => setRepoUrl(e.target.value)}
             />
           </div>
-          <NotYetAvailable
-            feature="Connecting a GitHub repository or uploading a zip for Sentra Scan"
-            phase="Phase 3"
-          />
+          <p className="text-sm text-muted-foreground">
+            Sentra Scan clones a public https repository, or you can upload a zip from the project
+            page. Installing the GitHub App for private repositories arrives in Phase 5.
+          </p>
         </Card>
 
         <Card className="flex flex-col gap-4">
           <CardTitle>Deploy URLs</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Sentra Pulse checks these once it is available (Phase 2). Leave a URL blank to skip it.
+            Sentra Pulse checks these. Leave a URL blank to skip it.
           </p>
           {envs.map((env, i) => (
             <fieldset

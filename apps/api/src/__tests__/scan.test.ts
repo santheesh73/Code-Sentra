@@ -136,6 +136,33 @@ describe("Scan API", () => {
     expect(report.dropped_claims.every((c: { reason: string }) => c.reason.length > 0)).toBe(true);
     expect(report.coverage.gaps.map((g: { stage: string }) => g.stage)).toContain("probe");
 
+    // Deductions cite stored evidence, not internal keys.
+    const deductions = report.health.components.flatMap(
+      (c: { deductions: { points: number; evidence_ids: string[] }[] }) => c.deductions,
+    );
+    expect(
+      deductions.some(
+        (d: { points: number; evidence_ids: string[] }) =>
+          d.points > 0 && d.evidence_ids.length > 0,
+      ),
+    ).toBe(true);
+
+    // Every Scan issue has a prompt (Rule 4), pointing at its file and line.
+    const found = await api.app.inject({
+      method: "GET",
+      url: `/v1/runs/${run.id}/findings`,
+      headers: { cookie },
+    });
+    expect(found.statusCode, found.body).toBe(200);
+    const issues = found.json().issues as {
+      code: string;
+      prompt: { type: string; body: string };
+    }[];
+    expect(issues.length).toBeGreaterThan(0);
+    const stub = issues.find((i) => i.code === "STUB_IMPLEMENTATION");
+    expect(stub?.prompt.type).toBe("code_fix");
+    expect(stub?.prompt.body).toContain("src/lib/csv.ts:4");
+
     // Every cited id resolves to evidence of this run.
     const cited = new Set<string>();
     for (const list of Object.values(report.sections) as { evidence_ids: string[] }[][])

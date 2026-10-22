@@ -13,9 +13,16 @@ import { api, type Evidence, problemMessage, type RunFindings } from "@/lib/api"
  * A finished Pulse run's results: screenshot, the gaps it reports, and every finding
  * grouped into issues, each with its prompt (Rule 4) and the evidence behind it (Rule 1).
  */
-export function PulseFindings({ runId }: { runId: string }) {
+export function PulseFindings({
+  runId,
+  screenshot = true,
+}: {
+  runId: string;
+  /** Scan runs have no screenshot. */
+  screenshot?: boolean;
+}) {
   const [evidence, setEvidence] = useState<Evidence | null>(null);
-  const [shotOk, setShotOk] = useState(true);
+  const [shotOk, setShotOk] = useState(screenshot);
   const q = useQuery({
     queryKey: ["run-findings", runId],
     queryFn: () => api<RunFindings>(`/v1/runs/${runId}/findings`),

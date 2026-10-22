@@ -247,7 +247,6 @@ export function scanRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             deductions: { reason: string; points: number; evidence: string[] }[];
           }[];
         };
-        // Health deductions reference evidence keys; map them to stored ids through the claims' evidence.
         const coverage = r.coverage as {
           gaps: { stage: string; reason: string }[];
           checks: Record<string, string>;

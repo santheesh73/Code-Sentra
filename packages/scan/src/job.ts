@@ -220,7 +220,19 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
           })),
           report: {
             healthScore: result.health.score,
-            healthBreakdown: result.health as unknown as JsonValue,
+            // Deductions cite evidence keys; store the ids they became.
+            healthBreakdown: {
+              ...result.health,
+              components: result.health.components.map((c) => ({
+                ...c,
+                deductions: c.deductions.map((d) => ({
+                  ...d,
+                  evidence: d.evidence
+                    .map((k) => persisted.evidenceIds.get(k))
+                    .filter((x): x is string => !!x),
+                })),
+              })),
+            } as unknown as JsonValue,
             coverage: {
               gaps: result.gaps,
               checks: result.checks,

@@ -24,6 +24,7 @@ import type { JobContext, JobHandler } from "@codesentra/queue";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { blastRadius } from "./blast.js";
 import { checkRunReport, type ReportedIssue } from "./check-run.js";
+import { type Notifier, notifyChannels } from "./notify.js";
 import { type LinkGraph, type Trace, traceFinding } from "./trace.js";
 
 /** Steps of a Link run (Section 10). */
@@ -135,6 +136,8 @@ export interface LinkJobDeps {
   github?: GithubApp | null;
   /** PUBLIC_APP_URL, for links back to the run. */
   appUrl?: string;
+  /** Alert delivery (email, Slack); null or absent records alerts as not sent. */
+  notifier?: Notifier | null;
 }
 
 export function linkHandler(deps: LinkJobDeps = {}): JobHandler {
@@ -334,6 +337,7 @@ export function linkHandler(deps: LinkJobDeps = {}): JobHandler {
 
     // --- verify ------------------------------------------------------------------------
     const totals = { opened: 0, seen: 0, resolved: 0, regressed: 0 };
+    const changedIssues = { opened: [] as string[], regressed: [] as string[] };
     const changed = initial.changed_files ?? loaded.checks.flatMap((c) => c.changedFiles);
     const atRisk = graph && changed.length ? blastRadius(changed, graph) : [];
     const inChange = new Set([...changed, ...atRisk.map((a) => a.path)]);
@@ -406,6 +410,8 @@ export function linkHandler(deps: LinkJobDeps = {}): JobHandler {
           totals.seen += r.seen.length;
           totals.resolved += r.resolved.length;
           totals.regressed += r.regressed.length;
+          changedIssues.opened.push(...r.opened);
+          changedIssues.regressed.push(...r.regressed);
         }
         const traced = [...traces.values()].filter((t) => t.verified).length;
         await setRunOutcome(tx, run.id, {
@@ -424,19 +430,42 @@ export function linkHandler(deps: LinkJobDeps = {}): JobHandler {
           gaps: [...(graph ? [] : [noScan]), ...gaps],
         });
       });
+      const pulse = loaded.kids.find(
+        (k) => (k.type === "pulse" || k.type === "recheck") && TERMINAL_OK.has(k.status),
+      );
+      const pulseStatus =
+        ((pulse?.outcome as { pulse_status?: string } | null)?.pulse_status as
+          | "live"
+          | "degraded"
+          | "down"
+          | "unverified"
+          | undefined) ?? null;
+      // Alerts for what this run opened or regressed, each with its prompt (Section 11).
+      if (mode === "sync" && changedIssues.opened.length + changedIssues.regressed.length > 0) {
+        const notifications = deps.notifier
+          ? await notifyChannels(ctx.db, deps.notifier, {
+              orgId,
+              projectId,
+              appUrl: deps.appUrl ?? "",
+              runId: run.id,
+              pulseStatus,
+              opened: changedIssues.opened,
+              regressed: changedIssues.regressed,
+            }).catch((e: Error) => ({ sent: 0, failed: 0, error: e.message }))
+          : { sent: 0, failed: 0, error: "notifications are not configured on worker-link" };
+        await ctx.db.withOrg(orgId, (tx) =>
+          tx
+            .update(s.runs)
+            .set({
+              outcome: sql`coalesce(${s.runs.outcome}, '{}'::jsonb) || ${JSON.stringify({ notifications })}::jsonb`,
+            })
+            .where(eq(s.runs.id, run.id)),
+        );
+      }
       // The commit's check run on GitHub (Section 16).
       if (loaded.checks.length) {
-        const pulse = loaded.kids.find(
-          (k) => (k.type === "pulse" || k.type === "recheck") && TERMINAL_OK.has(k.status),
-        );
         const report = checkRunReport({
-          pulseStatus:
-            ((pulse?.outcome as { pulse_status?: string } | null)?.pulse_status as
-              | "live"
-              | "degraded"
-              | "down"
-              | "unverified"
-              | undefined) ?? null,
+          pulseStatus,
           deploymentUrl: pulse?.targetUrl ?? null,
           newIssues: reported,
           atRisk,
@@ -488,3 +517,4 @@ export function linkHandler(deps: LinkJobDeps = {}): JobHandler {
     });
   };
 }
+export { type Notifier, type NotifyResult, notifyChannels } from "./notify.js";

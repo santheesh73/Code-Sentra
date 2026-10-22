@@ -5,7 +5,7 @@ import { and, asc, count, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { normalizeEmail } from "../auth/service.js";
-import { requireUser } from "../authz.js";
+import { requireSessionUser, requireUser } from "../authz.js";
 import type { AppContext } from "../context.js";
 import { MemberDto, OrgDto, userDto } from "../dto.js";
 import { badRequest, conflict, forbidden, notFound, Problem } from "../errors.js";
@@ -34,7 +34,11 @@ export function orgRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           response: { 200: z.array(OrgDto), 401: Problem },
         },
       },
-      async (req) => listMyOrgs(ctx, requireUser(req).id),
+      async (req) => {
+        const orgs = await listMyOrgs(ctx, requireUser(req).id);
+        const token = req.tokenOrgId;
+        return token ? orgs.filter((o) => o.id === token) : orgs;
+      },
     );
 
     app.post(
@@ -48,7 +52,7 @@ export function orgRoutes(ctx: AppContext): FastifyPluginAsyncZod {
         },
       },
       async (req, reply) => {
-        const user = requireUser(req);
+        const user = requireSessionUser(req);
         const slugBase =
           req.body.name
             .toLowerCase()

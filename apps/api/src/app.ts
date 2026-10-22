@@ -17,11 +17,14 @@ import { checkRoutes } from "./routes/check.js";
 import { githubRoutes } from "./routes/github.js";
 import { healthRoutes } from "./routes/health.js";
 import { issueRoutes } from "./routes/issues.js";
+import { notificationRoutes } from "./routes/notifications.js";
 import { orgRoutes } from "./routes/orgs.js";
 import { projectRoutes } from "./routes/projects.js";
 import { pulseRoutes } from "./routes/pulse.js";
 import { runRoutes } from "./routes/runs.js";
 import { scanRoutes } from "./routes/scan.js";
+import { scheduleRoutes } from "./routes/schedules.js";
+import { tokenRoutes } from "./routes/tokens.js";
 import { unbuiltRoutes } from "./routes/unbuilt.js";
 import { registerSession } from "./session-plugin.js";
 
@@ -90,9 +93,12 @@ export async function buildApp(
           "Errors are RFC 9457 problem+json. Long operations return 202 with a run id. Endpoints for later phases answer 501.",
       },
       components: {
-        securitySchemes: { session: { type: "apiKey", in: "cookie", name: "cs_session" } },
+        securitySchemes: {
+          session: { type: "apiKey", in: "cookie", name: "cs_session" },
+          token: { type: "http", scheme: "bearer", description: "An API token (cs_…)" },
+        },
       },
-      security: [{ session: [] }],
+      security: [{ session: [] }, { token: [] }],
     },
     transform: jsonSchemaTransform,
     // Emits the `.meta({ id })` schemas as components, so every $ref resolves.
@@ -115,6 +121,9 @@ export async function buildApp(
   await app.register(checkRoutes(ctx));
   await app.register(issueRoutes(ctx));
   await app.register(githubRoutes(ctx));
+  await app.register(scheduleRoutes(ctx));
+  await app.register(notificationRoutes(ctx));
+  await app.register(tokenRoutes(ctx));
   await app.register(unbuiltRoutes(ctx));
 
   app.get("/v1/openapi.json", { schema: { hide: true } }, async () => app.swagger());

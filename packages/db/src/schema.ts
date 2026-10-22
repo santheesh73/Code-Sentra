@@ -711,6 +711,93 @@ export const githubCheckRuns = pgTable(
   ],
 );
 
+// --- Schedules, notifications, API tokens (Phase 5) --------------------------------
+
+/** A recurring Pulse of one environment (Section 6). `next_run_at` is when it is due. */
+export const schedules = pgTable(
+  "schedules",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    environmentId: uuid("environment_id").notNull(),
+    cron: text("cron").notNull(),
+    runType: text("run_type").notNull().default("pulse"),
+    enabled: boolean("enabled").notNull().default(true),
+    nextRunAt: tz("next_run_at").notNull(),
+    lastRunId: uuid("last_run_id"),
+    lastRunAt: tz("last_run_at"),
+    lastError: text("last_error"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    foreignKey({
+      name: "schedules_project_fk",
+      columns: [t.orgId, t.projectId],
+      foreignColumns: [projects.orgId, projects.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "schedules_environment_fk",
+      columns: [t.orgId, t.environmentId],
+      foreignColumns: [environments.orgId, environments.id],
+    }).onDelete("cascade"),
+    check("schedules_run_type", sql`${t.runType} = 'pulse'`),
+    index().on(t.nextRunAt),
+    index().on(t.projectId),
+  ],
+);
+
+/**
+ * Where a project's alerts go. `sealed` holds the destination (an email address or a
+ * Slack incoming-webhook URL), sealed with purpose "notification-target"; `label` is a
+ * masked form for display.
+ */
+export const notificationChannels = pgTable(
+  "notification_channels",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    kind: text("kind").notNull(),
+    label: text("label").notNull(),
+    sealed: text("sealed").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    lastError: text("last_error"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    foreignKey({
+      name: "notification_channels_project_fk",
+      columns: [t.orgId, t.projectId],
+      foreignColumns: [projects.orgId, projects.id],
+    }).onDelete("cascade"),
+    check("notification_channels_kind", sql`${t.kind} in ('email', 'slack')`),
+    index().on(t.projectId),
+  ],
+);
+
+/** Bearer tokens for the CLI and API: bound to one user and one org; only the hash is kept. */
+export const apiTokens = pgTable(
+  "api_tokens",
+  {
+    ...base,
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    /** The first characters of the token, shown so a user can tell tokens apart. */
+    prefix: text("prefix").notNull(),
+    expiresAt: tz("expires_at"),
+    lastUsedAt: tz("last_used_at"),
+    revokedAt: tz("revoked_at"),
+  },
+  (t) => [uniqueIndex("api_tokens_token_hash_key").on(t.tokenHash), index().on(t.orgId, t.userId)],
+);
+
 export const TENANT_TABLES = [
   "memberships",
   "projects",
@@ -732,4 +819,7 @@ export const TENANT_TABLES = [
   "claims",
   "traces",
   "github_check_runs",
+  "schedules",
+  "notification_channels",
+  "api_tokens",
 ] as const;

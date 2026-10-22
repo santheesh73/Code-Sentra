@@ -101,6 +101,7 @@ export function checkRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           orgId,
           projectId: project.id,
           userId: access.user.id,
+          trigger: req.tokenOrgId ? "cli" : "manual",
           children,
         });
         return reply.code(202).send({ run_id: started.linkRunId });
@@ -174,6 +175,7 @@ export function checkRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           orgId,
           projectId: project.id,
           userId: access.user.id,
+          trigger: req.tokenOrgId ? "cli" : "manual",
           children: [child],
         });
         return reply.code(202).send({ run_id: started.linkRunId });

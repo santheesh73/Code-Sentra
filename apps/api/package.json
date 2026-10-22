@@ -27,7 +27,8 @@
     "fastify": "5.12.7",
     "fastify-type-provider-zod": "7.0.0",
     "pino": "10.4.0",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "@codesentra/notify": "workspace:*"
   },
   "devDependencies": {
     "@codesentra/fixture-harness": "workspace:*",
@@ -36,6 +37,7 @@
     "@testcontainers/postgresql": "12.2.1",
     "@types/yazl": "3.3.1",
     "playwright-core": "1.64.1",
-    "yazl": "3.3.1"
+    "yazl": "3.3.1",
+    "@codesentra/cli": "workspace:*"
   }
 }

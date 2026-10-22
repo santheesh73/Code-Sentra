@@ -76,6 +76,8 @@ export const EnvSchema = z.object({
   GITHUB_OAUTH_CLIENT_SECRET: secret(10),
   GITHUB_OAUTH_BASE_URL: url().default("https://github.com"),
   GITHUB_API_BASE_URL: url().default("https://api.github.com"),
+  /** Slack OAuth (oauth.v2.access); tests point it at a local fake. */
+  SLACK_API_BASE_URL: url().default("https://slack.com"),
   /** The App's URL name (github.com/apps/<slug>), for the install link in Settings. */
   GITHUB_APP_SLUG: z
     .string()
@@ -103,6 +105,8 @@ export const EnvSchema = z.object({
   /** Directory with an OSV dump (osv-scanner offline format); unset uses the OSV API. */
   OSV_OFFLINE_DIR: z.string().optional(),
   SCAN_MAX_COMMITS: z.coerce.number().int().min(1).max(50_000).default(2000),
+  /** How often worker-link looks for due schedules (Section 6 `schedules`); 0 turns it off. */
+  SCHEDULER_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(3600).default(30),
   /** Largest accepted zip upload (compressed), bytes. */
   SCAN_MAX_UPLOAD_BYTES: z.coerce
     .number()
@@ -172,6 +176,7 @@ export const SERVICE_ENV = {
       "GITHUB_OAUTH_BASE_URL",
       "GITHUB_API_BASE_URL",
       "GITHUB_APP_SLUG",
+      "SLACK_API_BASE_URL",
       "EMAIL_TRANSPORT",
       "EMAIL_OUTBOX_DIR",
       "PULSE_TEST_ALLOW_HOSTS",
@@ -207,7 +212,13 @@ export const SERVICE_ENV = {
   },
   "worker-link": {
     required: ["DATABASE_URL", "PUBLIC_APP_URL", "ENCRYPTION_KEY"],
-    settings: ["EMAIL_TRANSPORT", "EMAIL_OUTBOX_DIR", "GITHUB_API_BASE_URL"],
+    settings: [
+      "EMAIL_TRANSPORT",
+      "EMAIL_OUTBOX_DIR",
+      "GITHUB_API_BASE_URL",
+      "PULSE_TEST_ALLOW_HOSTS",
+      "SCHEDULER_INTERVAL_SECONDS",
+    ],
     integrations: ["anthropic", "github_app", "email", "slack"],
   },
 } as const satisfies Record<string, ServiceSpec>;

@@ -41,6 +41,9 @@ importers:
       '@codesentra/github':
         specifier: workspace:*
         version: link:../../packages/github
+      '@codesentra/notify':
+        specifier: workspace:*
+        version: link:../../packages/notify
       '@codesentra/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -75,6 +78,9 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      '@codesentra/cli':
+        specifier: workspace:*
+        version: link:../cli
       '@codesentra/fixture-harness':
         specifier: workspace:*
         version: link:../../fixtures/harness
@@ -176,6 +182,9 @@ importers:
 
   apps/worker-link:
     dependencies:
+      '@codesentra/checks':
+        specifier: workspace:*
+        version: link:../../packages/checks
       '@codesentra/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -188,6 +197,9 @@ importers:
       '@codesentra/link':
         specifier: workspace:*
         version: link:../../packages/link
+      '@codesentra/notify':
+        specifier: workspace:*
+        version: link:../../packages/notify
       '@codesentra/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -592,6 +604,9 @@ importers:
       '@codesentra/github':
         specifier: workspace:*
         version: link:../github
+      '@codesentra/notify':
+        specifier: workspace:*
+        version: link:../notify
       '@codesentra/prompts':
         specifier: workspace:*
         version: link:../prompts
@@ -617,6 +632,8 @@ importers:
       playwright-core:
         specifier: 1.64.1
         version: 1.64.1
+
+  packages/notify: {}
 
   packages/parsers:
     dependencies:

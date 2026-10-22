@@ -9,6 +9,7 @@ import { requireUser } from "../authz.js";
 import type { AppContext } from "../context.js";
 import { LinkedRunAccepted, PublicHttpUrl, RunAccepted } from "../dto.js";
 import { badRequest, notFound, Problem } from "../errors.js";
+import { enforceRunLimits } from "../limits.js";
 import { startLinked } from "../orchestrate.js";
 
 /**
@@ -112,6 +113,7 @@ export function pulseRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           orgId: access.orgId,
           projectId: req.params.id,
           userId: access.user.id,
+          trigger: req.tokenOrgId ? "cli" : "manual",
           children: [
             {
               job: "pulse.run",
@@ -148,6 +150,12 @@ export function pulseRoutes(ctx: AppContext): FastifyPluginAsyncZod {
         requireUser(req);
         const access = await ctx.authz.requireOrg(req, req.body.org_id);
         assertPublicTarget(req.body.url, testAllow);
+        await enforceRunLimits(ctx, {
+          orgId: access.orgId,
+          userId: access.user.id,
+          types: ["pulse"],
+          targetUrls: [req.body.url],
+        });
         const runId = await startPulse({
           orgId: access.orgId,
           userId: access.user.id,

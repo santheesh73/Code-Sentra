@@ -30,7 +30,8 @@
     "@codesentra/github": "workspace:*",
     "@codesentra/prompts": "workspace:*",
     "@codesentra/queue": "workspace:*",
-    "drizzle-orm": "0.45.4"
+    "drizzle-orm": "0.45.4",
+    "@codesentra/notify": "workspace:*"
   },
   "devDependencies": {
     "@codesentra/fixture-harness": "workspace:*",

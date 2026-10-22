@@ -81,6 +81,8 @@ const NOT_TENANT_SCOPED: Record<string, string> = {
 
   "POST /v1/webhooks/github":
     "HMAC-authenticated by GitHub, not by session; routed by installation",
+  "GET /v1/slack/callback":
+    "the project comes from the signed state (bound to the caller) and is re-authorized",
   "GET /v1/github/setup":
     "the org comes from the signed state (bound to the caller) and is admin-checked",
 };
@@ -138,6 +140,29 @@ const attacks = (): Record<string, Attack> => {
     "POST /v1/issues/:id/recheck": { url: `/v1/issues/${B.issue}/recheck` },
     "GET /v1/github/install": { url: `/v1/github/install?org_id=${B.org}` },
     "GET /v1/orgs/:id/github/installations": { url: `/v1/orgs/${B.org}/github/installations` },
+    "POST /v1/projects/:id/schedules": {
+      url: `/v1/projects/${B.project}/schedules`,
+      payload: { environment_id: B.env, cron: "*/30 * * * *" },
+    },
+    "GET /v1/projects/:id/schedules": { url: `/v1/projects/${B.project}/schedules` },
+    "DELETE /v1/projects/:id/schedules": {
+      url: `/v1/projects/${B.project}/schedules?schedule_id=${B.project}`,
+    },
+    "GET /v1/projects/:id/notifications": { url: `/v1/projects/${B.project}/notifications` },
+    "POST /v1/projects/:id/notifications": {
+      url: `/v1/projects/${B.project}/notifications`,
+      payload: { kind: "email", email: "attacker@example.com" },
+    },
+    "DELETE /v1/projects/:id/notifications": {
+      url: `/v1/projects/${B.project}/notifications?channel_id=${B.project}`,
+    },
+    "GET /v1/projects/:id/notifications/slack/install": {
+      url: `/v1/projects/${B.project}/notifications/slack/install`,
+    },
+    "POST /v1/orgs/:id/tokens": { url: `/v1/orgs/${B.org}/tokens`, payload: { name: "evil" } },
+    "GET /v1/orgs/:id/tokens": { url: `/v1/orgs/${B.org}/tokens` },
+    "DELETE /v1/orgs/:id/tokens/:tokenId": { url: `/v1/orgs/${B.org}/tokens/${B.project}` },
+    "GET /v1/orgs/:id/audit": { url: `/v1/orgs/${B.org}/audit` },
   };
   for (const r of UNBUILT) {
     if (r.scope === "project")

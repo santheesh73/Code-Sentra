@@ -10,6 +10,7 @@ import {
 import type { PulseStatus } from "@codesentra/core";
 import { defaultPolicy, type FetchPolicy, testPolicy } from "@codesentra/ssrf";
 import type { Browser } from "playwright-core";
+import { check, login, type RemoteDeps, RemoteError } from "./remote.js";
 import {
   type ScanEnv,
   ScanTargetError,
@@ -41,11 +42,15 @@ export interface CliDeps {
   policy?: FetchPolicy;
   /** Overrides the scan environment built from env vars (tests). */
   scanEnv?: () => Promise<ScanEnv>;
+  /** fetch, stdin and sleep for login/check (tests inject them). */
+  remote?: Partial<Omit<RemoteDeps, "env">>;
 }
 
 const USAGE = `Usage:
   codesentra pulse <url> [--json] [--fix-prompt] [--timeout=<ms>]
   codesentra scan [path|git-url] [--json] [--fix-prompt]
+  codesentra login --api <url> --token -      (reads the token from stdin)
+  codesentra check --project <id> [--wait] [--json] [--fix-prompt] [--timeout=<s>]
 
 pulse checks a deployed URL in-process: reachability, TLS, platform, browser
 render, linked routes and headers. No account needed.
@@ -56,6 +61,10 @@ committed secrets, the feature inventory, the health score and, with
 ANTHROPIC_API_KEY and ANTHROPIC_MODEL set, a report whose every claim cites
 evidence. Anything it cannot run is reported as not checked.
 
+login stores an API token (Settings → API tokens) for check; CODESENTRA_API_URL
+and CODESENTRA_TOKEN override it. check starts a full check of a project (Scan +
+Pulse, then Link); --wait follows it and prints the open issues.
+
 Options:
   --json          Print the result as JSON (includes every prompt)
   --fix-prompt    Print each issue's fix prompt
@@ -63,14 +72,7 @@ Options:
   -h, --help      Show this help
 
 Exit codes: 0 live / no errors, 1 degraded, unverified, Scan errors or checks not
-run, 2 down, 3 usage or CLI error.
-
-Not available yet: check and login (Phase 5, with API tokens).`;
-
-const UNBUILT: Record<string, string> = {
-  check: "Phase 5",
-  login: "Phase 5",
-};
+run, 2 down, 3 usage or CLI error.`;
 
 class UsageError extends Error {}
 
@@ -281,6 +283,74 @@ async function scan(argv: string[], io: Io, deps: CliDeps): Promise<number> {
   }
 }
 
+function remoteDeps(deps: CliDeps): RemoteDeps {
+  return {
+    env: deps.env,
+    fetch: deps.remote?.fetch ?? fetch,
+    sleep: deps.remote?.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
+    readStdin:
+      deps.remote?.readStdin ??
+      (async () => {
+        const chunks: Buffer[] = [];
+        for await (const c of process.stdin) chunks.push(c as Buffer);
+        return Buffer.concat(chunks).toString("utf8");
+      }),
+  };
+}
+
+async function remote(
+  command: "login" | "check",
+  argv: string[],
+  io: Io,
+  deps: CliDeps,
+): Promise<number> {
+  const { values } = parseArgs({
+    args: argv,
+    allowPositionals: false,
+    strict: true,
+    options: {
+      api: { type: "string" },
+      token: { type: "string" },
+      project: { type: "string" },
+      wait: { type: "boolean", default: false },
+      json: { type: "boolean", default: false },
+      "fix-prompt": { type: "boolean", default: false },
+      timeout: { type: "string" },
+      help: { type: "boolean", short: "h", default: false },
+    },
+  });
+  if (values.help) {
+    io.out(`${USAGE}\n`);
+    return 0;
+  }
+  const r = remoteDeps(deps);
+  try {
+    if (command === "login") {
+      io.out(await login(r, { api: values.api, token: values.token }));
+      return 0;
+    }
+    if (!values.project || !/^[0-9a-f-]{36}$/i.test(values.project))
+      throw new UsageError("check needs --project <project id>");
+    const timeoutSeconds = values.timeout === undefined ? 1200 : Number(values.timeout);
+    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 10 || timeoutSeconds > 7200)
+      throw new UsageError("--timeout must be a whole number of seconds from 10 to 7200");
+    const out = await check(r, {
+      project: values.project,
+      wait: values.wait,
+      fixPrompt: values["fix-prompt"],
+      timeoutSeconds,
+    });
+    io.out(values.json ? `${JSON.stringify(out.json, null, 2)}\n` : out.text);
+    return out.exitCode;
+  } catch (e) {
+    if (e instanceof RemoteError) {
+      io.err(`codesentra: ${e.message}\n`);
+      return EXIT.usage;
+    }
+    throw e;
+  }
+}
+
 /** Entry point; returns the process exit code and never throws. */
 export async function run(
   argv: string[],
@@ -295,10 +365,7 @@ export async function run(
     }
     if (command === "pulse") return await pulse(rest, io, deps);
     if (command === "scan") return await scan(rest, io, deps);
-    if (UNBUILT[command]) {
-      io.err(`codesentra ${command} is not available yet (planned for ${UNBUILT[command]}).\n`);
-      return EXIT.usage;
-    }
+    if (command === "login" || command === "check") return await remote(command, rest, io, deps);
     throw new UsageError(`unknown command: ${command}`);
   } catch (e) {
     const usage =

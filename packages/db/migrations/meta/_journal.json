@@ -78,6 +78,20 @@
       "when": 1792680484600,
       "tag": "0010_github_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792682129059,
+      "tag": "0011_schedules_notifications_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792682139852,
+      "tag": "0012_phase5_rls",
+      "breakpoints": true
     }
   ]
 }

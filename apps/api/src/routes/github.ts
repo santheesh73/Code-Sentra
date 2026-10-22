@@ -1,7 +1,7 @@
 import { PULSE_GROUPS } from "@codesentra/checks";
 import { ScanStage } from "@codesentra/core";
 import { openSecret, sealSecret } from "@codesentra/core/crypto";
-import { createSnapshot, schema as s } from "@codesentra/db";
+import { createSnapshot, schema as s, type TenantTx } from "@codesentra/db";
 import {
   DeploymentStatusEvent,
   type GithubApp,
@@ -15,7 +15,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { sign, verify } from "../auth/tokens.js";
-import { requireUser } from "../authz.js";
+import { requireSessionUser } from "../authz.js";
 import type { AppContext } from "../context.js";
 import {
   badRequest,
@@ -167,10 +167,7 @@ export function githubRoutes(ctx: AppContext): FastifyPluginAsyncZod {
     return started;
   }
 
-  async function upsertCheckRow(
-    tx: Parameters<NonNullable<Parameters<typeof startLinked>[1]["onCreated"]>>[0],
-    row: typeof s.githubCheckRuns.$inferInsert,
-  ) {
+  async function upsertCheckRow(tx: TenantTx, row: typeof s.githubCheckRuns.$inferInsert) {
     await tx
       .insert(s.githubCheckRuns)
       .values(row)
@@ -564,7 +561,7 @@ export function githubRoutes(ctx: AppContext): FastifyPluginAsyncZod {
       },
       async (req, reply) => {
         const github = configured();
-        const user = requireUser(req);
+        const user = requireSessionUser(req);
         const st = verify<InstallState>(req.query.state, ctx.config.SESSION_SECRET);
         if (!st || st.exp < Date.now() || st.user !== user.id)
           throw badRequest("The install link expired or belongs to another session; start again");
@@ -596,6 +593,12 @@ export function githubRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             { account: null, repositories: [] },
             { orgId: st.org },
           );
+        await ctx.db.system.insert(s.auditLog).values({
+          orgId: st.org,
+          actorId: user.id,
+          action: "github_installation.linked",
+          target: `github_installation:${req.query.installation_id}`,
+        });
         return reply.redirect(`${ctx.config.PUBLIC_APP_URL}/settings?github=linked`, 302);
       },
     );

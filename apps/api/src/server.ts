@@ -1,13 +1,13 @@
 import { loadConfig } from "@codesentra/config";
 import { createDatabase } from "@codesentra/db";
 import { GithubApp } from "@codesentra/github";
+import { type EmailTransport, outboxTransport, resendTransport } from "@codesentra/notify";
 import { createRunEventListener, startQueueClient } from "@codesentra/queue";
 import { objectStoreFromEnv } from "@codesentra/storage";
 import pino from "pino";
 import { buildApp } from "./app.js";
 import { createAuthService } from "./auth/service.js";
 import { createAuthz } from "./authz.js";
-import { type EmailTransport, outboxTransport, resendTransport } from "./email.js";
 
 const config = loadConfig("api");
 const log = pino({

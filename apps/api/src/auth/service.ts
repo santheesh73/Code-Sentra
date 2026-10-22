@@ -3,6 +3,8 @@ import { type Database, schema as s } from "@codesentra/db";
 import { and, count, eq, gt, isNull, sql } from "drizzle-orm";
 import { newToken, sha256 } from "./tokens.js";
 
+/** API tokens look like `cs_<43 base64url chars>`, so scanners can recognize them. */
+export const API_TOKEN_PREFIX = "cs_";
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
 /** Per-address cap on magic links, stored in Postgres so it holds across API replicas. */
@@ -113,6 +115,40 @@ export function createAuthService(db: Database, now: () => Date = () => new Date
         return { user: row.user, sessionId: row.session.id, renewedUntil };
       }
       return { user: row.user, sessionId: row.session.id };
+    },
+
+    /**
+     * Resolves a bearer API token to its user and the one org it is bound to. A token of
+     * a user who left the org stops working: membership is checked on every request.
+     */
+    async lookupApiToken(token: string): Promise<{ user: UserRow; orgId: string } | null> {
+      if (!token.startsWith(API_TOKEN_PREFIX)) return null;
+      const [row] = await sys
+        .select({ token: s.apiTokens, user: s.users })
+        .from(s.apiTokens)
+        .innerJoin(s.users, eq(s.users.id, s.apiTokens.userId))
+        .innerJoin(
+          s.memberships,
+          and(
+            eq(s.memberships.userId, s.apiTokens.userId),
+            eq(s.memberships.orgId, s.apiTokens.orgId),
+          ),
+        )
+        .where(
+          and(
+            eq(s.apiTokens.tokenHash, sha256(token)),
+            isNull(s.apiTokens.revokedAt),
+            sql`(${s.apiTokens.expiresAt} is null or ${s.apiTokens.expiresAt} > ${now()})`,
+          ),
+        );
+      if (!row) return null;
+      // Coarse last-used (once a minute) so every request is not a write.
+      if (!row.token.lastUsedAt || now().getTime() - row.token.lastUsedAt.getTime() > 60_000)
+        await sys
+          .update(s.apiTokens)
+          .set({ lastUsedAt: now() })
+          .where(eq(s.apiTokens.id, row.token.id));
+      return { user: row.user, orgId: row.token.orgId };
     },
 
     async deleteSession(token: string): Promise<void> {

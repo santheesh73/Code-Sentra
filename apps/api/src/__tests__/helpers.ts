@@ -5,6 +5,7 @@ import { loadConfig } from "@codesentra/config";
 import type { JobType } from "@codesentra/core";
 import { startTestDatabase, type TestDatabase } from "@codesentra/db/testing";
 import type { GithubApp } from "@codesentra/github";
+import { memoryTransport } from "@codesentra/notify";
 import {
   createRunEventListener,
   diagnosticHandler,
@@ -20,7 +21,7 @@ import type { FastifyInstance, LightMyRequestResponse } from "fastify";
 import { buildApp, type RegisteredRoute } from "../app.js";
 import { createAuthService } from "../auth/service.js";
 import { createAuthz } from "../authz.js";
-import { memoryTransport } from "../email.js";
+import type { RunLimits } from "../limits.js";
 
 export const APP_URL = "http://localhost:3000";
 export const ORIGIN = { origin: APP_URL };
@@ -117,6 +118,7 @@ export interface TestApiOptions {
   store?: ObjectStore;
   /** The GitHub App client (pointed at a fake); null leaves the integration off. */
   githubApp?: GithubApp | null;
+  limits?: Partial<RunLimits>;
 }
 
 /** An in-process object store for tests that need uploads (no MinIO in unit tests). */
@@ -176,6 +178,7 @@ export async function startTestApi(opts: TestApiOptions = {}): Promise<TestApi> 
     cookie: { secure: false },
     fetch,
     github: opts.githubApp ?? null,
+    ...(opts.limits ? { limits: opts.limits } : {}),
   });
   return {
     app,

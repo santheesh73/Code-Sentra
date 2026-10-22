@@ -1,11 +1,12 @@
 import type { ServiceEnv } from "@codesentra/config";
 import type { Database } from "@codesentra/db";
 import type { GithubApp } from "@codesentra/github";
+import type { EmailTransport } from "@codesentra/notify";
 import type { QueueClient, RunEventListener } from "@codesentra/queue";
 import type { ObjectStore } from "@codesentra/storage";
 import type { AuthService } from "./auth/service.js";
 import type { Authz } from "./authz.js";
-import type { EmailTransport } from "./email.js";
+import type { RunLimits } from "./limits.js";
 import type { CookieSettings } from "./session-plugin.js";
 
 export interface AppContext {
@@ -24,4 +25,6 @@ export interface AppContext {
   fetch: typeof fetch;
   /** null when the github_app integration is not configured. */
   github?: GithubApp | null;
+  /** Overrides for the Section 17 run limits (tests use small ones). */
+  limits?: Partial<RunLimits>;
 }

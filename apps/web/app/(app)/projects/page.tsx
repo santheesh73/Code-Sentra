@@ -62,7 +62,13 @@ export default function ProjectsPage() {
                 )}
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
                   <dt className="text-muted-foreground">Health score</dt>
-                  <dd>Not scanned yet</dd>
+                  <dd data-testid="health">
+                    {!p.latest_scan
+                      ? "Not scanned yet"
+                      : p.latest_scan.health_score === null
+                        ? "Not measured"
+                        : `${p.latest_scan.health_score} / 100`}
+                  </dd>
                   <dt className="text-muted-foreground">Open issues</dt>
                   <dd data-testid="open-issues">{p.open_issues}</dd>
                 </dl>

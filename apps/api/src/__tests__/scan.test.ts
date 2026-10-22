@@ -184,6 +184,14 @@ describe("Scan API", () => {
     const first = await scan(id, (await upload(id, zipBody)).json().id);
     const second = await scan(id, (await upload(id, zipBody)).json().id);
     expect(second.outcome).toMatchObject({ cached: true, source_run_id: first.id });
+    expect(second.outcome.health_score).toBe(first.outcome.health_score);
+    const proj = (
+      await api.app.inject({ method: "GET", url: `/v1/projects/${id}`, headers: { cookie } })
+    ).json();
+    expect(proj.latest_scan).toMatchObject({
+      run_id: second.id,
+      health_score: first.outcome.health_score,
+    });
     expect(
       second.steps
         .filter((s: { name: string }) => s.name !== "ingest")

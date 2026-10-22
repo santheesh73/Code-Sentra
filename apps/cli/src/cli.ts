@@ -10,6 +10,15 @@ import {
 import type { PulseStatus } from "@codesentra/core";
 import { defaultPolicy, type FetchPolicy, testPolicy } from "@codesentra/ssrf";
 import type { Browser } from "playwright-core";
+import {
+  type ScanEnv,
+  ScanTargetError,
+  scanEnvFrom,
+  scanExitCode,
+  scanLocal,
+  scanToJson,
+  scanToText,
+} from "./scan.js";
 
 /** Section 15 exit codes. `unverified` is never 0: a skipped check is not a pass (Rule 2). */
 export const EXIT: Record<PulseStatus | "usage", number> = {
@@ -30,26 +39,35 @@ export interface CliDeps {
   launchBrowser(): Promise<{ browser: Browser } | { browser: null; reason: string }>;
   /** Overrides the fetch policy built from the environment (tests). */
   policy?: FetchPolicy;
+  /** Overrides the scan environment built from env vars (tests). */
+  scanEnv?: () => Promise<ScanEnv>;
 }
 
 const USAGE = `Usage:
   codesentra pulse <url> [--json] [--fix-prompt] [--timeout=<ms>]
+  codesentra scan [path|git-url] [--json] [--fix-prompt]
 
-Checks a deployed URL in-process: reachability, TLS, platform, browser render,
-linked routes and headers. No account needed.
+pulse checks a deployed URL in-process: reachability, TLS, platform, browser
+render, linked routes and headers. No account needed.
+
+scan maps a local directory (default: .) or a public git repository: languages,
+routes, env vars, install/build/tests in the Docker sandbox, dependency advisories,
+committed secrets, the feature inventory, the health score and, with
+ANTHROPIC_API_KEY and ANTHROPIC_MODEL set, a report whose every claim cites
+evidence. Anything it cannot run is reported as not checked.
 
 Options:
   --json          Print the result as JSON (includes every prompt)
   --fix-prompt    Print each issue's fix prompt
-  --timeout=<ms>  Per-request timeout (default 15000)
+  --timeout=<ms>  Per-request timeout for pulse (default 15000)
   -h, --help      Show this help
 
-Exit codes: 0 live, 1 degraded or unverified, 2 down, 3 usage or CLI error.
+Exit codes: 0 live / no errors, 1 degraded, unverified, Scan errors or checks not
+run, 2 down, 3 usage or CLI error.
 
-Not available yet: scan (Phase 3), check and login (Phase 4).`;
+Not available yet: check and login (Phase 4).`;
 
 const UNBUILT: Record<string, string> = {
-  scan: "Phase 3",
   check: "Phase 4",
   login: "Phase 4",
 };
@@ -222,6 +240,47 @@ async function pulse(argv: string[], io: Io, deps: CliDeps): Promise<number> {
   }
 }
 
+async function scan(argv: string[], io: Io, deps: CliDeps): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    strict: true,
+    options: {
+      json: { type: "boolean", default: false },
+      "fix-prompt": { type: "boolean", default: false },
+      help: { type: "boolean", short: "h", default: false },
+    },
+  });
+  if (values.help) {
+    io.out(`${USAGE}\n`);
+    return 0;
+  }
+  if (positionals.length > 1) throw new UsageError("scan takes at most one path or git URL");
+  const target = positionals[0] ?? ".";
+  const env = await (deps.scanEnv ?? (() => scanEnvFrom(deps.env)))();
+  try {
+    const s = await scanLocal(
+      target,
+      env,
+      values.json
+        ? undefined
+        : (stage, state, detail) => {
+            if (state !== "running")
+              io.err(`  ${stage}: ${state}${state === "done" ? "" : ` (${detail ?? ""})`}\n`);
+          },
+    );
+    io.out(
+      values.json
+        ? `${JSON.stringify(scanToJson(s), null, 2)}\n`
+        : scanToText(s, values["fix-prompt"]),
+    );
+    return scanExitCode(s);
+  } catch (e) {
+    if (e instanceof ScanTargetError) throw new UsageError(e.message);
+    throw e;
+  }
+}
+
 /** Entry point; returns the process exit code and never throws. */
 export async function run(
   argv: string[],
@@ -235,6 +294,7 @@ export async function run(
       return command ? 0 : EXIT.usage;
     }
     if (command === "pulse") return await pulse(rest, io, deps);
+    if (command === "scan") return await scan(rest, io, deps);
     if (UNBUILT[command]) {
       io.err(`codesentra ${command} is not available yet (planned for ${UNBUILT[command]}).\n`);
       return EXIT.usage;

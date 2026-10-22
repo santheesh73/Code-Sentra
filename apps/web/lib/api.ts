@@ -86,6 +86,13 @@ export interface Project {
   platform: string | null;
   environments: Environment[];
   latest_run: RunSummary | null;
+  /** The latest finished Scan; null until one has run. */
+  latest_scan: {
+    run_id: string;
+    status: RunStatus;
+    health_score: number | null;
+    finished_at: string;
+  } | null;
   open_issues: number;
   created_at: string;
   updated_at: string;

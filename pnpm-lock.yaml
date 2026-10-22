@@ -99,6 +99,12 @@ importers:
       '@codesentra/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@codesentra/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
+      '@codesentra/scan':
+        specifier: workspace:*
+        version: link:../../packages/scan
       '@codesentra/ssrf':
         specifier: workspace:*
         version: link:../../packages/ssrf

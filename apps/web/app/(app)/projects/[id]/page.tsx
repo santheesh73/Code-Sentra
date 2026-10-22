@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import {
+  FeatureStatusBadge,
   IssueStatusBadge,
   PulseStatusBadge,
   RunStatusBadge,
@@ -16,10 +17,10 @@ import {
   api,
   type Issue,
   isPulseOutcome,
-  isScanOutcome,
   type Project,
   problemMessage,
   type RunSummary,
+  type ScanReport,
   uploadZip,
 } from "@/lib/api";
 import { formatTime } from "@/lib/utils";
@@ -103,7 +104,7 @@ export default function ProjectPage() {
         <ScanCard
           projectId={id}
           repoUrl={p.repo_url}
-          latest={runs.data?.find((r) => r.type === "scan") ?? null}
+          latest={p.latest_scan}
           onStarted={(runId) => {
             void qc.invalidateQueries({ queryKey: ["runs", id] });
             router.push(`/runs/${runId}`);
@@ -300,9 +301,15 @@ function ScanCard({
 }: {
   projectId: string;
   repoUrl: string | null;
-  latest: RunSummary | null;
+  latest: Project["latest_scan"];
   onStarted: (runId: string) => void;
 }) {
+  const report = useQuery({
+    queryKey: ["report", latest?.run_id],
+    queryFn: () => api<ScanReport>(`/v1/runs/${latest?.run_id}/report`),
+    enabled: !!latest,
+    retry: false,
+  });
   const [file, setFile] = useState<File | null>(null);
   const start = useMutation({
     mutationFn: async (source: "zip" | "repo") => {
@@ -315,26 +322,56 @@ function ScanCard({
     },
     onSuccess: ({ run_id }) => onStarted(run_id),
   });
-  const outcome = latest && isScanOutcome(latest.outcome) ? latest.outcome : null;
   return (
     <Card className="flex flex-col gap-3" data-testid="scan-card">
       <CardTitle>Scan report</CardTitle>
       {latest ? (
-        <Link
-          href={`/runs/${latest.id}`}
-          className="flex flex-wrap items-center justify-between gap-2 text-sm hover:underline"
-        >
-          <span>
-            Latest scan{" "}
-            <span className="text-muted-foreground">{formatTime(latest.created_at)}</span>
-          </span>
-          <span className="flex items-center gap-2">
-            {outcome?.health_score != null && (
-              <span className="font-medium">Health {outcome.health_score}/100</span>
-            )}
-            <RunStatusBadge status={latest.status} />
-          </span>
-        </Link>
+        <>
+          <Link
+            href={`/runs/${latest.run_id}`}
+            className="flex flex-wrap items-center justify-between gap-2 text-sm hover:underline"
+          >
+            <span>
+              Latest scan{" "}
+              <span className="text-muted-foreground">{formatTime(latest.finished_at)}</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="font-medium" data-testid="project-health">
+                Health {latest.health_score ?? "not measured"}
+                {latest.health_score !== null && "/100"}
+              </span>
+              <RunStatusBadge status={latest.status} />
+            </span>
+          </Link>
+          {report.data && (
+            <>
+              {[...report.data.sections.summary, ...report.data.sections.value].map((c) => (
+                <p key={c.text} className="text-sm">
+                  {c.text}
+                </p>
+              ))}
+              {report.data.features.length > 0 && (
+                <ul className="divide-y divide-border" aria-label="Feature inventory">
+                  {report.data.features.map((f) => (
+                    <li
+                      key={f.name}
+                      className="flex items-center justify-between gap-2 py-1.5 text-sm"
+                    >
+                      <span className="min-w-0 truncate">{f.name}</span>
+                      <FeatureStatusBadge status={f.status} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {report.data.coverage.gaps.length > 0 && (
+                <p className="text-xs text-warning">
+                  Not checked: {report.data.coverage.gaps.map((g) => g.stage).join(", ")} (see the
+                  report)
+                </p>
+              )}
+            </>
+          )}
+        </>
       ) : (
         <p className="text-sm text-muted-foreground">
           No scan yet. Sentra Scan maps the code, runs install, build and tests in a sandbox, audits

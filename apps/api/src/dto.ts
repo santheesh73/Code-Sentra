@@ -102,6 +102,15 @@ export const ProjectDto = z
     platform: z.string().nullable(),
     environments: z.array(EnvironmentDto),
     latest_run: RunSummaryDto.nullable(),
+    latest_scan: z
+      .object({
+        run_id: z.uuid(),
+        status: RunStatus,
+        health_score: z.number().int().nullable(),
+        finished_at: ts,
+      })
+      .nullable()
+      .describe("The latest finished Scan; null until one has run"),
     open_issues: z.number().int(),
     created_at: ts,
     updated_at: ts,
@@ -190,6 +199,7 @@ export const projectDto = (
   latest: RunRow | null,
   latestPulseByEnv: Map<string, RunRow> = new Map(),
   openIssues = 0,
+  latestScan: RunRow | null = null,
 ): z.infer<typeof ProjectDto> => ({
   id: p.id,
   org_id: p.orgId,
@@ -199,6 +209,15 @@ export const projectDto = (
   platform: p.platform,
   environments: envs.map((e) => environmentDto(e, latestPulseByEnv.get(e.id) ?? null)),
   latest_run: latest ? runSummaryDto(latest) : null,
+  latest_scan: latestScan
+    ? {
+        run_id: latestScan.id,
+        status: latestScan.status,
+        health_score:
+          (latestScan.outcome as { health_score?: number | null } | null)?.health_score ?? null,
+        finished_at: (latestScan.finishedAt ?? latestScan.createdAt).toISOString(),
+      }
+    : null,
   open_issues: openIssues,
   created_at: p.createdAt.toISOString(),
   updated_at: p.updatedAt.toISOString(),

@@ -126,7 +126,13 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
           });
           await ctx.db.withOrg(orgId, async (tx) => {
             await tx.update(s.runs).set({ parentRunId: reuse.runId }).where(eq(s.runs.id, run.id));
+            const [source] = await tx
+              .select({ outcome: s.runs.outcome })
+              .from(s.runs)
+              .where(eq(s.runs.id, reuse.runId));
+            // The reused run's results (health, counts), marked as reused.
             await setRunOutcome(tx, run.id, {
+              ...((source?.outcome as Record<string, JsonValue> | null) ?? {}),
               cached: true,
               source_run_id: reuse.runId,
               tree_hash: hash,

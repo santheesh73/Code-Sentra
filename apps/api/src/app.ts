@@ -5,6 +5,7 @@ import type { FastifyBaseLogger } from "fastify";
 import Fastify, { type FastifyInstance } from "fastify";
 import {
   jsonSchemaTransform,
+  jsonSchemaTransformObject,
   serializerCompiler,
   validatorCompiler,
   type ZodTypeProvider,
@@ -90,6 +91,8 @@ export async function buildApp(
       security: [{ session: [] }],
     },
     transform: jsonSchemaTransform,
+    // Emits the `.meta({ id })` schemas as components, so every $ref resolves.
+    transformObject: jsonSchemaTransformObject,
   });
 
   registerSession(app, ctx.auth, {

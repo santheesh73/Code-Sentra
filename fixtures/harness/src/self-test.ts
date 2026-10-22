@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import type { Browser } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
 import type { SelfTestVariant } from "./manifest.js";
 
 export interface ObservedRequest {
@@ -43,12 +43,19 @@ export async function observe(
   url: string,
   expected: SelfTestVariant["requests"] = [],
 ): Promise<Observation> {
-  const obs = await observeOnce(browser, url, expected);
-  // Chromium aborts in-flight requests when the host's network interfaces change (Docker
-  // creating a bridge for a parallel test does that). That is the machine, not the app:
-  // observe once more. Any other failure stands.
-  if (obs.requests.some((r) => r.failure === "net::ERR_NETWORK_CHANGED"))
-    return observeOnce(browser, url, expected);
+  // Chromium aborts in-flight requests, the navigation included, when the host's network
+  // interfaces change (Docker creating a bridge for a parallel test does that). That is
+  // the machine, not the app: observe once more. Any other failure stands.
+  const changed = "net::ERR_NETWORK_CHANGED";
+  let obs: Observation;
+  try {
+    obs = await observeOnce(browser, url, expected);
+  } catch (e) {
+    if (e instanceof Error && e.message.includes(changed))
+      return observeOnce(browser, url, expected);
+    throw e;
+  }
+  if (obs.requests.some((r) => r.failure === changed)) return observeOnce(browser, url, expected);
   return obs;
 }
 
@@ -58,7 +65,18 @@ async function observeOnce(
   expected: SelfTestVariant["requests"],
 ): Promise<Observation> {
   const context = await browser.newContext({ viewport: { width: 1366, height: 768 } });
-  const page = await context.newPage();
+  try {
+    return await record(await context.newPage(), url, expected);
+  } finally {
+    await context.close();
+  }
+}
+
+async function record(
+  page: Page,
+  url: string,
+  expected: SelfTestVariant["requests"],
+): Promise<Observation> {
   const byRequest = new Map<object, ObservedRequest>();
   const obs: Observation = {
     requests: [],
@@ -118,7 +136,6 @@ async function observeOnce(
     await res.body?.cancel();
     obs.links.push({ path: new URL(href).pathname, status: res.status });
   }
-  await context.close();
   return obs;
 }
 

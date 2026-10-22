@@ -208,7 +208,7 @@ describe("scan persistence", () => {
       });
       await tx
         .update(s.runs)
-        .set({ parentRunId: first.runId, outcome: { cached: true } })
+        .set({ outcome: { cached: true, source_run_id: first.runId } })
         .where(sql`${s.runs.id} = ${run.id}`);
       return run.id;
     });

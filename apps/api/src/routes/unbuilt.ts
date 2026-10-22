@@ -21,13 +21,6 @@ interface Unbuilt {
 export const UNBUILT: Unbuilt[] = [
   {
     method: "POST",
-    url: "/v1/projects/:id/check",
-    summary: "Full check: Scan + Pulse, then Link",
-    phase: "Phase 4",
-    scope: "project",
-  },
-  {
-    method: "POST",
     url: "/v1/projects/:id/schedules",
     summary: "Create a recurring Pulse",
     phase: "Phase 5",
@@ -46,13 +39,6 @@ export const UNBUILT: Unbuilt[] = [
     summary: "Delete a schedule",
     phase: "Phase 5",
     scope: "project",
-  },
-  {
-    method: "POST",
-    url: "/v1/issues/:id/recheck",
-    summary: "Targeted re-check",
-    phase: "Phase 4",
-    scope: "issue",
   },
   {
     method: "POST",

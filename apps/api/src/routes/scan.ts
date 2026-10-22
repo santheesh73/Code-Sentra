@@ -1,19 +1,12 @@
 import { ScanStage } from "@codesentra/core";
-import {
-  createRun,
-  createSnapshot,
-  failRun,
-  getReport,
-  schema as s,
-  updateSnapshot,
-} from "@codesentra/db";
-import { publishRunEvent } from "@codesentra/queue";
+import { createSnapshot, getReport, schema as s, updateSnapshot } from "@codesentra/db";
 import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
-import { PublicHttpUrl, ReportDto, RunAccepted, SnapshotDto, snapshotDto } from "../dto.js";
+import { LinkedRunAccepted, PublicHttpUrl, ReportDto, SnapshotDto, snapshotDto } from "../dto.js";
 import { badRequest, notConfigured, notFound, Problem } from "../errors.js";
+import { startLinked } from "../orchestrate.js";
 import { assertPublicTarget } from "./pulse.js";
 
 const GitSnapshot = z.object({
@@ -34,14 +27,41 @@ const isZip = (b: Buffer) =>
   (b[2] === 0x03 || b[2] === 0x05) &&
   (b[3] === 0x04 || b[3] === 0x06);
 
+/** Test only; packages/config refuses PULSE_TEST_ALLOW_HOSTS unless NODE_ENV=test. */
+export function testAllowHosts(ctx: AppContext): ReadonlySet<string> {
+  return new Set(
+    (ctx.config.PULSE_TEST_ALLOW_HOSTS ?? "")
+      .split(",")
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+/** A git snapshot of a public https repository (the clone itself is SSRF-pinned, ADR 0016). */
+export async function createGitSnapshot(
+  ctx: AppContext,
+  testAllow: ReadonlySet<string>,
+  input: { orgId: string; projectId: string; url: string; ref: string | null },
+) {
+  const u = new URL(input.url);
+  const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (u.protocol !== "https:" && !(u.protocol === "http:" && testAllow.has(host)))
+    throw badRequest("Only https git URLs can be scanned");
+  assertPublicTarget(input.url, testAllow);
+  return ctx.db.withOrg(input.orgId, (tx) =>
+    createSnapshot(tx, {
+      orgId: input.orgId,
+      projectId: input.projectId,
+      kind: "git",
+      sourceUrl: input.url,
+      ref: input.ref,
+    }),
+  );
+}
+
 export function scanRoutes(ctx: AppContext): FastifyPluginAsyncZod {
   return async (app) => {
-    const testAllow = new Set(
-      (ctx.config.PULSE_TEST_ALLOW_HOSTS ?? "")
-        .split(",")
-        .map((h) => h.trim().toLowerCase())
-        .filter(Boolean),
-    );
+    const testAllow = testAllowHosts(ctx);
     const maxUpload = ctx.config.SCAN_MAX_UPLOAD_BYTES;
 
     // Zip uploads arrive as a raw application/zip body: no form can send that type, and a
@@ -52,20 +72,8 @@ export function scanRoutes(ctx: AppContext): FastifyPluginAsyncZod {
       (_req, body, done) => done(null, body),
     );
 
-    const checkGitUrl = (url: string) => {
-      const u = new URL(url);
-      const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
-      if (u.protocol !== "https:" && !(u.protocol === "http:" && testAllow.has(host)))
-        throw badRequest("Only https git URLs can be scanned");
-      assertPublicTarget(url, testAllow);
-    };
-
-    async function gitSnapshot(orgId: string, projectId: string, url: string, ref: string | null) {
-      checkGitUrl(url);
-      return ctx.db.withOrg(orgId, (tx) =>
-        createSnapshot(tx, { orgId, projectId, kind: "git", sourceUrl: url, ref }),
-      );
-    }
+    const gitSnapshot = (orgId: string, projectId: string, url: string, ref: string | null) =>
+      createGitSnapshot(ctx, testAllow, { orgId, projectId, url, ref });
 
     app.post(
       "/v1/projects/:id/snapshots",
@@ -150,7 +158,13 @@ export function scanRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             "Scans a snapshot (or, without snapshot_id, the project's repo_url at its default branch): map, history, sandboxed probes, dependency audit, secrets, feature inventory and an evidence-verified report.",
           params: z.object({ id: z.uuid() }),
           body: z.object({ snapshot_id: z.uuid().optional() }).optional(),
-          response: { 202: RunAccepted, 400: Problem, 401: Problem, 404: Problem, 501: Problem },
+          response: {
+            202: LinkedRunAccepted,
+            400: Problem,
+            401: Problem,
+            404: Problem,
+            501: Problem,
+          },
         },
       },
       async (req, reply) => {
@@ -185,33 +199,18 @@ export function scanRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             await gitSnapshot(access.orgId, project.id, project.repoUrl, project.defaultBranch)
           ).id;
         }
-        const run = await ctx.db.withOrg(access.orgId, async (tx) => {
-          const created = await createRun(tx, {
-            orgId: access.orgId,
-            projectId: project.id,
-            type: "scan",
-            trigger: "manual",
-            requestedBy: access.user.id,
-            snapshotId,
-            steps: ScanStage.options,
-          });
-          await publishRunEvent(tx, {
-            kind: "run",
-            runId: created.run.id,
-            orgId: access.orgId,
-            status: "queued",
-          });
-          return created.run;
+        // The Scan feeds a Link run, which stores and re-checks its issues (ADR 0019).
+        const started = await startLinked(ctx, {
+          orgId: access.orgId,
+          projectId: project.id,
+          userId: access.user.id,
+          children: [
+            { job: "scan.run", run: { type: "scan", snapshotId, steps: ScanStage.options } },
+          ],
         });
-        try {
-          await ctx.queue.enqueue("scan.run", { runId: run.id, orgId: access.orgId });
-        } catch (e) {
-          await ctx.db.withOrg(access.orgId, (tx) =>
-            failRun(tx, run.id, `could not enqueue: ${(e as Error).message}`),
-          );
-          throw e;
-        }
-        return reply.code(202).send({ run_id: run.id });
+        return reply
+          .code(202)
+          .send({ run_id: started.childRunIds[0] as string, link_run_id: started.linkRunId });
       },
     );
 

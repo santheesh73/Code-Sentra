@@ -19,7 +19,7 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | GET | `/v1/issues/{id}` | Issue with history, evidence and its fix prompt | 200, 401, 404 |
 | POST | `/v1/issues/{id}/dismiss` | Dismiss an issue with a reason (audited) | 200, 401, 404 |
 | GET | `/v1/issues/{id}/fix-prompt` | The issue's fix prompt (latest, or ?version=) | 200, 401, 404 |
-| POST | `/v1/issues/{id}/recheck` | Targeted re-check (Phase 4) | 401, 404, 501 |
+| POST | `/v1/issues/{id}/recheck` | Targeted re-check | 202, 400, 401, 404 |
 | GET | `/v1/me` | The signed-in user and their organizations | 200, 401 |
 | GET | `/v1/orgs` | Organizations you belong to | 200, 401 |
 | POST | `/v1/orgs` | Create an organization (you become its owner) | 201, 401 |
@@ -32,7 +32,7 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | GET | `/v1/projects/{id}` | One project | 200, 401, 404 |
 | PATCH | `/v1/projects/{id}` | Update a project | 200, 401, 404 |
 | DELETE | `/v1/projects/{id}` | Delete a project and its runs (admin or owner) | 204, 401, 403, 404 |
-| POST | `/v1/projects/{id}/check` | Full check: Scan + Pulse, then Link (Phase 4) | 401, 404, 501 |
+| POST | `/v1/projects/{id}/check` | Full check: Scan + Pulse in parallel, then Link | 202, 400, 401, 404 |
 | POST | `/v1/projects/{id}/diagnostic` | Run a platform diagnostic (database, queue, object storage) | 202, 401, 404 |
 | POST | `/v1/projects/{id}/environments` | Add a deploy URL | 201, 400, 401, 404, 409 |
 | GET | `/v1/projects/{id}/issues` | Issues for a project, most severe first | 200, 401, 404 |

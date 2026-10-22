@@ -152,7 +152,7 @@ describe("usage", () => {
     [["pulse", "https://example.com", "--timeout=abc"], "--timeout"],
     [["pulse", "https://example.com", "--bogus"], "Unknown option"],
     [["frobnicate"], "unknown command"],
-    [["check"], "not available yet (planned for Phase 4)"],
+    [["check"], "not available yet (planned for Phase 5)"],
     [["scan", "/definitely/not/here"], "not a directory"],
     [["scan", "a", "b"], "at most one"],
   ])("%j → exit 3", async (argv, message) => {

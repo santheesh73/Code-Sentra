@@ -202,8 +202,28 @@ export function extractPy(path: string, tree: Tree, source: string): FileFacts {
       }
       case "string": {
         const v = stringValue(node);
-        if (v !== null && looksLikeUrl(v))
-          facts.urlLiterals.push({ value: v, line: lineOf(node), template: false, envVars: [] });
+        if (v !== null && looksLikeUrl(v)) {
+          const line = lineOf(node);
+          facts.urlLiterals.push({
+            value: v,
+            line,
+            template: false,
+            envVars: [],
+            text: lineText(lines, line),
+          });
+        }
+        break;
+      }
+      case "raise_statement": {
+        // raise ValueError("x"): the message a traceback shows.
+        const call = node.namedChildren[0];
+        const arg =
+          call?.type === "call" ? call.childForFieldName("arguments")?.namedChildren[0] : null;
+        const msg = arg ? stringValue(arg) : null;
+        if (msg?.trim()) {
+          const line = lineOf(node);
+          facts.messages.push({ value: msg, line, text: lineText(lines, line), kind: "throw" });
+        }
         break;
       }
       default:

@@ -14,7 +14,7 @@ export const TEMPLATE_VERSIONS: Record<PromptType, string> = {
   outage_triage: "outage_triage@1",
   config_fix: "config_fix@1",
   investigate: "investigate@1",
-  code_fix: "code_fix@1",
+  code_fix: "code_fix@2",
 };
 
 export type HintTopic =
@@ -30,6 +30,14 @@ export interface PromptEvidence {
   payload: JsonObject;
 }
 
+/** A verified trace (Section 10a) and its blast radius (10b), as the prompt shows them. */
+export interface PromptTrace {
+  joinKey: string;
+  sites: { path: string; line: number | null; symbol: string | null; excerpt: string | null }[];
+  envVars: { name: string; documented: boolean }[];
+  blastRadius: { path: string; reason: string }[];
+}
+
 export interface PromptContext {
   code: FindingCode;
   title: string;
@@ -41,6 +49,8 @@ export interface PromptContext {
   corroborating: { code: FindingCode; message: string }[];
   evidence: PromptEvidence[];
   hasVerifiedTrace: boolean;
+  /** Set by Sentra Link when the trace is verified. */
+  trace?: PromptTrace | null;
   platform: { name: string; environment: string; reason: string } | null;
   /** Where to change things on the detected platform (adapter configHint). */
   hints: Record<HintTopic, string>;
@@ -441,6 +451,25 @@ function investigate(ctx: PromptContext): string {
 // --- code_fix -----------------------------------------------------------------------
 
 const CODE_FIX_STEPS: Partial<Record<FindingCode, string[]>> = {
+  UNDEFINED_IN_URL: [
+    "Confirm the request URL above is built at the location shown, and which value was empty when it ran.",
+    "Make the code fail loudly (or use a same-origin relative path) instead of building a URL from an unset value.",
+  ],
+  LOCALHOST_CALL: [
+    "Replace the hard-coded development URL with a configured base URL (an environment variable) or a same-origin relative path.",
+  ],
+  ROUTE_MISSING: ["Either add the page or route the link points to, or change or remove the link."],
+  ROUTE_BROKEN: ["Find why the route at the location answers with an error, and fix the handler."],
+  SAME_ORIGIN_FAILURE: [
+    "Find why the handler at the location answers with an error for this request, and fix it.",
+  ],
+  UNCAUGHT_EXCEPTION: [
+    "Find what makes this code throw on load, and handle the case (or fix the bad input) instead of letting it escape.",
+  ],
+  CONSOLE_ERROR: ["Find what triggers this error log on load and fix its cause."],
+  BLANK_PAGE: [
+    "Check why the page component renders nothing (an early `return null`, an empty render, or a crash before first paint).",
+  ],
   TESTS_FAILING: [
     "Run the failing test locally and read the assertion that fails.",
     "Decide whether the code or the test is wrong; fix the code unless the test encodes outdated behaviour.",
@@ -483,21 +512,65 @@ const CODE_FIX_STEPS: Partial<Record<FindingCode, string[]>> = {
   ],
 };
 
-function codeFix(ctx: PromptContext, where: string): string {
+function envGuidance(ctx: PromptContext): string[] {
+  const vars = ctx.trace?.envVars ?? [];
+  if (!vars.length) return [];
+  const lines = vars.map((v) => {
+    const buildTime = /^(NEXT_PUBLIC_|VITE_|REACT_APP_|PUBLIC_|NUXT_PUBLIC_|EXPO_PUBLIC_)/.test(
+      v.name,
+    );
+    return [
+      `\`${v.name}\`${v.documented ? " (documented in .env.example)" : " — **not documented** in .env.example: add it there, without a real value"}.`,
+      buildTime
+        ? `It is a build-time variable: set \`${v.name}\` in the hosting environment **before the build**, then redeploy. Where: ${ctx.hints.env_var}`
+        : `Set \`${v.name}\` in the hosting environment and restart or redeploy. Where: ${ctx.hints.env_var}`,
+      "The value's shape: the base URL the browser should call (for example `https://api.example.com` or a same-origin path like `/api`), never a secret.",
+    ].join(" ");
+  });
+  return ["", "## Environment variables involved", bullet(lines)];
+}
+
+function codeFix(ctx: PromptContext, fallbackWhere: string | null): string {
+  const sites = ctx.trace?.sites ?? [];
+  const where = sites.length
+    ? sites
+        .map((s) => {
+          const at = s.line ? `${s.path}:${s.line}` : s.path;
+          return [
+            `- \`${at}\`${s.symbol ? ` in \`${s.symbol}\`` : ""}`,
+            ...(s.excerpt ? ["", "  ```", `  ${s.excerpt}`, "  ```"] : []),
+          ].join("\n");
+        })
+        .join("\n")
+    : `- \`${fallbackWhere}\``;
+  const blast = ctx.trace?.blastRadius ?? [];
   return [
     `# Fix: ${ctx.title}`,
     "",
-    `**Location:** \`${where}\``,
+    "> Investigate and confirm the cause before editing. If the code at the location does not match the evidence below, report back instead of changing it.",
     "",
     "## What CodeSentra observed",
     bullet([`Source: ${targetLine(ctx)}`, ctx.message, ...observations(ctx), corroboration(ctx)]),
+    "",
+    ctx.trace
+      ? `## Where it comes from (verified trace on \`${ctx.trace.joinKey}\`)`
+      : "## Location",
+    where,
+    ...envGuidance(ctx),
     "",
     "## What to change",
     (CODE_FIX_STEPS[ctx.code] ?? ["Fix the problem at the location above."])
       .map((s, i) => `${i + 1}. ${s}`)
       .join("\n"),
+    ...(blast.length
+      ? [
+          "",
+          "## Blast radius (check these still work after the change)",
+          bullet(blast.map((b) => `\`${b.path}\` — ${b.reason}`)),
+        ]
+      : []),
     "",
-    "Keep the change minimal and confined to what the observation needs. If the code at the location does not match the observation, report that instead of editing.",
+    "Keep the change minimal and confined to what the observation needs.",
     "",
     fixedWhen(ctx),
   ].join("\n");
@@ -522,11 +595,11 @@ export function renderPrompt(ctx: PromptContext): RenderedPrompt {
       break;
     case "code_fix": {
       const at = parseCodeLocator(ctx.locator);
-      if (!at)
+      if (!ctx.trace?.sites.length && !at)
         throw new Error(
-          `code_fix prompts need a verified trace or a Scan location (Phase 4 links Pulse findings to code); ${ctx.code} has none yet`,
+          `code_fix prompts need a verified trace or a Scan location; ${ctx.code} has neither`,
         );
-      body = codeFix(ctx, at.line ? `${at.path}:${at.line}` : at.path);
+      body = codeFix(ctx, at ? (at.line ? `${at.path}:${at.line}` : at.path) : null);
       break;
     }
   }

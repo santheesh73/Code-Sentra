@@ -7,10 +7,9 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { requireUser } from "../authz.js";
 import type { AppContext } from "../context.js";
-import { PublicHttpUrl, RunAccepted } from "../dto.js";
+import { LinkedRunAccepted, PublicHttpUrl, RunAccepted } from "../dto.js";
 import { badRequest, notFound, Problem } from "../errors.js";
-
-const PROJECT_STEPS = [...PULSE_GROUPS, "issues"];
+import { startLinked } from "../orchestrate.js";
 
 /**
  * Refuses obviously private targets up front (IP literals and localhost names). Names
@@ -87,10 +86,10 @@ export function pulseRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           tags: ["pulse"],
           summary: "Start Sentra Pulse on an environment",
           description:
-            "Checks the environment's deploy URL: reachability, platform, rendering, routes and hygiene. Findings become issues with fix prompts.",
+            "Checks the environment's deploy URL: reachability, platform, rendering, routes (including the latest Scan's routes) and hygiene. A Link run follows: findings become issues with fix prompts, traced to code when the project has a Scan, and earlier issues are re-checked.",
           params: z.object({ id: z.uuid() }),
           body: z.object({ environment_id: z.uuid() }),
-          response: { 202: RunAccepted, 400: Problem, 401: Problem, 404: Problem },
+          response: { 202: LinkedRunAccepted, 400: Problem, 401: Problem, 404: Problem },
         },
       },
       async (req, reply) => {
@@ -108,15 +107,26 @@ export function pulseRoutes(ctx: AppContext): FastifyPluginAsyncZod {
         );
         if (!env) throw notFound("Environment");
         assertPublicTarget(env.url, testAllow);
-        const runId = await startPulse({
+        // Pulse feeds a Link run, which opens, re-checks and resolves the issues (ADR 0019).
+        const started = await startLinked(ctx, {
           orgId: access.orgId,
-          userId: access.user.id,
           projectId: req.params.id,
-          environmentId: env.id,
-          url: env.url,
-          steps: PROJECT_STEPS,
+          userId: access.user.id,
+          children: [
+            {
+              job: "pulse.run",
+              run: {
+                type: "pulse",
+                environmentId: env.id,
+                targetUrl: env.url,
+                steps: PULSE_GROUPS,
+              },
+            },
+          ],
         });
-        return reply.code(202).send({ run_id: runId });
+        return reply
+          .code(202)
+          .send({ run_id: started.childRunIds[0] as string, link_run_id: started.linkRunId });
       },
     );
 

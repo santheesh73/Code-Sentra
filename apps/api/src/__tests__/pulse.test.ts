@@ -1,6 +1,7 @@
 import { launchPulseBrowser } from "@codesentra/checks";
 import { pulseHandler } from "@codesentra/checks/job";
 import { type Harness, startHarness } from "@codesentra/fixture-harness";
+import { linkHandler } from "@codesentra/link/job";
 import { testPolicy } from "@codesentra/ssrf";
 import type { Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -26,6 +27,7 @@ beforeAll(async () => {
         getBrowser: async () => ({ browser }),
         slowThresholdMs: 3000,
       }),
+      "link.run": linkHandler(),
     },
   });
   cookie = await signIn(api, "pulse@example.com");
@@ -73,7 +75,11 @@ async function pulse(projectId: string, envId: string) {
     payload: { environment_id: envId },
   });
   expect(res.statusCode, res.body).toBe(202);
-  return waitForRun(res.json().run_id);
+  const run = await waitForRun(res.json().run_id);
+  // Issues are Link's job: the Link run starts when the Pulse run finishes (ADR 0019).
+  const link = await waitForRun(res.json().link_run_id);
+  expect(run.parent_run_id).toBe(link.id);
+  return { ...run, link };
 }
 
 describe("project Pulse end to end", () => {
@@ -86,14 +92,11 @@ describe("project Pulse end to end", () => {
     expect(run1.outcome.pulse_status).toBe("degraded");
     expect(
       run1.steps.map((s: { name: string; status: string }) => `${s.name}:${s.status}`),
-    ).toEqual([
-      "reachability:done",
-      "platform:done",
-      "render:done",
-      "routes:done",
-      "hygiene:done",
-      "issues:done",
-    ]);
+    ).toEqual(["reachability:done", "platform:done", "render:done", "routes:done", "hygiene:done"]);
+    // No Scan of this project: Link cannot trace, says so, and still opens the issue.
+    expect(run1.link.status).toBe("partial");
+    expect(run1.link.gaps.map((g: { step: string }) => g.step)).toEqual(["trace", "widen"]);
+    expect(run1.link.outcome.issues).toMatchObject({ opened: 1 });
 
     const issues = (
       await api.app.inject({
@@ -116,7 +119,7 @@ describe("project Pulse end to end", () => {
         headers: { cookie },
       })
     ).json();
-    expect(detail.prompt.type).toBe("investigate");
+    expect(detail.prompt?.type, JSON.stringify(detail).slice(0, 600)).toBe("investigate");
     expect(detail.prompt.body).toContain("/api/ping");
     expect(detail.observed.map((f: { code: string }) => f.code).sort()).toEqual([
       "SAME_ORIGIN_FAILURE",

@@ -94,7 +94,15 @@ export interface ScanPersistInput {
   graph: {
     nodes: {
       key: string;
-      kind: "file" | "symbol" | "route" | "api_handler" | "cli_command" | "env_var" | "test";
+      kind:
+        | "file"
+        | "symbol"
+        | "route"
+        | "api_handler"
+        | "cli_command"
+        | "env_var"
+        | "test"
+        | "literal";
       path: string | null;
       name: string;
       line: number | null;
@@ -255,12 +263,13 @@ export interface ReportView {
 /** A scan run's report; a cached run serves the report of the run it reused. */
 export async function getReport(tx: TenantTx, runId: string): Promise<ReportView | null> {
   const [run] = await tx
-    .select({ id: runs.id, parent: runs.parentRunId, outcome: runs.outcome })
+    .select({ id: runs.id, outcome: runs.outcome })
     .from(runs)
     .where(eq(runs.id, runId));
   if (!run) return null;
-  const cached = (run.outcome as { cached?: boolean } | null)?.cached === true && run.parent;
-  const sourceRunId = cached ? (run.parent as string) : run.id;
+  // A cached run reuses another run's report; parent_run_id is the Link run (ADR 0019).
+  const o = run.outcome as { cached?: boolean; source_run_id?: string } | null;
+  const sourceRunId = o?.cached === true && o.source_run_id ? o.source_run_id : run.id;
   const [report] = await tx.select().from(reports).where(eq(reports.runId, sourceRunId));
   if (!report) return null;
   const claimRows = await tx

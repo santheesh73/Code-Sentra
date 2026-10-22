@@ -25,7 +25,7 @@ import { cloneRepo, GitError, scratchDir } from "./ingest/git.js";
 import { listTree, type TreeEntry, treeHash } from "./ingest/tree.js";
 import { DEFAULT_ZIP_LIMITS, extractZip, ZipRejected } from "./ingest/zip.js";
 import type { ReportModel } from "./model.js";
-import { runScan } from "./pipeline.js";
+import { runScan, scanGroupsRan } from "./pipeline.js";
 
 export interface ScanJobDeps {
   store: ObjectStore | null;
@@ -125,7 +125,6 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
             log: `${files.length} files; identical to the tree scanned in run ${reuse.runId}`,
           });
           await ctx.db.withOrg(orgId, async (tx) => {
-            await tx.update(s.runs).set({ parentRunId: reuse.runId }).where(eq(s.runs.id, run.id));
             const [source] = await tx
               .select({ outcome: s.runs.outcome })
               .from(s.runs)
@@ -278,6 +277,7 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
             dropped: result.claims.filter((c) => !c.verified).length,
           },
           findings: result.findings.length,
+          groups_ran: scanGroupsRan(result),
           gaps: result.gaps,
           sandbox_runtime: result.summary.sandboxRuntime,
           model: result.summary.model,

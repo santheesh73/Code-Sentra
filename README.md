@@ -7,7 +7,7 @@ an exact, verifiable fix:
 - **Sentra Link:** where in the code does each problem come from, how do we fix it, and how
   do we prove the fix?
 
-**Status:** Phase 3 (Sentra Scan).
+**Status:** Phase 4 (Sentra Link).
 - **Pulse:** paste a URL, or check a project environment, and get `live`, `degraded`,
   `down` or `unverified`, with evidence-backed issues and a fix prompt for each.
 - **Scan:** upload a zip or point at a public repository. You get:
@@ -17,10 +17,14 @@ an exact, verifiable fix:
   - a feature inventory (complete, partial or planned);
   - a health score;
   - a report in which every sentence cites evidence, and unverifiable claims are dropped.
-- **Where:** both work in the dashboard and from the CLI (`codesentra pulse`,
-  `codesentra scan`).
+- **Link:** a full check (Scan + Pulse, then Link) traces each issue to the exact file and
+  line by exact matches only. You get a `code_fix` prompt with the env vars and blast
+  radius involved, and the issue closes on its own once the fix is deployed (and reopens
+  if it comes back).
+- **Where:** in the dashboard, and from the CLI (`codesentra pulse`, `codesentra scan`).
 
-Link is not built yet; see [`docs/progress.md`](docs/progress.md).
+The GitHub App, schedules and notifications come next (Phase 5); see
+[`docs/progress.md`](docs/progress.md).
 
 ```sh
 pnpm install

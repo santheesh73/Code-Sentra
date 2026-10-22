@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { EvidenceButton, EvidenceDrawer } from "@/components/evidence-drawer";
 import { PromptCard } from "@/components/prompt-card";
@@ -27,6 +27,11 @@ export default function IssuePage() {
   const q = useQuery({
     queryKey: ["issue", id],
     queryFn: () => api<IssueDetail>(`/v1/issues/${id}`),
+  });
+  const router = useRouter();
+  const recheck = useMutation({
+    mutationFn: () => api<{ run_id: string }>(`/v1/issues/${id}/recheck`, { method: "POST" }),
+    onSuccess: ({ run_id }) => router.push(`/runs/${run_id}`),
   });
   const dismiss = useMutation({
     mutationFn: () => api<Issue>(`/v1/issues/${id}/dismiss`, { method: "POST", body: { reason } }),
@@ -103,9 +108,84 @@ export default function IssuePage() {
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-xs text-muted-foreground" data-testid="recheck">
-          Re-check ({i.recheck.module} · {i.recheck.check_group}): {i.recheck.expectation}
-        </p>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground" data-testid="recheck">
+            Re-check ({i.recheck.module} · {i.recheck.check_group}): {i.recheck.expectation}
+          </p>
+          {i.status !== "dismissed" && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={recheck.isPending}
+              onClick={() => recheck.mutate()}
+            >
+              {recheck.isPending ? "Starting…" : "Re-check now"}
+            </Button>
+          )}
+        </div>
+        {recheck.isError && (
+          <p role="alert" className="mt-2 text-sm text-danger">
+            {problemMessage(recheck.error)}
+          </p>
+        )}
+      </Card>
+
+      <Card data-testid="trace">
+        <CardTitle className="mb-3">Where it comes from</CardTitle>
+        {i.traces.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Not traced to code yet: CodeSentra links an issue to a file only on an exact match with
+            a Scan of the project (run a full check after uploading the source). The prompt below is
+            an unconfirmed lead until then.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {i.traces.map((t) => (
+              <li key={`${t.path}:${t.line}`} className="flex flex-col gap-1 text-sm">
+                <span>
+                  <code className="font-mono" data-testid="trace-location">
+                    {t.line ? `${t.path}:${t.line}` : t.path}
+                  </code>
+                  {t.symbol && <span className="text-muted-foreground"> in {t.symbol}</span>}
+                  <span className="text-xs text-muted-foreground">
+                    {" "}
+                    · verified on <code className="font-mono">{t.join_key}</code>
+                  </span>
+                </span>
+                {t.excerpt && (
+                  <pre className="overflow-x-auto rounded bg-muted p-2 font-mono text-xs">
+                    {t.excerpt}
+                  </pre>
+                )}
+                {t.env_vars.length > 0 && (
+                  <span className="text-xs" data-testid="trace-env">
+                    Environment variables:{" "}
+                    {t.env_vars.map((v, n) => (
+                      <span key={v.name}>
+                        {n > 0 && ", "}
+                        <code className="font-mono">{v.name}</code>
+                        {v.documented ? " (documented)" : " (not in .env.example)"}
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {i.blast_radius.length > 0 && (
+          <div className="mt-4">
+            <h3 className="mb-1 text-sm font-semibold">Blast radius</h3>
+            <ul className="flex flex-col gap-1 text-sm" data-testid="blast-radius">
+              {i.blast_radius.map((b) => (
+                <li key={b.path}>
+                  <code className="font-mono text-xs">{b.path}</code>{" "}
+                  <span className="text-muted-foreground">— {b.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Card>
 
       <Card>

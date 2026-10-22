@@ -151,6 +151,73 @@ describe("py-notes-api (Python, FastAPI)", () => {
   });
 });
 
+const APPS = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../fixtures/apps");
+const app = async (name: string) => {
+  const f = await parseFile("app/page.tsx", readFileSync(join(APPS, name, "app/page.tsx"), "utf8"));
+  if (!f) throw new Error(`not parsed: ${name}`);
+  return f;
+};
+
+describe("code facts Sentra Link joins on (fixture apps)", () => {
+  it("env-undefined: the URL template, its env var and the line", async () => {
+    const f = await app("env-undefined");
+    expect(f.urlLiterals).toContainEqual(
+      expect.objectContaining({ line: 9, template: true, envVars: ["NEXT_PUBLIC_API_URL"] }),
+    );
+    expect(f.urlLiterals.find((u) => u.line === 9)?.text).toContain(
+      "process.env.NEXT_PUBLIC_API_URL}/api/ping",
+    );
+  });
+
+  it("localhost-leak: the URL literal with host and port", async () => {
+    const f = await app("localhost-leak");
+    expect(f.urlLiterals).toContainEqual(
+      expect.objectContaining({ value: "http://localhost:4000/data", line: 9 }),
+    );
+  });
+
+  it("broken-route: every href with its line", async () => {
+    const f = await app("broken-route");
+    expect(f.hrefs.map((h) => `${h.value}@${h.line}`)).toEqual(["/about@7", "/pricing@7"]);
+  });
+
+  it("console-throw: the thrown message", async () => {
+    const f = await app("console-throw");
+    expect(f.messages).toEqual([
+      {
+        value: "CS_FIXTURE_BOOM",
+        line: 9,
+        text: 'throw new Error("CS_FIXTURE_BOOM");',
+        kind: "throw",
+      },
+    ]);
+  });
+
+  it("blank: the default export (the page component)", async () => {
+    const f = await app("blank");
+    expect(f.defaultExport).toEqual({
+      name: "Home",
+      line: 1,
+      text: "export default function Home() {",
+    });
+  });
+
+  it("records constructed errors, console.error and Python raise messages", async () => {
+    const js = await parseFile(
+      "src/a.ts",
+      'const e = new TypeError("bad input");\nconsole.error("save failed");\n',
+    );
+    expect(js?.messages.map((m) => `${m.kind}:${m.value}`)).toEqual([
+      "error:bad input",
+      "console:save failed",
+    ]);
+    const py = await parseFile("a.py", 'def f():\n    raise ValueError("no such note")\n');
+    expect(py?.messages.map((m) => `${m.kind}:${m.value}@${m.line}`)).toEqual([
+      "throw:no such note@2",
+    ]);
+  });
+});
+
 describe("edge cases", () => {
   // biome-ignore-start lint/suspicious/noTemplateCurlyInString: the source under test is a template literal
   it("records env-interpolated URL templates for Link", async () => {
@@ -164,6 +231,7 @@ describe("edge cases", () => {
         line: 2,
         template: true,
         envVars: ["NEXT_PUBLIC_API_URL"],
+        text: "fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/ping`);",
       },
     ]);
     expect(f?.envReads.map((e) => e.name)).toEqual(["NEXT_PUBLIC_API_URL"]);

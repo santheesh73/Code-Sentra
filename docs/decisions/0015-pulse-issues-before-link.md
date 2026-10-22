@@ -1,6 +1,6 @@
 # 0015 — Pulse issues are synced by the Pulse worker until Link exists
 
-- **Status:** accepted (Phase 2); revisit in Phase 4
+- **Status:** superseded by ADR 0019 (Phase 4): issues are synced by Sentra Link
 
 ## Context
 

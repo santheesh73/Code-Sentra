@@ -75,6 +75,9 @@ importers:
       '@codesentra/fixture-harness':
         specifier: workspace:*
         version: link:../../fixtures/harness
+      '@codesentra/link':
+        specifier: workspace:*
+        version: link:../../packages/link
       '@codesentra/scan':
         specifier: workspace:*
         version: link:../../packages/scan
@@ -168,6 +171,24 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
+  apps/worker-link:
+    dependencies:
+      '@codesentra/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@codesentra/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@codesentra/link':
+        specifier: workspace:*
+        version: link:../../packages/link
+      '@codesentra/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      pino:
+        specifier: 10.4.0
+        version: 10.4.0
+
   apps/worker-pulse:
     dependencies:
       '@codesentra/checks':
@@ -243,6 +264,9 @@ importers:
       '@codesentra/web':
         specifier: workspace:*
         version: link:../apps/web
+      '@codesentra/worker-link':
+        specifier: workspace:*
+        version: link:../apps/worker-link
       '@codesentra/worker-pulse':
         specifier: workspace:*
         version: link:../apps/worker-pulse
@@ -528,6 +552,43 @@ importers:
       '@codesentra/parsers':
         specifier: workspace:*
         version: link:../parsers
+
+  packages/link:
+    dependencies:
+      '@codesentra/checks':
+        specifier: workspace:*
+        version: link:../checks
+      '@codesentra/core':
+        specifier: workspace:*
+        version: link:../core
+      '@codesentra/db':
+        specifier: workspace:*
+        version: link:../db
+      '@codesentra/prompts':
+        specifier: workspace:*
+        version: link:../prompts
+      '@codesentra/queue':
+        specifier: workspace:*
+        version: link:../queue
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)
+    devDependencies:
+      '@codesentra/fixture-harness':
+        specifier: workspace:*
+        version: link:../../fixtures/harness
+      '@codesentra/graph':
+        specifier: workspace:*
+        version: link:../graph
+      '@codesentra/parsers':
+        specifier: workspace:*
+        version: link:../parsers
+      '@codesentra/ssrf':
+        specifier: workspace:*
+        version: link:../ssrf
+      playwright-core:
+        specifier: 1.64.1
+        version: 1.64.1
 
   packages/parsers:
     dependencies:

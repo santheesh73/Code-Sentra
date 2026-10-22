@@ -1,6 +1,6 @@
 # 0018 — Raw zip uploads, scan caching, and Scan findings before Link
 
-- **Status:** accepted (Phase 3); revisit in Phase 4
+- **Status:** accepted (Phase 3). The "Scan findings before Link" part is superseded by ADR 0019: Link now stores, traces and re-checks Scan issues.
 
 ## Context
 

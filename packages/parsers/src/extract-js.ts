@@ -100,6 +100,17 @@ export function extractJs(
         break;
       case "import_statement":
       case "export_statement": {
+        if (node.type === "export_statement" && /^export\s+default\b/.test(node.text)) {
+          const decl = node.childForFieldName("declaration") ?? node.childForFieldName("value");
+          const line = lineOf(node);
+          facts.defaultExport ??= {
+            name:
+              decl?.childForFieldName("name")?.text ??
+              (decl?.type === "identifier" ? decl.text : null),
+            line,
+            text: lineText(lines, line),
+          };
+        }
         const src = node.childForFieldName("source");
         const spec = src ? stringValue(src) : null;
         if (spec) facts.imports.push({ specifier: spec, line: lineOf(node), kind: "static" });
@@ -157,6 +168,15 @@ export function extractJs(
         if (!fn) break;
         const arg = firstArg(node);
         const argValue = arg ? stringValue(arg) : null;
+        if (fn.text === "console.error" && argValue?.trim()) {
+          const line = lineOf(node);
+          facts.messages.push({
+            value: argValue,
+            line,
+            text: lineText(lines, line),
+            kind: "console",
+          });
+        }
         if (fn.type === "identifier" && fn.text === "require" && argValue) {
           facts.imports.push({ specifier: argValue, line: lineOf(node), kind: "require" });
         } else if (fn.type === "import" && argValue) {
@@ -237,6 +257,33 @@ export function extractJs(
         }
         break;
       }
+      case "new_expression": {
+        // new Error("x"): `throw` when it is thrown directly, else a constructed error.
+        const ctor = node.childForFieldName("constructor")?.text ?? "";
+        const arg = node.childForFieldName("arguments")?.namedChildren[0];
+        const msg = arg ? stringValue(arg) : null;
+        if (/Error$/.test(ctor) && msg?.trim()) {
+          const line = lineOf(node);
+          facts.messages.push({
+            value: msg,
+            line,
+            text: lineText(lines, line),
+            kind: node.parent?.type === "throw_statement" ? "throw" : "error",
+          });
+        }
+        break;
+      }
+      case "jsx_attribute": {
+        const [name, value] = node.namedChildren;
+        if (name?.text === "href" && value) {
+          const v = stringValue(value);
+          if (v && /^(\/|https?:\/\/)/.test(v)) {
+            const line = lineOf(node);
+            facts.hrefs.push({ value: v, line, text: lineText(lines, line) });
+          }
+        }
+        break;
+      }
       case "member_expression":
       case "subscript_expression": {
         const name = envRead(node);
@@ -252,18 +299,29 @@ export function extractJs(
           break;
         const value = stringValue(node);
         if (value !== null) {
-          if (looksLikeUrl(value))
-            facts.urlLiterals.push({ value, line: lineOf(node), template: false, envVars: [] });
+          if (looksLikeUrl(value)) {
+            const line = lineOf(node);
+            facts.urlLiterals.push({
+              value,
+              line,
+              template: false,
+              envVars: [],
+              text: lineText(lines, line),
+            });
+          }
         } else if (node.type === "template_string") {
           // `${process.env.API}/api/ping`: keep the template; Link matches its static suffix.
           const raw = node.text.slice(1, -1);
-          if (/\/[\w.-]/.test(raw) || /^https?:/i.test(raw))
+          if (/\/[\w.-]/.test(raw) || /^https?:/i.test(raw)) {
+            const line = lineOf(node);
             facts.urlLiterals.push({
               value: raw,
-              line: lineOf(node),
+              line,
               template: true,
               envVars: envVarsIn(node),
+              text: lineText(lines, line),
             });
+          }
         }
         break;
       }

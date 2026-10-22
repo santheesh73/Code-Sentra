@@ -1,0 +1,1 @@
+ALTER TYPE "public"."code_node_kind" ADD VALUE 'literal';

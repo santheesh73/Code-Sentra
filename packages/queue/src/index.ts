@@ -19,6 +19,7 @@ export {
   type Logger,
   type StepContext,
   type StepFn,
+  startLinkIfReady,
   startWorker,
   type Worker,
   type WorkerOptions,

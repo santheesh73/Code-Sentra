@@ -1,5 +1,6 @@
 import type { JobType, RunStepStatus } from "@codesentra/core";
 import {
+  childRuns,
   type Database,
   failRun,
   finishRun,
@@ -65,6 +66,34 @@ export interface Worker {
 }
 
 const silent: Logger = { info() {}, error() {} };
+const TERMINAL = new Set(["succeeded", "failed", "partial"]);
+
+/**
+ * Job-completion hook (Section 5): when a run that feeds a Link run finishes, and every
+ * sibling has finished too, enqueue the Link run. The job id is the run id, so siblings
+ * finishing at the same moment enqueue it once (ADR 0019).
+ */
+export async function startLinkIfReady(
+  db: Database,
+  queue: QueueClient,
+  orgId: string,
+  runId: string,
+): Promise<boolean> {
+  const parent = await db.withOrg(orgId, async (tx) => {
+    const [r] = await tx
+      .select({ parent: schema.runs.parentRunId })
+      .from(schema.runs)
+      .where(eq(schema.runs.id, runId));
+    if (!r?.parent) return null;
+    const [p] = await tx.select().from(schema.runs).where(eq(schema.runs.id, r.parent));
+    if (p?.type !== "link" || p.status !== "queued") return null;
+    const kids = await childRuns(tx, p.id);
+    return kids.length > 0 && kids.every((k) => TERMINAL.has(k.status)) ? p : null;
+  });
+  if (!parent) return false;
+  await queue.enqueue("link.run", { runId: parent.id, orgId });
+  return true;
+}
 
 async function emitStep(
   db: Database,
@@ -83,6 +112,15 @@ export async function startWorker(opts: WorkerOptions): Promise<Worker> {
   const { db, queue } = opts;
   const log = opts.log ?? silent;
   const workerIds: string[] = [];
+
+  // Link still runs when a child failed: it records what is missing (Section 5).
+  const afterFinish = async (orgId: string, runId: string) => {
+    try {
+      await startLinkIfReady(db, queue, orgId, runId);
+    } catch (e) {
+      log.error({ runId, err: (e as Error).message }, "could not start the Link run");
+    }
+  };
 
   const runJob = async (type: JobType, handler: JobHandler, job: JobWithMetadata<unknown>) => {
     const payload = JOB_SPECS[type].payload.parse(job.data);
@@ -161,6 +199,7 @@ export async function startWorker(opts: WorkerOptions): Promise<Worker> {
         const status = await finishRun(tx, payload.runId);
         await publishRunEvent(tx, { kind: "run", ...payload, status });
       });
+      await afterFinish(payload.orgId, payload.runId);
     } catch (e) {
       const finalAttempt = job.retryCount >= job.retryLimit;
       log.error(
@@ -178,6 +217,7 @@ export async function startWorker(opts: WorkerOptions): Promise<Worker> {
           await failRun(tx, payload.runId, (e as Error).message);
           await publishRunEvent(tx, { kind: "run", ...payload, status: "failed" });
         });
+        await afterFinish(payload.orgId, payload.runId);
       }
       throw e;
     }
@@ -229,6 +269,7 @@ export async function startWorker(opts: WorkerOptions): Promise<Worker> {
           status: "failed",
         });
       });
+      await afterFinish(row.org_id, row.id);
     }
     return dead.rows.length;
   };

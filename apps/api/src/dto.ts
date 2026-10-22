@@ -77,6 +77,8 @@ export const RunSummaryDto = z
     trigger: RunTrigger,
     status: RunStatus,
     target_url: z.string().nullable(),
+    /** The Link run this run feeds (Scan and Pulse runs of a project; ADR 0019). */
+    parent_run_id: z.uuid().nullable(),
     error: z.string().nullable(),
     created_at: ts,
     started_at: ts.nullable(),
@@ -90,6 +92,8 @@ export const RunDto = RunSummaryDto.extend({
   steps: z.array(RunStepDto),
   /** Every step that did not run, with its reason (Rule 2). */
   gaps: z.array(z.object({ step: z.string(), reason: z.string() })),
+  /** For a Link run: the Scan and Pulse runs it waits for and combines. */
+  children: z.array(RunSummaryDto),
 }).meta({ id: "Run" });
 
 export const ProjectDto = z
@@ -118,6 +122,12 @@ export const ProjectDto = z
   .meta({ id: "Project" });
 
 export const RunAccepted = z.object({ run_id: z.uuid() }).meta({ id: "RunAccepted" });
+export const LinkedRunAccepted = z
+  .object({
+    run_id: z.uuid(),
+    link_run_id: z.uuid().describe("The Link run that follows it and updates the project's issues"),
+  })
+  .meta({ id: "LinkedRunAccepted" });
 
 type UserRow = typeof schema.users.$inferSelect;
 type ProjectRow = typeof schema.projects.$inferSelect;
@@ -168,6 +178,7 @@ export const runSummaryDto = (r: RunRow): z.infer<typeof RunSummaryDto> => ({
   trigger: r.trigger,
   status: r.status,
   target_url: r.targetUrl,
+  parent_run_id: r.parentRunId,
   error: r.error,
   created_at: r.createdAt.toISOString(),
   started_at: iso(r.startedAt),
@@ -175,7 +186,10 @@ export const runSummaryDto = (r: RunRow): z.infer<typeof RunSummaryDto> => ({
   outcome: (r.outcome as Record<string, unknown> | null) ?? null,
 });
 
-export const runDto = ({ run, steps }: RunWithSteps): z.infer<typeof RunDto> => ({
+export const runDto = (
+  { run, steps }: RunWithSteps,
+  children: RunRow[] = [],
+): z.infer<typeof RunDto> => ({
   ...runSummaryDto(run),
   steps: steps.map((st) => ({
     name: st.name,
@@ -191,6 +205,7 @@ export const runDto = ({ run, steps }: RunWithSteps): z.infer<typeof RunDto> => 
   gaps: steps
     .filter((st) => st.status === "skipped")
     .map((st) => ({ step: st.name, reason: st.gapReason ?? "no reason recorded" })),
+  children: children.map(runSummaryDto),
 });
 
 export const projectDto = (
@@ -314,6 +329,20 @@ export const IssueDetailDto = IssueDto.extend({
   ),
   /** Findings that showed this issue in its latest sighting, with their evidence. */
   observed: z.array(FindingDto),
+  /** Verified code locations (Section 10a); empty when Link could not trace it. */
+  traces: z.array(
+    z.object({
+      path: z.string(),
+      line: z.number().int().nullable(),
+      symbol: z.string().nullable(),
+      excerpt: z.string().nullable(),
+      join_key: z.string(),
+      env_vars: z.array(z.object({ name: z.string(), documented: z.boolean() })),
+      run_id: z.uuid(),
+    }),
+  ),
+  /** Files that depend on or change with the traced code, and why (Section 10b). */
+  blast_radius: z.array(z.object({ path: z.string(), reason: z.string() })),
 }).meta({ id: "IssueDetail" });
 
 /** Findings of one run, grouped into issues with prompts (Quick Pulse runs have no stored issues). */

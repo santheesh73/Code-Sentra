@@ -8,7 +8,8 @@ export type NodeKind =
   | "api_handler"
   | "cli_command"
   | "env_var"
-  | "test";
+  | "test"
+  | "literal";
 export type EdgeKind = "imports" | "calls" | "defines_route" | "reads_env" | "tests" | "co_changes";
 
 export interface GraphNode {
@@ -142,6 +143,22 @@ export function buildGraph(input: GraphInput): CodeGraph {
       });
       edges.push({ from, to: key, kind: "defines_route", weight: 1 });
     }
+    // Literals Sentra Link joins runtime evidence on (Section 10a).
+    const literal = (role: string, value: string, line: number, text: string, extra = {}) =>
+      add({
+        key: `literal:${role}:${f.path}:${line}:${value.slice(0, 500)}`,
+        kind: "literal",
+        path: f.path,
+        name: value.slice(0, 500),
+        line,
+        meta: { role, value: value.slice(0, 2000), text, ...extra },
+      });
+    for (const u of f.urlLiterals)
+      literal(u.template ? "url_template" : "url", u.value, u.line, u.text, {
+        envVars: u.envVars.join(","),
+      });
+    for (const h of f.hrefs) literal("href", h.value, h.line, h.text);
+    for (const m of f.messages) literal(m.kind, m.value, m.line, m.text);
     for (const t of f.tests) {
       const key = add({
         key: `test:${f.path}:${t.line}`,
@@ -155,17 +172,24 @@ export function buildGraph(input: GraphInput): CodeGraph {
     }
   }
 
-  // Next.js file-system routes.
+  // Next.js file-system routes, at the page component when the file was parsed.
+  const factsByPath = new Map(input.files.map((f) => [f.path, f]));
   for (const p of input.allPaths) {
     const r = nextRouteOf(p);
     if (!r) continue;
+    const def = factsByPath.get(p)?.defaultExport ?? null;
     const key = add({
       key: `${r.kind}:${r.path}@${p}`,
       kind: r.kind,
       path: p,
       name: r.path,
-      line: 1,
-      meta: { routePath: r.path, method: r.kind === "route" ? "GET" : null },
+      line: def?.line ?? 1,
+      meta: {
+        routePath: r.path,
+        method: r.kind === "route" ? "GET" : null,
+        symbol: def?.name ?? null,
+        text: def?.text ?? null,
+      },
     });
     edges.push({ from: fileKey(p), to: key, kind: "defines_route", weight: 1 });
   }

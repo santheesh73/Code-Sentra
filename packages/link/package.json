@@ -1,0 +1,41 @@
+{
+  "name": "@codesentra/link",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./job": {
+      "types": "./dist/job.d.ts",
+      "default": "./dist/job.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@codesentra/checks": "workspace:*",
+    "@codesentra/core": "workspace:*",
+    "@codesentra/db": "workspace:*",
+    "@codesentra/prompts": "workspace:*",
+    "@codesentra/queue": "workspace:*",
+    "drizzle-orm": "0.45.4"
+  },
+  "devDependencies": {
+    "@codesentra/fixture-harness": "workspace:*",
+    "@codesentra/graph": "workspace:*",
+    "@codesentra/parsers": "workspace:*",
+    "@codesentra/ssrf": "workspace:*",
+    "playwright-core": "1.64.1"
+  }
+}

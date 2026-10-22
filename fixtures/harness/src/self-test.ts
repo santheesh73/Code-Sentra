@@ -43,6 +43,20 @@ export async function observe(
   url: string,
   expected: SelfTestVariant["requests"] = [],
 ): Promise<Observation> {
+  const obs = await observeOnce(browser, url, expected);
+  // Chromium aborts in-flight requests when the host's network interfaces change (Docker
+  // creating a bridge for a parallel test does that). That is the machine, not the app:
+  // observe once more. Any other failure stands.
+  if (obs.requests.some((r) => r.failure === "net::ERR_NETWORK_CHANGED"))
+    return observeOnce(browser, url, expected);
+  return obs;
+}
+
+async function observeOnce(
+  browser: Browser,
+  url: string,
+  expected: SelfTestVariant["requests"],
+): Promise<Observation> {
   const context = await browser.newContext({ viewport: { width: 1366, height: 768 } });
   const page = await context.newPage();
   const byRequest = new Map<object, ObservedRequest>();

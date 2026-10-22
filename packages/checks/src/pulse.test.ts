@@ -91,6 +91,7 @@ describe("simulators", () => {
     ["tls-expired", "down", ["TLS_INVALID /"]],
     ["tls-wrong-host", "down", ["TLS_INVALID /"]],
     ["tls-self-signed", "down", ["TLS_INVALID /"]],
+    ["access-protected", "unverified", ["ACCESS_PROTECTED /"]],
   ];
   it.each(cases)("%s → %s", async (name, status, findings, extra) => {
     const sim = h.targets.simulators[name as keyof typeof h.targets.simulators];
@@ -100,6 +101,37 @@ describe("simulators", () => {
     if (status === "down") {
       expect(r.gaps.map((g) => g.group)).toEqual(["platform", "render", "routes", "hygiene"]);
     }
+  });
+});
+
+describe("platform findings end to end", () => {
+  it("access protection is a warning plus gaps, never live", async () => {
+    const r = await pulse(h.targets.simulators["access-protected"].url);
+    expect(r.platform?.name).toBe("vercel");
+    expect(r.gaps.map((g) => g.group)).toEqual(["render", "routes", "hygiene"]);
+    expect(r.gaps[0]?.reason).toMatch(/access protection/);
+  });
+
+  it("a preview deployment registered as production is PREVIEW_SERVED_AS_PROD", async () => {
+    const sim = new URL(h.targets.simulators["preview-deployment"].url);
+    const host = "shop-git-feature-x-acme.vercel.app";
+    const url = `http://${host}:${sim.port}/`;
+    // The test resolver sends the vercel.app name to the harness; nothing leaves the host.
+    const policy = testPolicy([host], {
+      resolver: async (name) => {
+        if (name !== host) throw new Error(`unexpected lookup: ${name}`);
+        return [{ address: "127.0.0.1", family: 4 }];
+      },
+    });
+    const asProd = await runPulse({ url, policy, browser, expectedEnvironment: "production" });
+    expect(asProd.platform).toMatchObject({ name: "vercel", environment: "preview" });
+    expect(asProd.status).toBe("degraded");
+    expect(summarise(asProd)).toEqual(["PREVIEW_SERVED_AS_PROD /"]);
+    expect(asProd.gaps).toEqual([]);
+
+    const asPreview = await runPulse({ url, policy, browser, expectedEnvironment: "preview" });
+    expect(asPreview.status).toBe("live");
+    expect(summarise(asPreview)).toEqual([]);
   });
 });
 

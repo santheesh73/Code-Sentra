@@ -1,5 +1,149 @@
 # Progress
 
+## Phase 2 — Sentra Pulse (2026-10-22)
+
+### Built
+
+- **`packages/ssrf`** (ADR 0013): `safeFetch` allows only global-unicast addresses. DNS is
+  resolved once and pinned. Redirects are manual and re-validated at every hop. `localhost`
+  names are refused. Timeouts, body caps, and a per-host limiter. `testPolicy` exists only
+  under `NODE_ENV=test`.
+- **`packages/checks`:** the five Pulse groups.
+  - reachability: DNS, TLS validity and expiry, main URL, redirects, TTFB.
+  - platform: Vercel, Netlify, Render, Cloudflare Pages, Fly and generic adapters;
+    environment detection; access walls; config hints.
+  - render: Chromium with every request fulfilled through `safeFetch`; GET/HEAD only;
+    loopback calls recorded, never sent (ADR 0014).
+  - routes: up to 50 same-origin links.
+  - hygiene: security headers and similar checks.
+  - Also `runPulse`, issue drafts, and the `pulse.run` job (`@codesentra/checks/job`).
+- **`packages/core`:**
+  - The Section 9 status rule. A blocked target is `unverified`; a skipped group is never
+    `live`.
+  - Merging findings by shared evidence (the most specific code leads).
+  - Re-check specs and the issue lifecycle.
+- **`packages/prompts`:** versioned `outage_triage`, `config_fix` and `investigate`
+  templates. `code_fix` refuses to render until there is a code trace (Phase 4).
+- **`packages/db`:** `evidence`, `findings`, `issues`, `issue_findings`, `issue_events`
+  (append-only) and `fix_prompts`, all under RLS. `runs.outcome`. `syncIssues` opens issues,
+  records sightings, regresses resolved ones that reappear, and resolves an issue only when
+  its check group ran (ADR 0015).
+- **`apps/api`:**
+  - `POST /v1/projects/{id}/pulse` and Quick Pulse `POST /v1/pulse` (10/min). Both refuse
+    private targets.
+  - Issues list, detail, fix prompt and dismiss (audited); evidence; run findings (with
+    prompts); screenshot.
+  - Environments carry their latest Pulse status, and projects their open-issue count.
+  - Cross-org tests cover every new route.
+- **`apps/worker-pulse`:** `pulse.run`, with one step per check group (live over SSE) and a
+  shared Chromium that relaunches if it crashes.
+- **`apps/web`:**
+  - The project page shows Pulse status per environment, a "Check now" button, and issues.
+  - The run page shows the Pulse status, gaps per group, issues with prompts (copy button,
+    type label), evidence, and the screenshot.
+  - New pages: issue (observation, evidence drawer, re-check, prompt, history, dismiss)
+    and Quick Pulse.
+- **`apps/cli`:** `codesentra pulse <url> [--json] [--fix-prompt] [--timeout=<ms>]` runs
+  in-process.
+  - Exit codes: 0 live, 1 degraded, 2 down, 3 usage. Without Chromium, render is a gap
+    and the status is `unverified`.
+  - `scan`, `check` and `login` say which phase brings them.
+- **`infra/pulse/Dockerfile`:** worker-pulse on the Playwright 1.64.1 image (Chromium
+  156.0.8078.4, the build playwright-core drives) with Node 22.23.4. CI builds it and
+  launches Chromium inside.
+- **Fixture harness:** new `access-protected` and `preview-deployment` simulators (promised
+  in Phase 0). Both run end to end: `ACCESS_PROTECTED` gives `unverified` with gaps, and
+  `PREVIEW_SERVED_AS_PROD` is found when the preview is registered as production.
+  `connection-refused` now uses a probed privileged port. A freed ephemeral port could be
+  taken by a parallel test, and the full-suite run caught that once.
+- **`e2e/`:** the Phase 2 gate through the whole stack (below).
+
+### Decisions
+
+- **`unverified` exits with 1** in the CLI, not 0. Section 15 lists only live, degraded and
+  down. An unchecked group must never look like a pass in CI (Rule 2).
+- **Quick Pulse runs store findings and evidence but no issues.** Issues belong to a project
+  environment. Their prompts are rendered when the findings are read.
+- **Pulse issues are synced by worker-pulse until Link exists** (ADR 0015).
+
+### Deferred or partial
+
+- **`code_fix` prompts and code traces** (the fixture manifests' `promptType: code_fix`
+  and `trace`) need Scan and Link and are Phase 4 gate items. Pulse issues currently get
+  `investigate` ("Unconfirmed lead"), `config_fix` or `outage_triage`.
+- **Scan-discovered routes:** the routes group checks links found on the page only. Routes
+  from Scan (`scanRoutes`) arrive in Phase 3.
+- **Preview bypass tokens:** `environments.bypass_token_ref` exists, and the check can send a
+  bypass header, but there is no secret storage or UI to register one yet (Phase 5 with API
+  tokens). Until then an access-protected deployment is `unverified` with that gap.
+- **Not built yet (answer 501):** `POST /v1/issues/{id}/recheck`, schedules and
+  notifications. Re-checks happen on the next Pulse of the same environment.
+- **Rate limits:** the Quick Pulse limit is per IP, not per org.
+- **Platform adapters** are tested against simulated headers and host names, not against
+  real accounts on each platform.
+- **The Pulse image is large** (~3.9 GB on disk; the Playwright base ships Firefox and
+  WebKit too). docker-compose still runs infrastructure only.
+- **The CLI is a private workspace package.** Bundling and publishing it to npm is Phase 5.
+
+### Known risks
+
+- **Render traffic passes through Node** (ADR 0014). That is fine for one page and its
+  assets, but large media-heavy pages are slower than native Chromium networking.
+- **Platform detection** relies on headers and URL patterns that the platforms can change.
+  The adapters are isolated so one can be updated alone.
+
+### Gate result
+
+Lint, typecheck and build were first run from a clean tree (all build outputs and turbo
+caches deleted). The final run below is after the last change, on 2026-10-22:
+
+```
+pnpm lint          Checked 256 files. No fixes applied.
+pnpm typecheck     Tasks: 38 successful, 38 total
+pnpm build         Tasks: 19 successful, 19 total
+pnpm test          Tasks: 29 successful, 29 total
+  @codesentra/core             51 passed   (status rule, grouping, lifecycle)
+  @codesentra/config           19 passed
+  @codesentra/storage           3 passed
+  @codesentra/ssrf             70 passed   (SSRF suite: every refused range, rebinding,
+                                            redirect re-validation, allowance guard)
+  @codesentra/checks           36 passed   (every fixture app and variant, 15 simulators,
+                                            platform findings, gaps never pass, prompts)
+  @codesentra/prompts           7 passed
+  @codesentra/db               22 passed   (RLS on Pulse tables, issue sync lifecycle)
+  @codesentra/queue             6 passed
+  @codesentra/api              38 passed   (Pulse + issues end to end, cross-org on every route)
+  @codesentra/cli              15 passed   (exit codes, JSON, --fix-prompt, no-browser gap,
+                                            SSRF under the default policy)
+  @codesentra/fixture-harness  44 passed
+pnpm openapi       docs/openapi.json and docs/api.md unchanged
+pnpm e2e           9 passed
+  ✓ Phase 1 tests (3, plus the 375 px check on mobile)
+  ✓ Phase 2 gate: every fixture app returns its expected status and findings
+  ✓ an issue opens with evidence and a prompt, then resolves after the fix deploys
+  ✓ Quick Pulse checks a pasted URL without a project and refuses private targets
+  ✓ @responsive Phase 2 pages fit a 375 px screen (desktop + mobile projects)
+docker build -f infra/pulse/Dockerfile   chromium 156.0.8078.4 launches in the image
+```
+
+The e2e gate signs in and registers all six fixture apps as environments of one project.
+For each app and variant it clicks "Check now", and the real worker checks the app in
+Chromium through the SSRF policy. The test then compares the run's status and its
+non-info findings with the manifest. All seven app–variant combinations match:
+
+| App                | Variant | Status   | Findings                                                            |
+| ------------------ | ------- | -------- | ------------------------------------------------------------------- |
+| `healthy`          | default | live     | none (zero issues)                                                  |
+| `env-undefined`    | broken  | degraded | `UNDEFINED_IN_URL` and `SAME_ORIGIN_FAILURE`, merged into one issue |
+| `env-undefined`    | fixed   | live     | none                                                                |
+| other fixture apps | default | degraded | its documented finding                                              |
+
+It also requires that no group was skipped, and that every issue has a stored prompt, both
+in the API and on the page. A second test watches an issue open on `env-undefined`
+(broken) and resolve once the fixed variant is deployed.
+
+**Phase 2 gate: passed locally.**
+
 ## Phase 1 — Foundation (2026-10-21)
 
 ### Built

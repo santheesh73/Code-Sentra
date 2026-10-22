@@ -114,6 +114,18 @@ describe("simulators", () => {
     expect((await get(s()["not-found"].url)).status).toBe(404);
   });
 
+  it("access-protected answers 401 from Vercel's edge", async () => {
+    const res = await get(s()["access-protected"].url);
+    expect(res.status).toBe(401);
+    expect(res.headers.get("x-vercel-id")).toBeTruthy();
+  });
+
+  it("preview-deployment serves a page as Vercel", async () => {
+    const res = await get(s()["preview-deployment"].url);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("server")).toBe("Vercel");
+  });
+
   it("timeout never answers", async () => {
     await expect(get(s().timeout.url, { signal: AbortSignal.timeout(500) })).rejects.toThrow();
   });

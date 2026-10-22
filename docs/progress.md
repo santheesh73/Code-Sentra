@@ -136,7 +136,10 @@ non-info findings with the manifest. All seven app–variant combinations match:
 | `healthy`          | default | live     | none (zero issues)                                                  |
 | `env-undefined`    | broken  | degraded | `UNDEFINED_IN_URL` and `SAME_ORIGIN_FAILURE`, merged into one issue |
 | `env-undefined`    | fixed   | live     | none                                                                |
-| other fixture apps | default | degraded | its documented finding                                              |
+| `blank` | default | degraded | `BLANK_PAGE` |
+| `broken-route` | default | degraded | `ROUTE_BROKEN` |
+| `console-throw` | default | degraded | `UNCAUGHT_EXCEPTION` |
+| `localhost-leak` | default | degraded | `LOCALHOST_CALL` |
 
 It also requires that no group was skipped, and that every issue has a stored prompt, both
 in the API and on the page. A second test watches an issue open on `env-undefined`

@@ -191,6 +191,9 @@ importers:
       '@codesentra/db':
         specifier: workspace:*
         version: link:../packages/db
+      '@codesentra/fixture-harness':
+        specifier: workspace:*
+        version: link:../fixtures/harness
       '@codesentra/web':
         specifier: workspace:*
         version: link:../apps/web

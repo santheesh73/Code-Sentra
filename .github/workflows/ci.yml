@@ -60,7 +60,8 @@ jobs:
       - name: OpenAPI docs are up to date
         run: pnpm openapi && git diff --exit-code docs/openapi.json docs/api.md
 
-  # Phase 1 gate: real Postgres + MinIO (Testcontainers), API, worker and web, driven in Chromium.
+  # Phase 1 and 2 gates: real Postgres + MinIO (Testcontainers), API, worker-pulse (real
+  # Chromium), web and the fixture harness on loopback, driven in Chromium.
   e2e:
     runs-on: ubuntu-24.04
     steps:
@@ -73,7 +74,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install Chromium
         run: pnpm --filter @codesentra/e2e exec playwright install --with-deps chromium
-      - run: pnpm turbo run build --filter=@codesentra/api --filter=@codesentra/web --filter=@codesentra/worker-pulse
+      # Everything e2e depends on, including the fixture harness and the fixture app exports.
+      - run: pnpm turbo run build --filter=@codesentra/e2e...
       - run: pnpm e2e
       - if: failure()
         uses: actions/upload-artifact@v4

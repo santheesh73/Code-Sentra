@@ -177,6 +177,7 @@ export async function checkRender(
     const summary = (await page.evaluate(() => {
       const body = document.body;
       // innerText: what a user can see (textContent would include hidden nodes).
+      // biome-ignore lint/performance/useDomNodeTextContent: visible text is the point
       const text = body?.innerText.trim() ?? "";
       const media = body ? body.querySelectorAll("img, svg, canvas, video, iframe").length : 0;
       const links = [...document.querySelectorAll("a[href]")].map(

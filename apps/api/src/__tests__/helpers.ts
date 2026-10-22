@@ -203,21 +203,18 @@ export function as(cookie: string) {
   return { cookie, ...ORIGIN };
 }
 
-/** Inserts an issue with evidence, a finding and a prompt directly (for authz tests). */
+/** Inserts evidence, an issue and its prompt directly (for authz tests). */
 export async function seedIssue(api: TestApi, orgId: string, projectId: string, runId: string) {
   const { schema: s } = await import("@codesentra/db");
   const sys = api.t.db.system;
-  const [ev] = await sys
-    .insert(s.evidence)
-    .values({
-      orgId,
-      runId,
-      kind: "render_summary",
-      locator: "https://seed.example/",
-      payload: { text_length: 0 },
-      hash: "0".repeat(64),
-    })
-    .returning();
+  await sys.insert(s.evidence).values({
+    orgId,
+    runId,
+    kind: "render_summary",
+    locator: "https://seed.example/",
+    payload: { text_length: 0 },
+    hash: "0".repeat(64),
+  });
   const [issue] = await sys
     .insert(s.issues)
     .values({

@@ -156,11 +156,43 @@ describe("renderPrompt", () => {
       }),
     );
     expect(p.type).toBe("code_fix");
-    expect(p.templateVersion).toBe("code_fix@1");
-    expect(p.body).toContain("**Location:** `src/lib/csv.ts:4`");
+    expect(p.templateVersion).toBe("code_fix@2");
+    expect(p.body).toContain("- `src/lib/csv.ts:4`");
     expect(p.body).toContain('throw new Error("not implemented");');
     expect(p.body).toContain("On the next Scan of this project");
     expect(p.body).not.toContain("later check of");
+  });
+
+  it("writes a code_fix prompt for a traced Pulse issue: site, env var, blast radius, confirm first", () => {
+    const p = renderPrompt(
+      ctx({
+        hasVerifiedTrace: true,
+        trace: {
+          joinKey: "/api/ping",
+          sites: [
+            {
+              path: "app/page.tsx",
+              line: 9,
+              symbol: "Home",
+              // biome-ignore lint/suspicious/noTemplateCurlyInString: the source line under test
+              excerpt: "fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/ping`)",
+            },
+          ],
+          envVars: [{ name: "NEXT_PUBLIC_API_URL", documented: false }],
+          blastRadius: [{ path: "app/layout.tsx", reason: "imports app/page.tsx" }],
+        },
+      }),
+    );
+    expect(p.type).toBe("code_fix");
+    expect(p.body).toContain("Investigate and confirm the cause before editing");
+    expect(p.body).toContain("https://shop.example.com/undefined/api/ping");
+    expect(p.body).toContain("`app/page.tsx:9` in `Home`");
+    expect(p.body).toContain("verified trace on `/api/ping`");
+    expect(p.body).toContain("`NEXT_PUBLIC_API_URL` — **not documented** in .env.example");
+    expect(p.body).toContain("**before the build**");
+    expect(p.body).toContain("Platform → Settings → Environment Variables");
+    expect(p.body).toContain("`app/layout.tsx` — imports app/page.tsx");
+    expect(p.body).toContain("SAME_ORIGIN_FAILURE");
   });
 
   it("never puts more than the masked preview of a secret in a prompt", () => {

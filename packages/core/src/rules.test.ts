@@ -24,6 +24,34 @@ describe("computePulseStatus", () => {
     }
   });
 
+  it("is down on redirect loops and over-long chains", () => {
+    for (const failure of ["redirect_loop", "too_many_redirects"] as const) {
+      expect(
+        computePulseStatus({ main: { reachable: false, failure }, groups: allRan(), findings: [] })
+          .status,
+      ).toBe("down");
+    }
+  });
+
+  it("is unverified, not down, when the target was refused by the SSRF policy", () => {
+    const r = computePulseStatus({
+      main: { reachable: false, failure: "blocked" },
+      groups: [],
+      findings: [],
+    });
+    expect(r.status).toBe("unverified");
+    expect(r.gaps[0]?.reason).toMatch(/non-public address/);
+  });
+
+  it("reports one reachability gap when the group already recorded why it was skipped", () => {
+    const r = computePulseStatus({
+      main: { reachable: false, failure: "blocked" },
+      groups: [{ group: "reachability", ran: false, gapReason: "refused by policy" }],
+      findings: [],
+    });
+    expect(r.gaps).toEqual([{ group: "reachability", reason: "refused by policy" }]);
+  });
+
   it("is down on a 5xx main response", () => {
     expect(
       computePulseStatus({ main: { reachable: true, status: 503 }, groups: allRan(), findings: [] })

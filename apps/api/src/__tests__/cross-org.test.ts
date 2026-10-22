@@ -2,7 +2,7 @@ import { schema as s } from "@codesentra/db";
 import { count, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { UNBUILT } from "../routes/unbuilt.js";
-import { as, signIn, startTestApi, type TestApi } from "./helpers.js";
+import { as, seedEvidence, seedIssue, signIn, startTestApi, type TestApi } from "./helpers.js";
 
 /**
  * Section 17: "tests that try cross-org access on every route". User A attacks every
@@ -14,7 +14,7 @@ import { as, signIn, startTestApi, type TestApi } from "./helpers.js";
 let api: TestApi;
 let attacker: string;
 let victim: string;
-const B = { org: "", user: "", project: "", run: "" };
+const B = { org: "", user: "", project: "", run: "", env: "", issue: "", evidence: "" };
 
 beforeAll(async () => {
   api = await startTestApi();
@@ -36,6 +36,7 @@ beforeAll(async () => {
     },
   });
   B.project = p.json().id;
+  B.env = p.json().environments[0].id;
   B.run = (
     await api.app.inject({
       method: "POST",
@@ -43,6 +44,8 @@ beforeAll(async () => {
       headers: as(victim),
     })
   ).json().run_id;
+  B.issue = await seedIssue(api, B.org, B.project, B.run);
+  B.evidence = await seedEvidence(api, B.org, B.run);
 }, 180_000);
 afterAll(async () => api?.close());
 
@@ -61,13 +64,8 @@ const NOT_TENANT_SCOPED: Record<string, string> = {
   "GET /v1/me": "the caller's own identity",
   "GET /v1/orgs": "lists only the caller's memberships",
   "POST /v1/orgs": "creates a new org owned by the caller",
-  "POST /v1/pulse": "unbuilt; takes a public URL, no tenant id",
+
   "POST /v1/webhooks/github": "unbuilt; HMAC-authenticated by GitHub, not by session",
-  "GET /v1/issues/:id": "unbuilt; issues do not exist until Phase 2 (re-classify then)",
-  "GET /v1/issues/:id/fix-prompt": "unbuilt; issues do not exist until Phase 2",
-  "POST /v1/issues/:id/recheck": "unbuilt; issues do not exist until Phase 2",
-  "POST /v1/issues/:id/dismiss": "unbuilt; issues do not exist until Phase 2",
-  "GET /v1/evidence/:id": "unbuilt; evidence does not exist until Phase 2",
 };
 
 const attacks = (): Record<string, Attack> => {
@@ -95,12 +93,29 @@ const attacks = (): Record<string, Attack> => {
     "POST /v1/projects/:id/diagnostic": { url: `/v1/projects/${B.project}/diagnostic` },
     "GET /v1/runs/:id": { url: `/v1/runs/${B.run}` },
     "GET /v1/runs/:id/stream": { url: `/v1/runs/${B.run}/stream` },
+    "GET /v1/runs/:id/findings": { url: `/v1/runs/${B.run}/findings` },
+    "GET /v1/runs/:id/screenshot": { url: `/v1/runs/${B.run}/screenshot` },
+    "POST /v1/projects/:id/pulse": {
+      url: `/v1/projects/${B.project}/pulse`,
+      payload: { environment_id: B.env },
+    },
+    "POST /v1/pulse": { url: "/v1/pulse", payload: { url: "https://example.com/", org_id: B.org } },
+    "GET /v1/projects/:id/issues": { url: `/v1/projects/${B.project}/issues` },
+    "GET /v1/issues/:id": { url: `/v1/issues/${B.issue}` },
+    "GET /v1/issues/:id/fix-prompt": { url: `/v1/issues/${B.issue}/fix-prompt` },
+    "POST /v1/issues/:id/dismiss": {
+      url: `/v1/issues/${B.issue}/dismiss`,
+      payload: { reason: "pwned by attacker" },
+    },
+    "GET /v1/evidence/:id": { url: `/v1/evidence/${B.evidence}` },
   };
   for (const r of UNBUILT) {
     if (r.scope === "project")
       a[`${r.method} ${r.url}`] = { url: r.url.replace(":id", B.project), payload: {} };
     if (r.scope === "run")
       a[`${r.method} ${r.url}`] = { url: r.url.replace(":id", B.run), payload: {} };
+    if (r.scope === "issue")
+      a[`${r.method} ${r.url}`] = { url: r.url.replace(":id", B.issue), payload: {} };
   }
   return a;
 };
@@ -124,7 +139,8 @@ async function snapshotB() {
     .select({ projects: count() })
     .from(s.projects)
     .where(eq(s.projects.orgId, B.org))) as [{ projects: number }];
-  return { name: project?.name, envs, runs, projects, members };
+  const [issue] = await sys.select().from(s.issues).where(eq(s.issues.id, B.issue));
+  return { name: project?.name, envs, runs, projects, members, issue: issue?.status };
 }
 
 describe("cross-org access", () => {

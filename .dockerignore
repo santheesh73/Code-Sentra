@@ -1,0 +1,11 @@
+# Images build from source; host build outputs and installs never enter the context.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/*.tsbuildinfo
+e2e/test-results
+e2e/playwright-report
+.env
+.env.*
+.git

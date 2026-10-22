@@ -15,6 +15,20 @@
       "when": 1792604836116,
       "tag": "0001_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792630298372,
+      "tag": "0002_pulse",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792630299167,
+      "tag": "0003_pulse_rls",
+      "breakpoints": true
     }
   ]
 }

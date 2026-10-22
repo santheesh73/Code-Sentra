@@ -1,6 +1,6 @@
-import { createRun, failRun, schema as s, type TenantTx } from "@codesentra/db";
+import { countOpenIssues, createRun, failRun, schema as s, type TenantTx } from "@codesentra/db";
 import { DIAGNOSTIC_STEPS, publishRunEvent } from "@codesentra/queue";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
@@ -50,11 +50,30 @@ async function loadProjects(tx: TenantTx, ids?: string[]) {
     .from(s.runs)
     .where(inArray(s.runs.projectId, pids))
     .orderBy(s.runs.projectId, desc(s.runs.createdAt));
+  // Latest finished Pulse per environment: the environment's status badge.
+  const envIds = envs.map((e) => e.id);
+  const pulses = envIds.length
+    ? await tx
+        .selectDistinctOn([s.runs.environmentId])
+        .from(s.runs)
+        .where(
+          and(
+            inArray(s.runs.environmentId, envIds),
+            eq(s.runs.type, "pulse"),
+            isNotNull(s.runs.outcome),
+          ),
+        )
+        .orderBy(s.runs.environmentId, desc(s.runs.createdAt))
+    : [];
+  const pulseByEnv = new Map(pulses.map((r) => [r.environmentId as string, r]));
+  const openIssues = await countOpenIssues(tx, pids);
   return projects.map((p) =>
     projectDto(
       p,
       envs.filter((e) => e.projectId === p.id),
       latest.find((r) => r.projectId === p.id) ?? null,
+      pulseByEnv,
+      openIssues.get(p.id) ?? 0,
     ),
   );
 }

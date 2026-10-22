@@ -60,7 +60,8 @@ jobs:
       - name: OpenAPI docs are up to date
         run: pnpm openapi && git diff --exit-code docs/openapi.json docs/api.md
 
-  # Phase 1 gate: real Postgres + MinIO (Testcontainers), API, worker and web, driven in Chromium.
+  # Phase 1 and 2 gates: real Postgres + MinIO (Testcontainers), API, worker-pulse (real
+  # Chromium), web and the fixture harness on loopback, driven in Chromium.
   e2e:
     runs-on: ubuntu-24.04
     steps:
@@ -73,7 +74,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install Chromium
         run: pnpm --filter @codesentra/e2e exec playwright install --with-deps chromium
-      - run: pnpm turbo run build --filter=@codesentra/api --filter=@codesentra/web --filter=@codesentra/worker-pulse
+      # Everything e2e depends on, including the fixture harness and the fixture app exports.
+      - run: pnpm turbo run build --filter=@codesentra/e2e...
       - run: pnpm e2e
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -104,6 +106,19 @@ jobs:
         run: curl -fsS http://localhost:4100/ -o /dev/null
       - if: always()
         run: docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures down -v
+
+  # The Pulse worker image: pinned Chromium must launch inside it.
+  pulse-image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -f infra/pulse/Dockerfile -t codesentra/worker-pulse:ci .
+      - name: Chromium launches in the image
+        run: >-
+          docker run --rm codesentra/worker-pulse:ci node -e
+          "import('@codesentra/checks').then(async (m) => { const r = await m.launchPulseBrowser();
+          if (!r.browser) { console.error(r.reason); process.exit(1); }
+          console.log('chromium', r.browser.version()); await r.browser.close(); })"
 
   secrets:
     runs-on: ubuntu-24.04

@@ -1,0 +1,28 @@
+{
+  "name": "@codesentra/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "CodeSentra command line: check a deployed URL with Sentra Pulse",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "bin": {
+    "codesentra": "./dist/main.js"
+  },
+  "main": "./dist/cli.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@codesentra/checks": "workspace:*",
+    "@codesentra/core": "workspace:*",
+    "@codesentra/ssrf": "workspace:*",
+    "playwright-core": "1.64.1"
+  },
+  "devDependencies": {
+    "@codesentra/fixture-harness": "workspace:*"
+  }
+}

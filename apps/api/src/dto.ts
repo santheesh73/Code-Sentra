@@ -1,4 +1,16 @@
-import { MembershipRole, RunStatus, RunStepStatus, RunTrigger, RunType } from "@codesentra/core";
+import {
+  FindingCode,
+  IssueEventKind,
+  IssueStatus,
+  MembershipRole,
+  PromptType,
+  PulseStatus,
+  RunStatus,
+  RunStepStatus,
+  RunTrigger,
+  RunType,
+  Severity,
+} from "@codesentra/core";
 import type { RunWithSteps, schema } from "@codesentra/db";
 import { z } from "zod";
 
@@ -21,8 +33,24 @@ export const MemberDto = z
   .object({ user: UserDto, role: MembershipRole, joined_at: ts })
   .meta({ id: "Member" });
 
+/** Latest Pulse result for an environment; null until one has finished (never assumed live). */
+export const EnvironmentStatusDto = z
+  .object({
+    pulse_status: PulseStatus,
+    run_id: z.uuid(),
+    checked_at: ts,
+    gaps: z.array(z.object({ group: z.string(), reason: z.string() })),
+  })
+  .meta({ id: "EnvironmentStatus" });
+
 export const EnvironmentDto = z
-  .object({ id: z.uuid(), name: z.string(), url: z.url(), created_at: ts })
+  .object({
+    id: z.uuid(),
+    name: z.string(),
+    url: z.url(),
+    created_at: ts,
+    status: EnvironmentStatusDto.nullable(),
+  })
   .meta({ id: "Environment" });
 
 export const RunStepDto = z
@@ -53,6 +81,8 @@ export const RunSummaryDto = z
     created_at: ts,
     started_at: ts.nullable(),
     finished_at: ts.nullable(),
+    /** Module-specific result, e.g. { pulse_status, gaps, platform, final_url } for Pulse runs. */
+    outcome: z.record(z.string(), z.unknown()).nullable(),
   })
   .meta({ id: "RunSummary" });
 
@@ -72,6 +102,7 @@ export const ProjectDto = z
     platform: z.string().nullable(),
     environments: z.array(EnvironmentDto),
     latest_run: RunSummaryDto.nullable(),
+    open_issues: z.number().int(),
     created_at: ts,
     updated_at: ts,
   })
@@ -93,12 +124,31 @@ export const userDto = (
   avatar_url: u.avatarUrl,
 });
 
-export const environmentDto = (e: EnvRow): z.infer<typeof EnvironmentDto> => ({
-  id: e.id,
-  name: e.name,
-  url: e.url,
-  created_at: e.createdAt.toISOString(),
-});
+export const environmentDto = (
+  e: EnvRow,
+  latestPulse: RunRow | null = null,
+): z.infer<typeof EnvironmentDto> => {
+  const o = (latestPulse?.outcome ?? null) as {
+    pulse_status?: string;
+    gaps?: { group: string; reason: string }[];
+  } | null;
+  const parsed = PulseStatus.safeParse(o?.pulse_status);
+  return {
+    id: e.id,
+    name: e.name,
+    url: e.url,
+    created_at: e.createdAt.toISOString(),
+    status:
+      latestPulse && parsed.success
+        ? {
+            pulse_status: parsed.data,
+            run_id: latestPulse.id,
+            checked_at: (latestPulse.finishedAt ?? latestPulse.createdAt).toISOString(),
+            gaps: o?.gaps ?? [],
+          }
+        : null,
+  };
+};
 
 export const runSummaryDto = (r: RunRow): z.infer<typeof RunSummaryDto> => ({
   id: r.id,
@@ -113,6 +163,7 @@ export const runSummaryDto = (r: RunRow): z.infer<typeof RunSummaryDto> => ({
   created_at: r.createdAt.toISOString(),
   started_at: iso(r.startedAt),
   finished_at: iso(r.finishedAt),
+  outcome: (r.outcome as Record<string, unknown> | null) ?? null,
 });
 
 export const runDto = ({ run, steps }: RunWithSteps): z.infer<typeof RunDto> => ({
@@ -137,6 +188,8 @@ export const projectDto = (
   p: ProjectRow,
   envs: EnvRow[],
   latest: RunRow | null,
+  latestPulseByEnv: Map<string, RunRow> = new Map(),
+  openIssues = 0,
 ): z.infer<typeof ProjectDto> => ({
   id: p.id,
   org_id: p.orgId,
@@ -144,8 +197,9 @@ export const projectDto = (
   repo_url: p.repoUrl,
   default_branch: p.defaultBranch,
   platform: p.platform,
-  environments: envs.map(environmentDto),
+  environments: envs.map((e) => environmentDto(e, latestPulseByEnv.get(e.id) ?? null)),
   latest_run: latest ? runSummaryDto(latest) : null,
+  open_issues: openIssues,
   created_at: p.createdAt.toISOString(),
   updated_at: p.updatedAt.toISOString(),
 });
@@ -158,3 +212,156 @@ export const PublicHttpUrl = z
     const u = new URL(v);
     return !u.username && !u.password;
   }, "must not contain credentials");
+
+// --- Pulse: findings, issues, evidence, prompts -------------------------------
+
+export const EvidenceDto = z
+  .object({
+    id: z.uuid(),
+    run_id: z.uuid(),
+    kind: z.string(),
+    locator: z.string(),
+    payload: z.record(z.string(), z.unknown()),
+    hash: z.string(),
+    created_at: ts,
+  })
+  .meta({ id: "Evidence" });
+
+export const FindingDto = z
+  .object({
+    id: z.uuid(),
+    run_id: z.uuid(),
+    source: z.enum(["scan", "pulse"]),
+    code: FindingCode,
+    severity: Severity,
+    locator: z.string(),
+    discriminator: z.string().nullable(),
+    message: z.string(),
+    fingerprint: z.string(),
+    evidence: EvidenceDto,
+  })
+  .meta({ id: "Finding" });
+
+export const PromptDto = z
+  .object({
+    type: PromptType,
+    body: z.string(),
+    template_version: z.string(),
+    version: z.number().int().nullable(),
+  })
+  .meta({ id: "FixPrompt" });
+
+export const RecheckDto = z
+  .object({
+    module: z.enum(["scan", "pulse"]),
+    check_group: z.string(),
+    target: z.string(),
+    expectation: z.string(),
+  })
+  .meta({ id: "Recheck" });
+
+export const IssueDto = z
+  .object({
+    id: z.uuid(),
+    project_id: z.uuid(),
+    environment_id: z.uuid().nullable(),
+    fingerprint: z.string(),
+    title: z.string(),
+    code: FindingCode,
+    corroborating_codes: z.array(z.string()),
+    severity: Severity,
+    status: IssueStatus,
+    locator: z.string(),
+    summary: z.string(),
+    first_seen_run_id: z.uuid(),
+    last_seen_run_id: z.uuid(),
+    resolved_run_id: z.uuid().nullable(),
+    recheck: RecheckDto,
+    dismissed_reason: z.string().nullable(),
+    created_at: ts,
+    updated_at: ts,
+  })
+  .meta({ id: "Issue" });
+
+export const IssueDetailDto = IssueDto.extend({
+  prompt: PromptDto,
+  events: z.array(
+    z.object({
+      kind: IssueEventKind,
+      run_id: z.uuid().nullable(),
+      note: z.string().nullable(),
+      at: ts,
+    }),
+  ),
+  /** Findings that showed this issue in its latest sighting, with their evidence. */
+  observed: z.array(FindingDto),
+}).meta({ id: "IssueDetail" });
+
+/** Findings of one run, grouped into issues with prompts (Quick Pulse runs have no stored issues). */
+export const RunFindingsDto = z
+  .object({
+    run_id: z.uuid(),
+    outcome: z.record(z.string(), z.unknown()).nullable(),
+    findings: z.array(FindingDto),
+    issues: z.array(
+      z.object({
+        issue_id: z.uuid().nullable(),
+        title: z.string(),
+        code: FindingCode,
+        severity: Severity,
+        corroborating_codes: z.array(z.string()),
+        finding_ids: z.array(z.uuid()),
+        prompt: PromptDto,
+        recheck: RecheckDto,
+      }),
+    ),
+  })
+  .meta({ id: "RunFindings" });
+
+type EvidenceRow = typeof schema.evidence.$inferSelect;
+type FindingRow = typeof schema.findings.$inferSelect;
+type IssueRow = typeof schema.issues.$inferSelect;
+
+export const evidenceDto = (e: EvidenceRow): z.infer<typeof EvidenceDto> => ({
+  id: e.id,
+  run_id: e.runId,
+  kind: e.kind,
+  locator: e.locator,
+  payload: e.payload as Record<string, unknown>,
+  hash: e.hash,
+  created_at: e.createdAt.toISOString(),
+});
+
+export const findingDto = (f: FindingRow, e: EvidenceRow): z.infer<typeof FindingDto> => ({
+  id: f.id,
+  run_id: f.runId,
+  source: f.source,
+  code: f.code,
+  severity: f.severity,
+  locator: f.locator,
+  discriminator: f.discriminator,
+  message: f.message,
+  fingerprint: f.fingerprint,
+  evidence: evidenceDto(e),
+});
+
+export const issueDto = (i: IssueRow): z.infer<typeof IssueDto> => ({
+  id: i.id,
+  project_id: i.projectId,
+  environment_id: i.environmentId,
+  fingerprint: i.fingerprint,
+  title: i.title,
+  code: i.code,
+  corroborating_codes: i.corroboratingCodes,
+  severity: i.severity,
+  status: i.status,
+  locator: i.locator,
+  summary: i.summary,
+  first_seen_run_id: i.firstSeenRunId,
+  last_seen_run_id: i.lastSeenRunId,
+  resolved_run_id: i.resolvedRunId,
+  recheck: i.recheck as z.infer<typeof RecheckDto>,
+  dismissed_reason: i.dismissedReason,
+  created_at: i.createdAt.toISOString(),
+  updated_at: i.updatedAt.toISOString(),
+});

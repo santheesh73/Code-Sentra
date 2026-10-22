@@ -217,6 +217,27 @@ describe("integrations (ADR 0007)", () => {
   });
 });
 
+describe("Pulse test-only settings", () => {
+  it("refuses SSRF test allowances outside NODE_ENV=test", () => {
+    for (const NODE_ENV of ["production", "development"]) {
+      expect(() =>
+        loadConfig("worker-pulse", {
+          ...validEnv(),
+          NODE_ENV,
+          PULSE_TEST_ALLOW_HOSTS: "127.0.0.1",
+        }),
+      ).toThrow(/only allowed when NODE_ENV=test/);
+    }
+    expect(
+      loadConfig("worker-pulse", {
+        ...validEnv(),
+        NODE_ENV: "test",
+        PULSE_TEST_ALLOW_HOSTS: "127.0.0.1",
+      }).PULSE_TEST_ALLOW_HOSTS,
+    ).toBe("127.0.0.1");
+  });
+});
+
 describe(".env.example", () => {
   it("documents exactly the variables the schema knows", () => {
     const path = fileURLToPath(new URL("../../../.env.example", import.meta.url));

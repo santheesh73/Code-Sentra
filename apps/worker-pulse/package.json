@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "main": "./dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -10,10 +13,14 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@codesentra/checks": "workspace:*",
     "@codesentra/config": "workspace:*",
     "@codesentra/db": "workspace:*",
     "@codesentra/queue": "workspace:*",
+    "@codesentra/ssrf": "workspace:*",
     "@codesentra/storage": "workspace:*",
-    "pino": "10.4.0"
+    "drizzle-orm": "0.45.4",
+    "pino": "10.4.0",
+    "playwright-core": "1.64.1"
   }
 }

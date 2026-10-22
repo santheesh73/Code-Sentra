@@ -36,6 +36,9 @@ export interface JobContext {
   attempt: number;
   /** Runs one declared step: marks it running, records its outcome, emits progress. */
   step(name: string, fn: StepFn): Promise<StepOutcome>;
+  /** For work whose phases are reported by a callee (e.g. Pulse check groups). */
+  beginStep(name: string): Promise<void>;
+  endStep(name: string, outcome: StepOutcome): Promise<void>;
 }
 
 export type JobHandler = (ctx: JobContext) => Promise<void>;
@@ -98,6 +101,9 @@ export async function startWorker(opts: WorkerOptions): Promise<Worker> {
     const run = await db.withOrg(payload.orgId, (tx) => getRunWithSteps(tx, payload.runId));
     if (!run) throw new Error(`run ${payload.runId} disappeared`);
 
+    const declared = (name: string) => {
+      if (!run.steps.some((s) => s.name === name)) throw new Error(`undeclared step ${name}`);
+    };
     const ctx: JobContext = {
       db,
       payload,
@@ -105,8 +111,22 @@ export async function startWorker(opts: WorkerOptions): Promise<Worker> {
       signal: job.signal,
       enqueuedAt: job.createdOn,
       attempt: job.retryCount + 1,
+      async beginStep(name) {
+        declared(name);
+        await emitStep(db, payload, name, (tx) => startStep(tx, payload.runId, name), "running");
+      },
+      async endStep(name, outcome) {
+        declared(name);
+        await emitStep(
+          db,
+          payload,
+          name,
+          (tx) => finishStep(tx, payload.runId, name, outcome),
+          outcome.status,
+        );
+      },
       async step(name, fn) {
-        if (!run.steps.some((s) => s.name === name)) throw new Error(`undeclared step ${name}`);
+        declared(name);
         await emitStep(db, payload, name, (tx) => startStep(tx, payload.runId, name), "running");
         let outcome: StepOutcome;
         try {

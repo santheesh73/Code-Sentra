@@ -10,6 +10,7 @@
   "devDependencies": {
     "@codesentra/api": "workspace:*",
     "@codesentra/db": "workspace:*",
+    "@codesentra/fixture-harness": "workspace:*",
     "@codesentra/web": "workspace:*",
     "@codesentra/worker-pulse": "workspace:*",
     "@playwright/test": "1.64.1",

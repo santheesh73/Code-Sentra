@@ -86,6 +86,11 @@ export const EnvSchema = z.object({
   SLACK_CLIENT_ID: secret(1),
   SLACK_CLIENT_SECRET: secret(8),
   SANDBOX_RUNTIME: z.enum(["runsc", "runc"]),
+  PULSE_SLOW_THRESHOLD_MS: z.coerce.number().int().min(100).max(60_000).default(3000),
+  /** Test only (fixture harness on loopback): comma-separated hosts exempt from the SSRF address check. */
+  PULSE_TEST_ALLOW_HOSTS: z.string().optional(),
+  /** Test only: PEM file of the fixture harness's throwaway CA. */
+  PULSE_TEST_CA_FILE: z.string().optional(),
   SENTRY_DSN: url().optional(),
   OTEL_EXPORTER_OTLP_ENDPOINT: url().optional(),
 });
@@ -137,6 +142,7 @@ export const SERVICE_ENV = {
       "GITHUB_API_BASE_URL",
       "EMAIL_TRANSPORT",
       "EMAIL_OUTBOX_DIR",
+      "PULSE_TEST_ALLOW_HOSTS",
     ],
     integrations: ["s3", "github_oauth", "github_app", "email", "slack"],
   },
@@ -152,7 +158,7 @@ export const SERVICE_ENV = {
   },
   "worker-pulse": {
     required: ["DATABASE_URL", "ENCRYPTION_KEY"],
-    settings: [],
+    settings: ["PULSE_SLOW_THRESHOLD_MS", "PULSE_TEST_ALLOW_HOSTS", "PULSE_TEST_CA_FILE"],
     integrations: ["s3"],
   },
   "worker-link": {
@@ -209,6 +215,14 @@ export function loadConfig<S extends Service>(
   ) as Record<Integration, boolean>;
 
   const keys = new Set<EnvKey>([...spec.required, ...spec.settings, ...ALWAYS]);
+  for (const k of ["PULSE_TEST_ALLOW_HOSTS", "PULSE_TEST_CA_FILE"] as const) {
+    if (present(env, k) && env.NODE_ENV !== "test") {
+      problems.push({
+        key: k,
+        message: "is only allowed when NODE_ENV=test (it weakens SSRF protection)",
+      });
+    }
+  }
   const outbox = env.EMAIL_TRANSPORT === "outbox";
   if (production && outbox && spec.settings.includes("EMAIL_TRANSPORT")) {
     problems.push({ key: "EMAIL_TRANSPORT", message: "outbox is not allowed in production" });

@@ -2,6 +2,7 @@ export * from "./enums.js";
 export * from "./evidence.js";
 export * from "./finding-codes.js";
 export * from "./fingerprint.js";
+export * from "./issue-grouping.js";
 export * from "./issue-lifecycle.js";
 export * from "./json.js";
 export * from "./pulse-status.js";

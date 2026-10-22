@@ -1,6 +1,7 @@
 import { loadConfig } from "@codesentra/config";
 import { createDatabase } from "@codesentra/db";
 import { createRunEventListener, startQueueClient } from "@codesentra/queue";
+import { objectStoreFromEnv } from "@codesentra/storage";
 import pino from "pino";
 import { buildApp } from "./app.js";
 import { createAuthService } from "./auth/service.js";
@@ -48,6 +49,7 @@ const { app } = await buildApp(
     queue,
     events,
     email,
+    store: objectStoreFromEnv(config),
     cookie: { secure: new URL(config.PUBLIC_APP_URL).protocol === "https:" },
     fetch,
   },

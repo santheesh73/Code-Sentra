@@ -70,6 +70,7 @@ export function AppShell({ me: initial, children }: { me: Me; children: ReactNod
 
   const nav = [
     { href: "/projects", label: "Projects" },
+    { href: "/pulse", label: "Quick Pulse" },
     { href: "/settings", label: "Settings" },
   ];
 

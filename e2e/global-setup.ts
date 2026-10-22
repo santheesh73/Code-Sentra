@@ -1,5 +1,8 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runMigrations } from "@codesentra/db";
+import { startHarness } from "@codesentra/fixture-harness";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { GenericContainer, Wait } from "testcontainers";
 import { freePort, newEnvBase, ROOT, spawnService, stop, waitFor } from "./stack";
@@ -7,7 +10,9 @@ import { freePort, newEnvBase, ROOT, spawnService, stop, waitFor } from "./stack
 /**
  * Boots the real stack: Postgres 16 and MinIO in containers, migrations, the API and the
  * web app as production builds. worker-pulse is started by the tests themselves so they
- * can prove the run page updates live. Nothing here talks to the internet.
+ * can prove the run page updates live. The fixture harness serves the fixture apps and
+ * failure simulators on 127.0.0.1, which Pulse may reach only through the NODE_ENV=test
+ * allowance (ADR 0013). Nothing here talks to the internet.
  */
 export default async function globalSetup() {
   const minioUser = "cs-e2e";
@@ -28,6 +33,10 @@ export default async function globalSetup() {
   ]);
   if (mb.exitCode !== 0) throw new Error(`bucket creation failed: ${mb.output}`);
 
+  const harness = await startHarness();
+  const caFile = join(mkdtempSync(join(tmpdir(), "cs-e2e-ca-")), "ca.pem");
+  writeFileSync(caFile, harness.caCertPem);
+
   const databaseUrl = pg.getConnectionUri();
   await runMigrations(databaseUrl);
 
@@ -44,6 +53,8 @@ export default async function globalSetup() {
     S3_BUCKET: "codesentra",
     S3_ACCESS_KEY_ID: minioUser,
     S3_SECRET_ACCESS_KEY: minioPassword,
+    PULSE_TEST_ALLOW_HOSTS: "127.0.0.1",
+    PULSE_TEST_CA_FILE: caFile,
   };
 
   const api = spawnService("api", [join(ROOT, "apps/api/dist/server.js")], env);
@@ -66,9 +77,10 @@ export default async function globalSetup() {
   process.env.CS_E2E_ENV = JSON.stringify(env);
   process.env.CS_E2E_APP_URL = appUrl;
   process.env.CS_E2E_OUTBOX = env.EMAIL_OUTBOX_DIR;
+  process.env.CS_E2E_HARNESS = JSON.stringify(harness.targets);
 
   return async () => {
     await Promise.all([stop(web), stop(api)]);
-    await Promise.all([pg.stop(), minio.stop()]);
+    await Promise.all([pg.stop(), minio.stop(), harness.close()]);
   };
 }

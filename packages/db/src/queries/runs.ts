@@ -126,6 +126,15 @@ export async function finishStep(
   return row;
 }
 
+/** Records a module-specific outcome summary (e.g. Pulse status and gaps). */
+export async function setRunOutcome(
+  tx: TenantTx,
+  runId: string,
+  outcome: Record<string, unknown>,
+): Promise<void> {
+  await tx.update(runs).set({ outcome }).where(eq(runs.id, runId));
+}
+
 /** Sets the terminal status derived from the steps (Rule 2: skipped → partial). */
 export async function finishRun(tx: TenantTx, runId: string): Promise<RunStatus> {
   const steps = await tx

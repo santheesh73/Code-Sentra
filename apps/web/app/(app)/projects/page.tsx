@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useOrg } from "@/components/app-shell";
-import { EnvironmentStatusBadge } from "@/components/status";
+import { PulseStatusBadge } from "@/components/status";
 import { buttonVariants, EmptyState, Notice, Spinner } from "@/components/ui/primitives";
 import { api, type Project, problemMessage } from "@/lib/api";
 import { formatTime } from "@/lib/utils";
@@ -64,7 +64,7 @@ export default function ProjectsPage() {
                   <dt className="text-muted-foreground">Health score</dt>
                   <dd>Not scanned yet</dd>
                   <dt className="text-muted-foreground">Open issues</dt>
-                  <dd>—</dd>
+                  <dd data-testid="open-issues">{p.open_issues}</dd>
                 </dl>
                 {p.environments.length > 0 ? (
                   <ul className="flex flex-col gap-1.5">
@@ -74,7 +74,10 @@ export default function ProjectsPage() {
                           <span className="font-medium">{e.name}</span>{" "}
                           <span className="text-muted-foreground">{new URL(e.url).host}</span>
                         </span>
-                        <EnvironmentStatusBadge />
+                        <PulseStatusBadge
+                          status={e.status?.pulse_status ?? null}
+                          gaps={e.status?.gaps}
+                        />
                       </li>
                     ))}
                   </ul>

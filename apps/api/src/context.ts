@@ -1,6 +1,7 @@
 import type { ServiceEnv } from "@codesentra/config";
 import type { Database } from "@codesentra/db";
 import type { QueueClient, RunEventListener } from "@codesentra/queue";
+import type { ObjectStore } from "@codesentra/storage";
 import type { AuthService } from "./auth/service.js";
 import type { Authz } from "./authz.js";
 import type { EmailTransport } from "./email.js";
@@ -15,6 +16,8 @@ export interface AppContext {
   events: RunEventListener;
   /** null when the email integration is not configured. */
   email: EmailTransport | null;
+  /** null when the s3 integration is not configured. */
+  store: ObjectStore | null;
   cookie: CookieSettings;
   /** Injected for GitHub OAuth so tests can point at a local fake. */
   fetch: typeof fetch;

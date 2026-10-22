@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
-import type { AddressInfo, Socket } from "node:net";
+import { type AddressInfo, connect, type Socket } from "node:net";
 import { join } from "node:path";
 import { type CertPair, createTestPki } from "./certs.js";
 import { type FixtureApp, loadFixtureApps } from "./manifest.js";
@@ -22,6 +22,8 @@ export const SIMULATORS = [
   "tls-expired",
   "tls-wrong-host",
   "tls-self-signed",
+  "access-protected",
+  "preview-deployment",
 ] as const;
 export type SimulatorName = (typeof SIMULATORS)[number];
 
@@ -68,6 +70,31 @@ function sendHtml(res: ServerResponse, status: number, title: string): void {
 }
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => void;
+
+/**
+ * A port on `host` that refuses connections. Privileged ports are never handed out as
+ * ephemeral ports, so no other process can start listening on one mid-test (a closed
+ * ephemeral port can be reused by a parallel test). Each candidate is probed first.
+ */
+async function refusedPort(host: string): Promise<number> {
+  for (const port of [9, 1, 47, 59, 61]) {
+    const refused = await new Promise<boolean>((ok) => {
+      const sock = connect({ host, port });
+      sock.setTimeout(1000);
+      sock.once("connect", () => {
+        sock.destroy();
+        ok(false);
+      });
+      sock.once("timeout", () => {
+        sock.destroy();
+        ok(false);
+      });
+      sock.once("error", (e: NodeJS.ErrnoException) => ok(e.code === "ECONNREFUSED"));
+    });
+    if (refused) return port;
+  }
+  throw new Error(`no refusing port found on ${host}`);
+}
 
 export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> {
   const host = opts.host ?? "127.0.0.1";
@@ -152,6 +179,26 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     url: await http((_q, r) => sendHtml(r, 404, "Not Found")),
     produces: "BAD_STATUS",
   };
+  sim["access-protected"] = {
+    // Vercel Deployment Protection's wall: 401 from Vercel's edge.
+    url: await http((_q, r) => {
+      r.setHeader("server", "Vercel");
+      r.setHeader("x-vercel-id", "sim1::protected");
+      sendHtml(r, 401, "Authentication Required");
+    }),
+    produces: "ACCESS_PROTECTED; render, routes and hygiene not checked (unverified)",
+  };
+  sim["preview-deployment"] = {
+    // A healthy page served by Vercel. Reached as <project>-git-<branch>-<scope>.vercel.app
+    // through a test resolver, it is a preview deployment.
+    url: await http((_q, r) => {
+      r.setHeader("server", "Vercel");
+      r.setHeader("x-vercel-id", "sim1::preview");
+      sendHtml(r, 200, "Preview deployment");
+    }),
+    produces:
+      "PREVIEW_SERVED_AS_PROD when registered as production and reached via a *-git-*.vercel.app name",
+  };
   sim.timeout = {
     // Accepts the connection, never answers.
     url: await http(() => {}),
@@ -188,14 +235,10 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     }),
     produces: "LONG_REDIRECT_CHAIN (5 hops)",
   };
-  {
-    // Reserve a port, then close it so connections are refused.
-    const s = createServer();
-    await new Promise<void>((ok) => s.listen(0, host, () => ok()));
-    const port = (s.address() as AddressInfo).port;
-    await new Promise<void>((ok) => s.close(() => ok()));
-    sim["connection-refused"] = { url: httpUrl(port), produces: "DOWN (connection refused)" };
-  }
+  sim["connection-refused"] = {
+    url: httpUrl(await refusedPort(host)),
+    produces: "DOWN (connection refused)",
+  };
   // RFC 2606: .invalid never resolves.
   sim["dns-failure"] = {
     url: "http://dns-failure.codesentra-fixture.invalid/",

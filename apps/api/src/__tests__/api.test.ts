@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generateOpenApi, renderApiMarkdown } from "../openapi.js";
 import { UNBUILT } from "../routes/unbuilt.js";
-import { as, ORIGIN, signIn, startTestApi, type TestApi } from "./helpers.js";
+import { as, ORIGIN, seedIssue, signIn, startTestApi, type TestApi } from "./helpers.js";
 
 let api: TestApi;
 let owner: string;
@@ -308,13 +308,16 @@ describe("not yet available", () => {
         headers: as(owner),
       })
     ).json();
+    const issueId = await seedIssue(api, p.org_id, p.id, run.run_id);
     for (const r of UNBUILT) {
       const id =
         r.scope === "project"
           ? p.id
           : r.scope === "run"
             ? run.run_id
-            : "00000000-0000-4000-8000-000000000000";
+            : r.scope === "issue"
+              ? issueId
+              : "00000000-0000-4000-8000-000000000000";
       const res = await api.app.inject({
         method: r.method,
         url: r.url.replace(":id", id),
@@ -330,7 +333,7 @@ describe("not yet available", () => {
   it("requires sign-in before revealing even a 501", async () => {
     const res = await api.app.inject({
       method: "POST",
-      url: "/v1/pulse",
+      url: "/v1/projects/00000000-0000-4000-8000-000000000000/scan",
       headers: ORIGIN,
       payload: {},
     });

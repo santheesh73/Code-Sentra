@@ -48,6 +48,7 @@ export async function generateOpenApi(): Promise<OpenApiDoc> {
     queue: unused as QueueClient,
     events: unused as RunEventListener,
     email: null,
+    store: null,
     cookie: { secure: false },
     fetch,
   });

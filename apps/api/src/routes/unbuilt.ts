@@ -4,7 +4,7 @@ import { requireUser } from "../authz.js";
 import type { AppContext } from "../context.js";
 import { notImplemented, Problem } from "../errors.js";
 
-type Scope = "project" | "run" | "user" | "none";
+type Scope = "project" | "run" | "issue" | "user" | "none";
 
 interface Unbuilt {
   method: "GET" | "POST" | "DELETE";
@@ -35,23 +35,9 @@ export const UNBUILT: Unbuilt[] = [
   },
   {
     method: "POST",
-    url: "/v1/projects/:id/pulse",
-    summary: "Start Sentra Pulse on an environment",
-    phase: "Phase 2",
-    scope: "project",
-  },
-  {
-    method: "POST",
     url: "/v1/projects/:id/check",
     summary: "Full check: Scan + Pulse, then Link",
     phase: "Phase 4",
-    scope: "project",
-  },
-  {
-    method: "GET",
-    url: "/v1/projects/:id/issues",
-    summary: "Issues for a project",
-    phase: "Phase 2",
     scope: "project",
   },
   {
@@ -83,53 +69,11 @@ export const UNBUILT: Unbuilt[] = [
     scope: "run",
   },
   {
-    method: "GET",
-    url: "/v1/runs/:id/findings",
-    summary: "Findings for a run",
-    phase: "Phase 2",
-    scope: "run",
-  },
-  {
-    method: "POST",
-    url: "/v1/pulse",
-    summary: "One-off Pulse on any public URL",
-    phase: "Phase 2",
-    scope: "user",
-  },
-  {
-    method: "GET",
-    url: "/v1/issues/:id",
-    summary: "Issue with traces, history, blast radius",
-    phase: "Phase 2",
-    scope: "user",
-  },
-  {
-    method: "GET",
-    url: "/v1/issues/:id/fix-prompt",
-    summary: "Latest fix prompt",
-    phase: "Phase 2",
-    scope: "user",
-  },
-  {
     method: "POST",
     url: "/v1/issues/:id/recheck",
     summary: "Targeted re-check",
     phase: "Phase 4",
-    scope: "user",
-  },
-  {
-    method: "POST",
-    url: "/v1/issues/:id/dismiss",
-    summary: "Dismiss with reason",
-    phase: "Phase 2",
-    scope: "user",
-  },
-  {
-    method: "GET",
-    url: "/v1/evidence/:id",
-    summary: "One evidence record",
-    phase: "Phase 2",
-    scope: "user",
+    scope: "issue",
   },
   {
     method: "POST",
@@ -157,6 +101,7 @@ export function unbuiltRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           const id = (req.params as { id?: string }).id ?? "";
           if (r.scope === "project") await ctx.authz.requireProject(req, id);
           else if (r.scope === "run") await ctx.authz.requireRun(req, id);
+          else if (r.scope === "issue") await ctx.authz.requireIssue(req, id);
           else if (r.scope === "user") requireUser(req);
           throw notImplemented(r.summary, r.phase);
         },

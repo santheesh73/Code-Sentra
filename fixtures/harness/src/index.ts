@@ -7,6 +7,7 @@ export {
   type SimulatorName,
   startHarness,
 } from "./harness.js";
+export { createHistoryRepo, HISTORY_EXPECTED } from "./history-repo.js";
 export { FIXTURE_APPS_DIR, type FixtureApp, FixtureManifest, loadFixtureApps } from "./manifest.js";
 export {
   FIXTURE_REPOS_DIR,

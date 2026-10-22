@@ -287,14 +287,18 @@ describe("diagnostic runs", () => {
         idx = buffer.indexOf("\n\n");
       }
     }
+    // Each change pushes a snapshot of the run as it is when read, so a step that lasts a
+    // few milliseconds may already be done in it: assert progress, not a timing window.
     expect(snapshots[0]?.status).toBe("queued");
-    expect(
-      snapshots.some(
-        (x) => x.status === "running" && x.steps.some((st) => st.status === "running"),
-      ),
-    ).toBe(true);
+    expect(snapshots.some((x) => x.status === "running")).toBe(true);
+    const finished = snapshots.map(
+      (x) => x.steps.filter((st) => st.status !== "pending" && st.status !== "running").length,
+    );
+    expect(finished).toEqual([...finished].sort((a, b) => a - b));
+    expect(finished[0]).toBe(0);
+    expect(finished.at(-1)).toBe(snapshots.at(-1)?.steps.length);
     expect(snapshots.at(-1)?.status).toBe("partial");
-    expect(snapshots.length).toBeGreaterThanOrEqual(5);
+    expect(snapshots.length).toBeGreaterThanOrEqual(3);
   });
 });
 

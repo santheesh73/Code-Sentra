@@ -1,5 +1,105 @@
 # Progress
 
+## Phase 4 — Sentra Link (2026-10-22)
+
+### Built
+
+- **Code facts (ADR 0020).**
+  - Parsers record `href` values, error messages (throw/Error/console.error, Python
+    raise) and the default export. URL literals keep their line text.
+  - The graph stores them as `literal` nodes. Next.js routes point at the page
+    component, and co-change pairs become edges.
+- **`packages/link`** (pure functions):
+  - exact-join trace rules for every Pulse code, plus Scan locators;
+  - `ROUTE_BROKEN` / `SAME_ORIGIN_FAILURE` with no route are reclassified to
+    `ROUTE_MISSING` and traced to the href;
+  - for each site: the enclosing symbol, the source line, and the env vars with
+    whether they are documented;
+  - blast radius: 2 hops of importers plus the top 5 co-change partners, with reasons.
+- **`code_fix@2` prompts** for traced issues. They contain:
+  - the confirm-first instruction and the exact observation;
+  - each site with file, line, symbol and source line;
+  - the env vars involved, whether `.env.example` documents them, and the build-time
+    guidance with the platform hint;
+  - the blast radius.
+- **Link runs (ADR 0019).**
+  - Every project Scan and Pulse run (and every check or re-check) feeds a `link` run.
+    The queue's completion hook enqueues it once all children have finished.
+  - `link.run` (`apps/worker-link`) runs trace → widen → prompt → verify and is now the
+    only writer of issues. It stores traces (a new `traces` table under RLS) and the
+    blast radius.
+  - A missing Scan or a failed child is a gap: the Link run is `partial`.
+- **Pulse:**
+  - probes the latest Scan's static GET routes;
+  - `recheck` runs execute only the issue's check group;
+  - no longer syncs issues itself.
+- **API:**
+  - `POST /v1/projects/{id}/check`;
+  - `POST /v1/issues/{id}/recheck`;
+  - `/pulse` and `/scan` return `link_run_id`;
+  - runs carry `parent_run_id`, and Link runs list `children`;
+  - issue detail has `traces` and `blast_radius`.
+- **Web:**
+  - a "Run full check" button;
+  - the Link run page (children, outcome);
+  - the issue view's "Where it comes from": file:line, symbol, source line, join key,
+    env vars and blast radius;
+  - "Re-check now".
+- **Fixes found on the way:**
+  - The `?source=` issue filter answered 500 (an array bound into `= any(...)`).
+  - Link ignored a Scan whose model stage failed, even though its graph and findings were
+    stored. Usable now means "stored its results".
+  - An SSE test asserted a millisecond-long timing window. It failed twice under full-suite
+    load and now asserts monotonic progress instead.
+
+### Gate output (2026-10-22, this machine)
+
+```
+pnpm lint / typecheck / build          clean
+pnpm test                              all packages pass:
+  link 15 (incl. real-Pulse traces of all 5 fixture apps to their manifest file:line)
+  api 46 (incl. the API-level Phase 4 gate and cross-org on /check and /recheck)
+  parsers 26 · prompts 10 · checks 36 · scan 64 · db 27 · queue 6 · core 57 · ssrf 71 ·
+  claims 36 · graph 10 · sandbox 10 · cli 20 · config 19 · storage 3 · harness 44
+  (api's SSE test failed once in this full run on the old timing assertion; fixed above,
+   the api suite then passed 46/46, and api.test.ts 3/3 runs)
+pnpm e2e                               12 passed (Phase 1–4 gates; desktop + 375 px)
+```
+
+The Phase 4 e2e gate drives the UI on `env-undefined`:
+1. Upload the app's source and click "Run full check": Scan, then Pulse in Chromium,
+   then Link (trace, widen, prompt, verify all `done`).
+2. Exactly one Pulse issue: `UNDEFINED_IN_URL`, corroborated by `SAME_ORIGIN_FAILURE`.
+   The view shows the trace `app/page.tsx:9` (`process.env.NEXT_PUBLIC_API_URL}/api/ping`,
+   env var `NEXT_PUBLIC_API_URL` not in .env.example). The prompt is `code_fix` and names
+   `NEXT_PUBLIC_API_URL` and `app/page.tsx:9`.
+3. Serve the fixed build and click "Check production now": the issue becomes `resolved`
+   with no manual action.
+4. Serve the broken build again and click "Re-check now" (a render-only re-check): the
+   issue becomes `regressed`, and its history reads opened → resolved → regressed.
+
+The API-level gate (`apps/api/src/__tests__/link.test.ts`) asserts the same flow. It also
+checks the stored Scan issue (`ENV_VAR_UNDOCUMENTED` at `app/page.tsx:9`) and that a
+re-check never changes the environment's badge.
+
+**Phase 4 gate: passed locally.**
+
+### Deferred or partial
+
+- **No LLM in Link.** Prompts are templates (Section 10c). Link's only model-shaped work
+  would be report prose, which is Scan's. With no `ANTHROPIC_API_KEY` here, a real-model
+  run is still untested (as in Phase 3).
+- **CLI `check` and `login` move to Phase 5** with API tokens (Settings). `codesentra scan`
+  and `pulse` are unchanged.
+- **Trace coverage.** The rules see only literal facts. A URL built from several
+  variables with no static suffix, or a message assembled at runtime, stays untraced and
+  gets an `investigate` prompt. That is by design: no guessing.
+- **Child progress.** The Link run's stream carries only its own events, so its page
+  polls the children (every 2 s) while they run.
+- **Scan re-checks** need `repo_url`. For zip-only projects, the API asks for a new upload.
+- **Cross-module merging:** a Pulse issue and a Scan finding about the same env var stay
+  two issues. The `code_fix` prompt says whether the variable is documented.
+
 ## Phase 3 — Sentra Scan (2026-10-22)
 
 ### Built

@@ -55,14 +55,34 @@ async function openUp(dir: string): Promise<void> {
  * parsed diagnostics and test counts; anything that could not run is `skipped` with a
  * reason (Rule 2).
  */
-export async function runProbes(opts: {
+export async function runProbes(opts: ProbeOptions): Promise<ProbeRun> {
+  try {
+    return await probe(opts);
+  } finally {
+    // Files the sandbox wrote belong to its uid (10001). Opening them up from inside lets
+    // a non-root worker delete the scratch copy afterwards.
+    await opts.sandbox
+      .run({
+        image: opts.image,
+        workdir: join(opts.scratchDir, "work"),
+        command: ["sh", "-c", "chmod -R a+rwX /work 2>/dev/null; true"],
+        network: "none",
+        limits: { timeoutMs: 60_000 },
+      })
+      .catch(() => {});
+  }
+}
+
+interface ProbeOptions {
   sandbox: Sandbox;
   image: string;
   sourceDir: string;
   scratchDir: string;
   plan: ProbePlan;
   budgetMs?: number;
-}): Promise<ProbeRun> {
+}
+
+async function probe(opts: ProbeOptions): Promise<ProbeRun> {
   const { sandbox, image, plan } = opts;
   const budget = opts.budgetMs ?? PROBE_BUDGET_MS;
   const started = performance.now();

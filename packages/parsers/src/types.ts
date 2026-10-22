@@ -26,7 +26,22 @@ export interface FileFacts {
    * String literals that look like a URL or `host:port`, and template strings that build a
    * path from interpolations (`${process.env.API}/api/ping`, with the env vars they read).
    */
-  urlLiterals: { value: string; line: number; template: boolean; envVars: string[] }[];
+  urlLiterals: {
+    value: string;
+    line: number;
+    template: boolean;
+    envVars: string[];
+    text: string;
+  }[];
+  /** Link targets in markup: JSX/HTML `href="/path"` attribute values. */
+  hrefs: { value: string; line: number; text: string }[];
+  /**
+   * Error message literals: `throw new Error("x")` / `raise X("x")` (throw), `new Error("x")`
+   * elsewhere (error) and `console.error("x")` (console). Link joins runtime messages here.
+   */
+  messages: { value: string; line: number; text: string; kind: "throw" | "error" | "console" }[];
+  /** The module's default export (a Next.js page component, for instance). */
+  defaultExport: { name: string | null; line: number; text: string } | null;
   /** Test cases. `line` is the test's own line; `skipLine` the line that skips it. */
   tests: {
     name: string;
@@ -53,6 +68,9 @@ export function emptyFacts(path: string, language: ParserLanguage): FileFacts {
     routes: [],
     envReads: [],
     urlLiterals: [],
+    hrefs: [],
+    messages: [],
+    defaultExport: null,
     tests: [],
     markers: [],
     stubs: [],

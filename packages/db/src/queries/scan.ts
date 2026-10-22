@@ -94,7 +94,15 @@ export interface ScanPersistInput {
   graph: {
     nodes: {
       key: string;
-      kind: "file" | "symbol" | "route" | "api_handler" | "cli_command" | "env_var" | "test";
+      kind:
+        | "file"
+        | "symbol"
+        | "route"
+        | "api_handler"
+        | "cli_command"
+        | "env_var"
+        | "test"
+        | "literal";
       path: string | null;
       name: string;
       line: number | null;

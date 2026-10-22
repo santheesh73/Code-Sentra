@@ -81,6 +81,8 @@ export const CodeNodeKind = z.enum([
   "cli_command",
   "env_var",
   "test",
+  /** A literal Link joins on: URL, URL template, href, or error message (meta.role). */
+  "literal",
 ]);
 export type CodeNodeKind = z.infer<typeof CodeNodeKind>;
 

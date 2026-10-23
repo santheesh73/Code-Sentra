@@ -7,6 +7,7 @@ an exact, verifiable fix:
 - **Sentra Link:** where in the code does each problem come from, how do we fix it, and how
   do we prove the fix?
 
+
 **Status:** Phase 4 (Sentra Link).
 - **Pulse:** paste a URL, or check a project environment, and get `live`, `degraded`,
   `down` or `unverified`, with evidence-backed issues and a fix prompt for each.
@@ -22,6 +23,7 @@ an exact, verifiable fix:
   radius involved, and the issue closes on its own once the fix is deployed (and reopens
   if it comes back).
 - **Where:** in the dashboard, and from the CLI (`codesentra pulse`, `codesentra scan`).
+
 
 The GitHub App, schedules and notifications come next (Phase 5); see
 [`docs/progress.md`](docs/progress.md).

@@ -247,7 +247,7 @@ describe("GitHub App (Phase 5)", () => {
     });
     // Installation data is sealed at rest.
     const [row] = await api.t.db.system.select().from(s.githubInstallations);
-    expect(row?.sealed).toMatch(/^v1\./);
+    expect(row?.sealed).toMatch(/^v2\./);
     expect(row?.sealed).not.toContain("acme");
   });
 

@@ -168,5 +168,13 @@ The real run:
   - `SESSION_SECRET`: signs out everyone.
   - `GITHUB_WEBHOOK_SECRET`: update GitHub and Render together.
   - API tokens: revoke in Settings.
-  - **`ENCRYPTION_KEY` rotation is not supported yet.** It needs a re-seal of every sealed
-    column (`docs/progress.md`).
+  - `ENCRYPTION_KEY` (rotation, ADR 0024):
+    1. Generate a new key (`openssl rand -base64 32`). On **every** service, set
+       `ENCRYPTION_KEY` to the new key and `ENCRYPTION_KEY_PREVIOUS` to the old one, then
+       deploy. New values are sealed with the new key, and old ones still open.
+    2. Run `node node_modules/@codesentra/db/dist/reseal-cli.js` once, in the API image with
+       the same environment. It rewrites every sealed column under the new key and prints a
+       count per column. It exits 1, listing row ids, if any value cannot be opened; keep
+       the key that sealed those values in `ENCRYPTION_KEY_PREVIOUS`. Running it again is
+       harmless.
+    3. Remove `ENCRYPTION_KEY_PREVIOUS` and deploy. Retire the old key.

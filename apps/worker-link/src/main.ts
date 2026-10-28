@@ -1,6 +1,7 @@
 import { PULSE_GROUPS } from "@codesentra/checks";
 import { loadConfig } from "@codesentra/config";
 import { ScanStage } from "@codesentra/core";
+import { keyring } from "@codesentra/core/crypto";
 import { createDatabase } from "@codesentra/db";
 import { GithubApp } from "@codesentra/github";
 import { linkHandler } from "@codesentra/link/job";
@@ -24,6 +25,8 @@ const telemetry = initTelemetry({
 });
 const log = pino({ level: config.LOG_LEVEL, base: { service: "worker-link" } });
 
+// The current key seals; retired ones still open values until `reseal` runs (ADR 0024).
+const keys = keyring(config.ENCRYPTION_KEY, config.ENCRYPTION_KEY_PREVIOUS);
 const db = createDatabase(config.DATABASE_URL, { applicationName: "codesentra-worker-link" });
 const queue = await startQueueClient(config.DATABASE_URL, {
   onError: (e) => log.error({ err: e.message }, "queue error"),
@@ -67,7 +70,7 @@ const worker = await startWorker({
     "link.run": linkHandler({
       github,
       appUrl: config.PUBLIC_APP_URL,
-      notifier: { encryptionKey: config.ENCRYPTION_KEY, email, slackFetch },
+      notifier: { encryptionKey: keys, email, slackFetch },
     }),
   },
 });
@@ -83,7 +86,7 @@ const tick = async () => {
       queue,
       pulseSteps: PULSE_GROUPS,
       scanSteps: ScanStage.options,
-      encryptionKey: config.ENCRYPTION_KEY,
+      encryptionKey: keys,
     });
     if (r.started.length || r.failed.length) log.info(r, "schedules fired");
   } catch (e) {

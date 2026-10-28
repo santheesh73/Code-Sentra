@@ -1,4 +1,4 @@
-import { openSecret } from "@codesentra/core/crypto";
+import { type Keyring, openSecret } from "@codesentra/core/crypto";
 import { type Database, schema as s } from "@codesentra/db";
 import { type AlertIssue, type EmailTransport, postSlack, renderAlert } from "@codesentra/notify";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -7,7 +7,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 const PURPOSE = "notification-target";
 
 export interface Notifier {
-  encryptionKey: string;
+  encryptionKey: Keyring;
   /** null when the email integration is off: email channels then record that. */
   email: EmailTransport | null;
   /** The SSRF-safe fetch Slack webhooks are posted through. */

@@ -219,7 +219,7 @@ describe("notifications", () => {
     // Destinations are sealed at rest.
     const rows = await api.t.db.system.select().from(s.notificationChannels);
     for (const r of rows) {
-      expect(r.sealed).toMatch(/^v1\./);
+      expect(r.sealed).toMatch(/^v2\./);
       expect(r.sealed).not.toContain("example.com");
       expect(r.sealed).not.toContain("/services/");
     }
@@ -471,7 +471,7 @@ describe("bypass tokens (Section 9, 17)", () => {
       .select()
       .from(s.environments)
       .where(eq(s.environments.id, env));
-    expect(row?.bypassTokenRef).toMatch(/^v1\./);
+    expect(row?.bypassTokenRef).toMatch(/^v2\./);
     expect(row?.bypassTokenRef).not.toContain(ACCESS_PROTECTED_BYPASS);
 
     const run = await pulse();

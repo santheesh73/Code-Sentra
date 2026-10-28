@@ -1,4 +1,5 @@
 import { ScanStage } from "@codesentra/core";
+import { keyring } from "@codesentra/core/crypto";
 import { createSnapshot, getReport, schema as s, updateSnapshot } from "@codesentra/db";
 import { createSourceSnapshot, installationFor } from "@codesentra/queue";
 import { and, eq } from "drizzle-orm";
@@ -74,8 +75,9 @@ export async function projectSourceSnapshot(
   testAllow: ReadonlySet<string>,
   project: typeof s.projects.$inferSelect,
 ): Promise<{ id: string } | null> {
-  if (await installationFor(ctx.db, project, ctx.config.ENCRYPTION_KEY))
-    return createSourceSnapshot(ctx.db, project, ctx.config.ENCRYPTION_KEY);
+  const keys = keyring(ctx.config.ENCRYPTION_KEY, ctx.config.ENCRYPTION_KEY_PREVIOUS);
+  if (await installationFor(ctx.db, project, keys))
+    return createSourceSnapshot(ctx.db, project, keys);
   if (!project.repoUrl) return null;
   return createGitSnapshot(ctx, testAllow, {
     orgId: project.orgId,

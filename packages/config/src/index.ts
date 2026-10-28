@@ -62,6 +62,23 @@ export const EnvSchema = z.object({
   DATABASE_URL: postgresUrl(),
   SESSION_SECRET: secret(32),
   ENCRYPTION_KEY: encryptionKey(),
+  /**
+   * Retired encryption keys, comma-separated: sealed values still open with them until
+   * `reseal` rewrites them under ENCRYPTION_KEY (key rotation, ADR 0024).
+   */
+  ENCRYPTION_KEY_PREVIOUS: z
+    .string()
+    .optional()
+    .refine(
+      (v) =>
+        !v ||
+        v
+          .split(",")
+          .map((k) => k.trim())
+          .filter(Boolean)
+          .every((k) => /^[A-Za-z0-9+/]+={0,2}$/.test(k) && Buffer.from(k, "base64").length === 32),
+      "must be comma-separated 32-byte base64 keys",
+    ),
   PUBLIC_APP_URL: url(),
   API_HOST: z.string().default("127.0.0.1"),
   API_PORT: port(4000),
@@ -186,6 +203,7 @@ export const SERVICE_ENV = {
       "PULSE_TEST_ALLOW_HOSTS",
       "SCAN_MAX_UPLOAD_BYTES",
       "S3_PUBLIC_ENDPOINT",
+      "ENCRYPTION_KEY_PREVIOUS",
     ],
     integrations: ["s3", "github_oauth", "github_app", "email", "slack"],
   },
@@ -213,7 +231,12 @@ export const SERVICE_ENV = {
   },
   "worker-pulse": {
     required: ["DATABASE_URL", "ENCRYPTION_KEY"],
-    settings: ["PULSE_SLOW_THRESHOLD_MS", "PULSE_TEST_ALLOW_HOSTS", "PULSE_TEST_CA_FILE"],
+    settings: [
+      "PULSE_SLOW_THRESHOLD_MS",
+      "PULSE_TEST_ALLOW_HOSTS",
+      "PULSE_TEST_CA_FILE",
+      "ENCRYPTION_KEY_PREVIOUS",
+    ],
     integrations: ["s3"],
   },
   "worker-link": {
@@ -224,6 +247,7 @@ export const SERVICE_ENV = {
       "GITHUB_API_BASE_URL",
       "PULSE_TEST_ALLOW_HOSTS",
       "SCHEDULER_INTERVAL_SECONDS",
+      "ENCRYPTION_KEY_PREVIOUS",
     ],
     integrations: ["anthropic", "github_app", "email", "slack"],
   },

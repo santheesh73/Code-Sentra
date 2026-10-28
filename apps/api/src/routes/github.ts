@@ -1,6 +1,6 @@
 import { PULSE_GROUPS } from "@codesentra/checks";
 import { ScanStage } from "@codesentra/core";
-import { openSecret, sealSecret } from "@codesentra/core/crypto";
+import { keyring, openSecret, sealSecret } from "@codesentra/core/crypto";
 import { createSnapshot, schema as s, type TenantTx } from "@codesentra/db";
 import {
   DeploymentStatusEvent,
@@ -56,7 +56,7 @@ export const rawBodyOf = (req: unknown): string | undefined =>
  * run; install/setup link an installation to an organization (ADR 0021).
  */
 export function githubRoutes(ctx: AppContext): FastifyPluginAsyncZod {
-  const key = ctx.config.ENCRYPTION_KEY;
+  const key = keyring(ctx.config.ENCRYPTION_KEY, ctx.config.ENCRYPTION_KEY_PREVIOUS);
   const seal = (d: InstallationData) => sealSecret(JSON.stringify(d), key, PURPOSE);
   const open = (sealed: string): InstallationData => JSON.parse(openSecret(sealed, key, PURPOSE));
   const configured = (): GithubApp => {

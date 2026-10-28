@@ -1,5 +1,5 @@
 import type { PulseCheckGroup } from "@codesentra/core";
-import { openSecret } from "@codesentra/core/crypto";
+import { type Keyring, openSecret } from "@codesentra/core/crypto";
 import {
   persistRunData,
   type RunWithSteps,
@@ -24,7 +24,7 @@ export interface PulseJobDeps {
   getBrowser(): Promise<{ browser: Browser } | { browser: null; reason: string }>;
   slowThresholdMs: number;
   /** ENCRYPTION_KEY, to open an environment's sealed bypass token (Section 9). */
-  encryptionKey?: string;
+  encryptionKey?: Keyring;
 }
 
 /** Purpose bound into sealed bypass tokens (apps/api routes/projects.ts). */

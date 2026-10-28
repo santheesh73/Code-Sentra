@@ -1,5 +1,5 @@
 import { type JobType, LinkStep, nextCronRun, type RunTrigger } from "@codesentra/core";
-import { openSecret } from "@codesentra/core/crypto";
+import { type Keyring, openSecret } from "@codesentra/core/crypto";
 import {
   type CreateRunInput,
   createRun,
@@ -108,7 +108,7 @@ export async function runDueSchedules(
     pulseSteps: readonly string[];
     /** For `check` schedules: Scan steps and the key that opens installation data. */
     scanSteps?: readonly string[];
-    encryptionKey?: string;
+    encryptionKey?: Keyring;
   },
   now: Date = new Date(),
   limit = 25,
@@ -207,7 +207,7 @@ type ProjectRow = typeof schema.projects.$inferSelect;
 export async function installationFor(
   db: Database,
   project: Pick<ProjectRow, "orgId" | "githubRepo">,
-  encryptionKey: string,
+  encryptionKey: Keyring,
 ): Promise<number | null> {
   if (!project.githubRepo) return null;
   const rows = await db.system
@@ -248,7 +248,7 @@ export async function installationFor(
 export async function createSourceSnapshot(
   db: Database,
   project: ProjectRow,
-  encryptionKey: string,
+  encryptionKey: Keyring,
 ): Promise<{ id: string; kind: "github" | "git" } | null> {
   const installationId = await installationFor(db, project, encryptionKey);
   if (installationId !== null && project.githubRepo) {

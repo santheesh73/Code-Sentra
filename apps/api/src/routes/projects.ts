@@ -1,5 +1,5 @@
 import { BYPASS_PURPOSE } from "@codesentra/checks/job";
-import { sealSecret } from "@codesentra/core/crypto";
+import { keyring, sealSecret } from "@codesentra/core/crypto";
 import { countOpenIssues, createRun, failRun, schema as s, type TenantTx } from "@codesentra/db";
 import { DIAGNOSTIC_STEPS, publishRunEvent } from "@codesentra/queue";
 import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
@@ -334,7 +334,7 @@ export function projectRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             .set({
               bypassTokenRef: sealSecret(
                 JSON.stringify({ header: req.body.header.toLowerCase(), value: req.body.token }),
-                ctx.config.ENCRYPTION_KEY,
+                keyring(ctx.config.ENCRYPTION_KEY, ctx.config.ENCRYPTION_KEY_PREVIOUS),
                 BYPASS_PURPOSE,
               ),
             })

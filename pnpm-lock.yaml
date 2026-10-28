@@ -227,6 +227,9 @@ importers:
       '@codesentra/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@codesentra/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@codesentra/db':
         specifier: workspace:*
         version: link:../../packages/db

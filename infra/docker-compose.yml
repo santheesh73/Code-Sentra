@@ -7,10 +7,23 @@
 # Behind a TLS-intercepting proxy, prebuild the harness image with the optional
 # `extra_ca` secret (see docs/architecture.md), then run without --build.
 #
-# Infrastructure only. api, web and worker-pulse run from `pnpm start:*` (see
-# docs/architecture.md); containerised app services arrive with the production
-# Dockerfiles in Phase 5.
+#   pnpm stack:up          # the whole app in containers (profile "app"): migrate, api,
+#                          # worker-link, worker-pulse, worker-scan, web on localhost:3000
+#
+# Without the profile it is infrastructure only, for `pnpm start:*` development.
 name: codesentra
+
+# The app services' shared configuration: ../.env plus container addresses.
+x-app-env: &app-env
+  NODE_ENV: development
+  LOG_LEVEL: info
+  DATABASE_URL: postgres://codesentra:${POSTGRES_PASSWORD}@postgres:5432/codesentra
+  S3_ENDPOINT: http://minio:9000
+  # Browsers upload zips straight to MinIO (ADR 0024): the address they reach.
+  S3_PUBLIC_ENDPOINT: http://localhost:9000
+  PUBLIC_APP_URL: http://localhost:3000
+  EMAIL_TRANSPORT: outbox
+  EMAIL_OUTBOX_DIR: /outbox
 
 services:
   postgres:
@@ -76,6 +89,114 @@ services:
     ports:
       - "127.0.0.1:4100-4130:4100-4130"
 
+  # --- The app (profile "app") -----------------------------------------------------
+
+  migrate:
+    profiles: ["app"]
+    build: { context: .., dockerfile: infra/node/Dockerfile, args: { SERVICE: api } }
+    image: codesentra/api:local
+    env_file: [../.env]
+    environment: *app-env
+    entrypoint: ["node", "node_modules/@codesentra/db/dist/migrate-cli.js"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    profiles: ["app"]
+    image: codesentra/api:local
+    env_file: [../.env]
+    environment:
+      <<: *app-env
+      API_HOST: 0.0.0.0
+      API_PORT: "4000"
+    ports: ["127.0.0.1:4000:4000"]
+    volumes: [outbox:/outbox]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      minio-init: { condition: service_completed_successfully }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))",
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  worker-link:
+    profiles: ["app"]
+    build: { context: .., dockerfile: infra/node/Dockerfile, args: { SERVICE: worker-link } }
+    image: codesentra/worker-link:local
+    env_file: [../.env]
+    environment: *app-env
+    volumes: [outbox:/outbox]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  worker-pulse:
+    profiles: ["app"]
+    build: { context: .., dockerfile: infra/pulse/Dockerfile }
+    image: codesentra/worker-pulse:local
+    env_file: [../.env]
+    environment: *app-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  # The probe image worker-scan starts sandboxes from (built, never run here).
+  sandbox-image:
+    profiles: ["app"]
+    build: { context: ../infra/sandbox }
+    image: codesentra/sandbox:local
+    entrypoint: ["true"]
+    restart: "no"
+
+  # Runs untrusted code only inside sandboxes on the host's Docker (runc locally; use the
+  # gVisor VM setup in infra/deploy/ for anything but your own machine).
+  worker-scan:
+    profiles: ["app"]
+    build: { context: .., dockerfile: infra/scan/Dockerfile }
+    image: codesentra/worker-scan:local
+    env_file: [../.env]
+    environment:
+      <<: *app-env
+      SANDBOX_RUNTIME: runc
+      SANDBOX_IMAGE: codesentra/sandbox:local
+      # Sandboxes mount snapshot copies by path through the host's Docker, so the scratch
+      # directory has the same path inside and outside this container.
+      TMPDIR: /tmp/codesentra-scratch
+    # The group that owns the Docker socket on your machine (stat -c %g /var/run/docker.sock).
+    user: "node:${DOCKER_GID:-0}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/codesentra-scratch:/tmp/codesentra-scratch
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      sandbox-image: { condition: service_completed_successfully }
+      scratch-init: { condition: service_completed_successfully }
+
+  scratch-init:
+    profiles: ["app"]
+    image: node:22.23.4-bookworm-slim
+    entrypoint: ["sh", "-c", "chmod 1777 /tmp/codesentra-scratch"]
+    volumes: ["/tmp/codesentra-scratch:/tmp/codesentra-scratch"]
+    restart: "no"
+
+  web:
+    profiles: ["app"]
+    build: { context: .., dockerfile: infra/web/Dockerfile }
+    image: codesentra/web:local
+    environment:
+      PUBLIC_APP_URL: http://localhost:3000
+      API_INTERNAL_URL: http://api:4000
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+
 volumes:
   postgres-data:
   minio-data:
+  outbox:

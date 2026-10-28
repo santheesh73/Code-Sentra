@@ -8,7 +8,7 @@ import { type FixtureApp, loadFixtureApps } from "./manifest.js";
 import { FIXTURE_SECURITY_HEADERS, serveExport } from "./static-server.js";
 
 /** The bypass secret the access-protected simulator accepts (tests only). */
-export const ACCESS_PROTECTED_BYPASS = "cs-test-bypass-0123456789abcdef";
+export const ACCESS_PROTECTED_BYPASS = "test-only-bypass-not-a-secret";
 
 export const SIMULATORS = [
   "server-error",

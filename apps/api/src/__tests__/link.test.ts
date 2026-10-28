@@ -155,7 +155,8 @@ describe("Phase 4 gate (API): full check, trace, prompt, resolve, regress", () =
     expect(pulseIssues, JSON.stringify(pulseIssues).slice(0, 500)).toHaveLength(1);
     expect(pulseIssues[0]).toMatchObject({
       code: "UNDEFINED_IN_URL",
-      corroborating_codes: ["SAME_ORIGIN_FAILURE"],
+      // The Scan finding about the same env var at the traced file joins it (Phase 6 merge).
+      corroborating_codes: ["SAME_ORIGIN_FAILURE", "ENV_VAR_UNDOCUMENTED"],
     });
     const issueId = pulseIssues[0]?.id as string;
     const detail = await get(`/v1/issues/${issueId}`);
@@ -174,12 +175,13 @@ describe("Phase 4 gate (API): full check, trace, prompt, resolve, regress", () =
     ]);
     expect(detail.traces[0].excerpt).toContain("process.env.NEXT_PUBLIC_API_URL}/api/ping");
 
-    // Scan issues are stored too, with code_fix prompts at their file and line.
+    // Scan issues are stored too, but the undocumented NEXT_PUBLIC_API_URL is not a second
+    // issue: it is part of the traced Pulse issue above.
     const scanIssues = (await get(`/v1/projects/${project.id}/issues?source=scan`)) as {
       code: string;
       locator: string;
     }[];
-    expect(scanIssues).toContainEqual(
+    expect(scanIssues).not.toContainEqual(
       expect.objectContaining({ code: "ENV_VAR_UNDOCUMENTED", locator: "app/page.tsx:9" }),
     );
 

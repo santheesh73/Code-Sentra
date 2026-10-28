@@ -24,6 +24,7 @@ import type { JobContext, JobHandler } from "@codesentra/queue";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { blastRadius } from "./blast.js";
 import { checkRunReport, type ReportedIssue } from "./check-run.js";
+import { mergeEnvFindings } from "./merge.js";
 import { type Notifier, notifyChannels } from "./notify.js";
 import { type LinkGraph, type Trace, traceFinding } from "./trace.js";
 
@@ -300,6 +301,8 @@ export function linkHandler(deps: LinkJobDeps = {}): JobHandler {
     // --- prompt ------------------------------------------------------------------------
     const drafts: { src: Source; si: number; drafts: (IssueDraftOut & { leader: number })[] }[] =
       [];
+    /** Pulse issue key → Scan findings merged into it (their code and finding ids). */
+    const mergedInto = new Map<string, { code: string; findingIds: string[] }[]>();
     await ctx.step("prompt", async () => {
       const counts: Record<string, number> = {};
       loaded.sources.forEach((src, si) => {
@@ -323,9 +326,60 @@ export function linkHandler(deps: LinkJobDeps = {}): JobHandler {
                 : null,
           };
         }).map((d) => ({ ...d, leader: d.findingIndexes[0] as number }));
-        for (const d of list) counts[d.prompt.type] = (counts[d.prompt.type] ?? 0) + 1;
         drafts.push({ src, si, drafts: list });
       });
+      // Cross-module merge: an undocumented env var found by Scan at the file a Pulse issue
+      // is traced to corroborates that issue instead of opening a second one.
+      const pulseTraced = drafts.flatMap(({ src, si, drafts: list }) =>
+        src.module !== "pulse"
+          ? []
+          : list.flatMap((d) => {
+              const t = traces.get(keyOf(si, d.leader));
+              return t?.verified
+                ? [
+                    {
+                      key: keyOf(si, d.leader),
+                      envVars: t.envVars.map((e) => e.name),
+                      sites: t.sites,
+                    },
+                  ]
+                : [];
+            }),
+      );
+      const scanEnv = drafts.flatMap(({ src, si, drafts: list }) =>
+        src.module !== "scan"
+          ? []
+          : list.map((d) => ({
+              key: keyOf(si, d.leader),
+              code: d.code,
+              envVar: src.findings[d.leader]?.finding.discriminator ?? null,
+              path: d.locator.split(":")[0] ?? "",
+              alreadyOpen: loaded.openFingerprints.has(d.fingerprint),
+            })),
+      );
+      const merged = mergeEnvFindings(pulseTraced, scanEnv);
+      for (const group of drafts) {
+        group.drafts = group.drafts.filter((d) => {
+          const into = merged.get(keyOf(group.si, d.leader));
+          if (!into) return true;
+          const ids = d.findingIndexes
+            .map((i) => group.src.findings[i]?.finding.id)
+            .filter((x): x is string => Boolean(x));
+          mergedInto.set(into, [
+            ...(mergedInto.get(into) ?? []),
+            { code: d.code, findingIds: ids },
+          ]);
+          return false;
+        });
+      }
+      for (const group of drafts)
+        for (const d of group.drafts) {
+          for (const m of mergedInto.get(keyOf(group.si, d.leader)) ?? [])
+            if (!d.corroboratingCodes.includes(m.code as FindingCode))
+              d.corroboratingCodes.push(m.code as FindingCode);
+          counts[d.prompt.type] = (counts[d.prompt.type] ?? 0) + 1;
+        }
+      if (merged.size) counts["merged into a Pulse issue"] = merged.size;
       return {
         status: "done",
         log:
@@ -382,9 +436,12 @@ export function linkHandler(deps: LinkJobDeps = {}): JobHandler {
                 locator: d.locator,
                 summary: d.summary,
                 corroboratingCodes: d.corroboratingCodes,
-                findingIds: d.findingIndexes
-                  .map((i) => src.findings[i]?.finding.id)
-                  .filter((x): x is string => Boolean(x)),
+                findingIds: [
+                  ...d.findingIndexes
+                    .map((i) => src.findings[i]?.finding.id)
+                    .filter((x): x is string => Boolean(x)),
+                  ...(mergedInto.get(keyOf(si, d.leader)) ?? []).flatMap((m) => m.findingIds),
+                ],
                 recheck: d.recheck,
                 prompt: d.prompt,
                 trace:

@@ -56,8 +56,13 @@ async function sandbox() {
 
 async function reportModel(): Promise<{ model: ReportModel } | { model: null; reason: string }> {
   if (config.SCAN_TEST_MODEL === "fixture") {
-    // TEST ONLY (packages/config refuses it unless NODE_ENV=test; ADR 0017).
-    const { fixtureReportModel } = await import("@codesentra/fixture-harness");
+    // TEST ONLY (packages/config refuses it unless NODE_ENV=test; ADR 0017). The harness is
+    // a devDependency, absent from the production image, so the specifier is not a literal:
+    // the production build must not need its types.
+    const harness = "@codesentra/fixture-harness";
+    const { fixtureReportModel } = (await import(harness)) as {
+      fixtureReportModel(): ReportModel;
+    };
     log.warn("TEST ONLY: the scripted fixture model writes reports");
     return { model: fixtureReportModel() };
   }

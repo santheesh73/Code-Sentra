@@ -8,6 +8,7 @@
  *
  *   pnpm --filter @codesentra/scan build
  *   node packages/scan/scripts/build-osv-snapshot.ts fixtures/osv <lockfile>...
+ *   npx biome check --write fixtures/osv   # the repo's JSON format
  */
 import { createWriteStream } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";

@@ -66,13 +66,17 @@ jobs:
           SANDBOX_IMAGE: codesentra/sandbox:ci
       - name: OpenAPI docs are up to date
         run: pnpm openapi && git diff --exit-code docs/openapi.json docs/api.md
-      - name: The single-file CLI installs from its tarball and parses code
+      - name: The single-file CLI installs from its tarball and parses JS and Go
         run: |
           cd apps/cli/dist/npm && npm pack --pack-destination "$RUNNER_TEMP"
           npm install -g --prefix "$RUNNER_TEMP/cli" "$RUNNER_TEMP"/codesentra-cli-*.tgz
           cd "$RUNNER_TEMP" && cp -r "$GITHUB_WORKSPACE/fixtures/apps/env-undefined" app
           "$RUNNER_TEMP/cli/bin/codesentra" scan app --json > scan.json || true
           node -e 'const r=require(process.argv[1]); if (!r.summary.envVars.read.includes("NEXT_PUBLIC_API_URL")) { console.error(JSON.stringify(r.summary)); process.exit(1) }' "$RUNNER_TEMP/scan.json"
+          # The embedded Go grammar (ADR 0026): routes and env reads from a Go repo.
+          cp -r "$GITHUB_WORKSPACE/fixtures/repos/go-shop-api/repo" go-app
+          "$RUNNER_TEMP/cli/bin/codesentra" scan go-app --json > go.json || true
+          node -e 'const r=require(process.argv[1]); if (r.summary.routes.length !== 4 || !r.summary.envVars.read.includes("SHOP_API_KEY")) { console.error(JSON.stringify(r.summary)); process.exit(1) }' "$RUNNER_TEMP/go.json"
 
   # Phase 1–4 gates: real Postgres + MinIO (Testcontainers), API, worker-pulse (real
   # Chromium), worker-scan (sandbox, gitleaks, offline OSV), worker-link, web and the fixture harness on

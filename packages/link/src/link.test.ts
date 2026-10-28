@@ -166,6 +166,27 @@ async function graphOf(dir: string): Promise<LinkGraph> {
   };
 }
 
+describe("Go, Ruby and Java routes are trace targets (ADR 0026)", () => {
+  const repos = join(new URL(".", import.meta.url).pathname, "../../../fixtures/repos");
+  it.each([
+    ["go-shop-api", "https://shop.example/products/p9", "cmd/shop/main.go", 17],
+    ["rb-notes-api", "https://notes.example/notes/5/export.md", "app.rb", 28],
+    [
+      "java-shop-api",
+      "https://shop.example/api/orders/export.csv",
+      "src/main/java/com/example/shop/OrderController.java",
+      27,
+    ],
+  ] as const)("%s: a broken %s traces to %s:%i", async (repo, url, path, line) => {
+    const t = traceFinding(
+      { code: "ROUTE_BROKEN", locator: url, message: "" },
+      await graphOf(join(repos, repo, "repo")),
+    );
+    expect(t.verified, t.reason).toBe(true);
+    expect(t.sites[0]).toMatchObject({ path, line });
+  });
+});
+
 let h: Harness;
 let browser: Browser;
 beforeAll(async () => {

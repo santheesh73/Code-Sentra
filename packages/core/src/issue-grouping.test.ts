@@ -67,4 +67,22 @@ describe("recheckFor", () => {
       ).expectation,
     ).toBe("the response from https://x.dev/ sets Strict-Transport-Security");
   });
+
+  it("names the env var, test or message rather than the place it was seen", () => {
+    expect(
+      recheckFor("ENV_VAR_UNDOCUMENTED", "app/page.tsx:9", "", "NEXT_PUBLIC_API_URL").expectation,
+    ).toBe("NEXT_PUBLIC_API_URL is documented in .env.example or docs");
+    expect(
+      recheckFor(
+        "CONSOLE_ERROR",
+        "https://x.dev/",
+        "https://x.dev/",
+        `TypeError: a\n${"x".repeat(9)}`,
+      ).expectation,
+    ).toBe('https://x.dev/ logs no console error "TypeError: a"');
+    expect(
+      recheckFor("UNCAUGHT_EXCEPTION", "https://x.dev/", "https://x.dev/", "y".repeat(300))
+        .expectation,
+    ).toBe(`https://x.dev/ throws no uncaught "${"y".repeat(119)}…"`);
+  });
 });

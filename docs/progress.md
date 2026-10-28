@@ -57,7 +57,6 @@ account (ADR 0024).
 ### Deferred or partial
 
 - `scan.incremental` still scans the whole head tree (cached by tree hash).
-- A missed schedule window is not replayed.
 - Only the env-var pair is merged across Pulse and Scan. Other pairs need an equally
   exact rule.
 

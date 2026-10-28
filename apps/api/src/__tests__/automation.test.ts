@@ -115,7 +115,7 @@ async function project(name: string, url: string) {
 }
 
 describe("schedules", () => {
-  it("validates, fires once per window, and deletes", async () => {
+  it("validates, fires once per window, catches up missed windows once, and deletes", async () => {
     const p = await project("scheduled", h.targets.apps.healthy?.url as string);
     const env = p.environments[0]?.id as string;
     const post = (cron: string) =>
@@ -134,7 +134,8 @@ describe("schedules", () => {
     const schedule = created.json();
     expect(schedule).toMatchObject({ cron: "*/10 * * * *", run_type: "pulse", enabled: true });
 
-    // Due (an hour from now): one Pulse with its Link run, triggered by the schedule.
+    // An hour late on a 10-minute schedule (the scheduler was down for six windows): one
+    // catch-up Pulse with its Link run, not one per missed window.
     const later = new Date(Date.now() + 3600_000);
     const first = await runDueSchedules(
       { db: api.t.db, queue: api.queue, pulseSteps: PULSE_GROUPS },

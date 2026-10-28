@@ -65,6 +65,12 @@ export interface RecheckSpec {
   expectation: string;
 }
 
+/** Discriminators can be whole error messages; an expectation names the first line. */
+function clip(text: string): string {
+  const line = text.split("\n")[0] ?? "";
+  return line.length > 120 ? `${line.slice(0, 119)}…` : line;
+}
+
 /**
  * The stored re-check for an issue (Section 10d), from its code's declaration.
  * `discriminator` fills `{discriminator}` (which header, which message).
@@ -82,6 +88,6 @@ export function recheckFor(
     target,
     expectation: d.expectation
       .replaceAll("{locator}", locator)
-      .replaceAll("{discriminator}", discriminator ?? locator),
+      .replaceAll("{discriminator}", clip(discriminator ?? locator)),
   };
 }

@@ -1,3 +1,4 @@
+import { execFileSync, spawn } from "node:child_process";
 import {
   createHmac,
   createPublicKey,
@@ -6,8 +7,11 @@ import {
   randomBytes,
   randomUUID,
 } from "node:crypto";
-import { createServer, type IncomingMessage, type Server } from "node:http";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import yazl from "yazl";
 
 /**
@@ -22,8 +26,16 @@ export interface FakeGithubApp {
   appId: string;
   privateKeyPem: string;
   webhookSecret: string;
-  /** Registers a commit: the full tree at `sha` (path → content). */
+  /** Registers a commit: the full tree at `sha` (path → content). No git history. */
   commit(repo: string, sha: string, files: Record<string, string | Buffer>): void;
+  /**
+   * Makes a real git commit (the full tree), served over smart HTTP at
+   * `<url>/<owner>/<repo>.git` to installation tokens, and registered for compare and
+   * zipball. Returns its SHA.
+   */
+  gitCommit(repo: string, files: Record<string, string | Buffer>, message?: string): string;
+  /** Base URL for git clones (`<gitBaseUrl>/<owner>/<repo>.git`). */
+  gitBaseUrl: string;
   checkRuns: FakeCheckRun[];
   /** Calls the API made, as `METHOD path`. */
   calls: string[];
@@ -83,6 +95,49 @@ async function zipOf(top: string, files: Record<string, string | Buffer>): Promi
   return Buffer.concat(chunks);
 }
 
+/** `git http-backend` as CGI for bare repos under `root` (fetch by any SHA allowed, as GitHub). */
+function gitBackendIn(root: string) {
+  return (req: IncomingMessage, res: ServerResponse, pathInfo: string, query: string) => {
+    const cgi = spawn("git", ["http-backend"], {
+      env: {
+        PATH: process.env.PATH,
+        GIT_PROJECT_ROOT: root,
+        GIT_HTTP_EXPORT_ALL: "1",
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "uploadpack.allowAnySHA1InWant",
+        GIT_CONFIG_VALUE_0: "true",
+        PATH_INFO: decodeURIComponent(pathInfo),
+        QUERY_STRING: query,
+        REQUEST_METHOD: req.method ?? "GET",
+        CONTENT_TYPE: req.headers["content-type"] ?? "",
+        REMOTE_ADDR: "127.0.0.1",
+      },
+    });
+    req.pipe(cgi.stdin);
+    let head = Buffer.alloc(0);
+    let headersDone = false;
+    cgi.stdout.on("data", (chunk: Buffer) => {
+      if (headersDone) return void res.write(chunk);
+      head = Buffer.concat([head, chunk]);
+      const sep = head.indexOf("\r\n\r\n");
+      if (sep === -1) return;
+      headersDone = true;
+      let status = 200;
+      for (const line of head.subarray(0, sep).toString().split("\r\n")) {
+        const i = line.indexOf(":");
+        const k = line.slice(0, i).trim();
+        const v = line.slice(i + 1).trim();
+        if (k.toLowerCase() === "status") status = Number(v.split(" ")[0]);
+        else res.setHeader(k, v);
+      }
+      res.writeHead(status);
+      res.write(head.subarray(sep + 4));
+    });
+    cgi.stdout.on("end", () => res.end());
+    cgi.on("error", () => res.end());
+  };
+}
+
 export async function startFakeGithubApp(): Promise<FakeGithubApp> {
   const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const privateKeyPem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
@@ -98,6 +153,21 @@ export async function startFakeGithubApp(): Promise<FakeGithubApp> {
   const clientId = "Iv1.fakeapp00000001";
   const clientSecret = randomBytes(16).toString("hex");
   let nextId = 1000;
+  const gitRoot = mkdtempSync(join(tmpdir(), "cs-fake-gh-git-"));
+  const workdirs = new Map<string, string>();
+  let commitClock = Date.parse("2026-01-01T00:00:00Z");
+  const runGit = (cwd: string, args: string[], date?: string) =>
+    execFileSync("git", ["-c", "user.name=dev", "-c", "user.email=dev@example.com", ...args], {
+      cwd,
+      env: {
+        PATH: process.env.PATH ?? "/usr/bin:/bin",
+        HOME: gitRoot,
+        GIT_CONFIG_NOSYSTEM: "1",
+        ...(date ? { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : {}),
+      },
+    })
+      .toString()
+      .trim();
 
   const server: Server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
@@ -107,6 +177,17 @@ export async function startFakeGithubApp(): Promise<FakeGithubApp> {
       res.end(JSON.stringify(body));
     };
     const auth = req.headers.authorization ?? "";
+    // Git smart HTTP for gitCommit() repos, authenticated like GitHub's installation tokens.
+    const g = /^\/([^/]+\/[^/]+)\.git(\/.*)$/.exec(url.pathname);
+    if (g) {
+      const basic = /^Basic (.+)$/.exec(auth)?.[1];
+      const [user, pass] = basic ? Buffer.from(basic, "base64").toString().split(":") : [];
+      if (user !== "x-access-token" || !pass || !tokens.has(pass)) {
+        res.writeHead(401, { "www-authenticate": 'Basic realm="GitHub"' });
+        return res.end();
+      }
+      return gitBackend(req, res, `/${g[1]}.git${g[2]}`, url.search.slice(1));
+    }
     let m = /^\/app\/installations\/(\d+)\/access_tokens$/.exec(url.pathname);
     if (req.method === "POST" && m) {
       if (!verifyJwt(auth.replace(/^Bearer /, ""), publicKeyPem, appId))
@@ -194,6 +275,7 @@ export async function startFakeGithubApp(): Promise<FakeGithubApp> {
     }
     json(404, { message: "Not Found" });
   });
+  const gitBackend = gitBackendIn(gitRoot);
   await new Promise<void>((ok) => server.listen(0, "127.0.0.1", () => ok()));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
@@ -214,6 +296,39 @@ export async function startFakeGithubApp(): Promise<FakeGithubApp> {
       m.set(sha, files);
       commits.set(repo, m);
     },
+    gitBaseUrl: url,
+    gitCommit(repo, files, message = "commit") {
+      let work = workdirs.get(repo);
+      if (!work) {
+        work = mkdtempSync(join(gitRoot, "work-"));
+        runGit(work, ["init", "-q", "-b", "main"]);
+        workdirs.set(repo, work);
+      }
+      for (const f of runGit(work, ["ls-files"]).split("\n").filter(Boolean))
+        rmSync(join(work, f), { force: true });
+      for (const [path, content] of Object.entries(files)) {
+        mkdirSync(dirname(join(work, path)), { recursive: true });
+        writeFileSync(join(work, path), content);
+      }
+      commitClock += 3_600_000;
+      runGit(work, ["add", "-A"]);
+      runGit(
+        work,
+        ["commit", "-q", "--allow-empty", "-m", message],
+        new Date(commitClock).toISOString(),
+      );
+      const sha = runGit(work, ["rev-parse", "HEAD"]);
+      const bare = join(gitRoot, `${repo}.git`);
+      if (!existsSync(bare)) {
+        mkdirSync(bare, { recursive: true });
+        runGit(bare, ["init", "-q", "--bare", "-b", "main"]);
+      }
+      runGit(work, ["push", "-q", "--force", bare, "HEAD:refs/heads/main"]);
+      const m = commits.get(repo) ?? new Map();
+      m.set(sha, files);
+      commits.set(repo, m);
+      return sha;
+    },
     async deliver(target, event, payload, opts = {}) {
       const body = JSON.stringify(payload);
       const sig = createHmac("sha256", opts.secret ?? webhookSecret)
@@ -231,6 +346,12 @@ export async function startFakeGithubApp(): Promise<FakeGithubApp> {
         body,
       });
     },
-    close: () => new Promise((ok) => server.close(() => ok())),
+    close: () =>
+      new Promise((ok) =>
+        server.close(() => {
+          rmSync(gitRoot, { recursive: true, force: true });
+          ok();
+        }),
+      ),
   };
 }

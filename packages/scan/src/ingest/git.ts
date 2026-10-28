@@ -12,6 +12,14 @@ export interface GitOptions {
   /** Plain http is allowed only for test hosts (the harness has no TLS for git). */
   allowHttp?: boolean;
   ref?: string;
+  /** Fetch exactly this commit (a full SHA) with history, instead of a branch tip. */
+  commit?: string;
+  /**
+   * An HTTP Authorization header for the clone (a GitHub installation token). It reaches
+   * git through GIT_CONFIG_* environment variables, never the command line, so it is not
+   * visible in the process list, and it is never logged.
+   */
+  authorization?: string;
 }
 
 export class GitError extends Error {
@@ -25,6 +33,15 @@ export class GitError extends Error {
   }
 }
 
+function envConfigOf(pairs: [string, string][]): Record<string, string> {
+  const env: Record<string, string> = { GIT_CONFIG_COUNT: String(pairs.length) };
+  pairs.forEach(([k, v], i) => {
+    env[`GIT_CONFIG_KEY_${i}`] = k;
+    env[`GIT_CONFIG_VALUE_${i}`] = v;
+  });
+  return pairs.length ? env : {};
+}
+
 /**
  * Hardened git invocation: no system/global config, no hooks, no credential prompts,
  * symlinks checked out as plain files, LFS not smudged, only http(s) transports.
@@ -32,7 +49,14 @@ export class GitError extends Error {
  */
 export function git(
   args: string[],
-  opts: { cwd?: string; timeoutMs?: number; extraConfig?: string[]; allowHttp?: boolean } = {},
+  opts: {
+    cwd?: string;
+    timeoutMs?: number;
+    extraConfig?: string[];
+    allowHttp?: boolean;
+    /** Config passed through the environment (secrets): [key, value] pairs. */
+    envConfig?: [string, string][];
+  } = {},
 ): Promise<{ stdout: string; stderr: string }> {
   const config = [
     "core.hooksPath=/dev/null",
@@ -63,6 +87,7 @@ export function git(
           GIT_ASKPASS: "/bin/false",
           GIT_LFS_SKIP_SMUDGE: "1",
           GIT_ALLOW_PROTOCOL: opts.allowHttp ? "https:http" : "https",
+          ...envConfigOf(opts.envConfig ?? []),
           // No proxy variables: a proxy resolves the target itself, which would bypass the pin.
         },
       },
@@ -120,6 +145,27 @@ export async function cloneRepo(
   const extraConfig = [`http.curloptResolve=${host}:${port}:${pinned}`];
   const depth = String(opts.maxCommits ?? 2000);
   const timeoutMs = opts.timeoutMs ?? 300_000;
+  const envConfig: [string, string][] = opts.authorization
+    ? [["http.extraHeader", `Authorization: ${opts.authorization}`]]
+    : [];
+  if (opts.commit) {
+    if (!/^[0-9a-f]{40}$/.test(opts.commit)) throw new GitError("invalid_url", "not a commit SHA");
+    await git(["init", "-q", "--", dest], { timeoutMs: 10_000 });
+    await git(["fetch", "--depth", depth, "--no-tags", "--", u.href, opts.commit], {
+      cwd: dest,
+      timeoutMs,
+      extraConfig,
+      allowHttp: httpOk,
+      envConfig,
+    }).catch((e: GitError) => {
+      if (/not our ref|couldn't find remote ref|unadvertised object/i.test(e.stderr))
+        throw new GitError("ref_not_found", `commit ${opts.commit} not found`, e.stderr);
+      throw e;
+    });
+    await git(["checkout", "-q", "--detach", "FETCH_HEAD"], { cwd: dest, timeoutMs: 60_000 });
+    const { stdout } = await git(["rev-parse", "HEAD"], { cwd: dest, timeoutMs: 10_000 });
+    return { commitSha: stdout.trim() };
+  }
   await git(
     [
       "clone",
@@ -132,7 +178,7 @@ export async function cloneRepo(
       u.href,
       dest,
     ],
-    { timeoutMs, extraConfig, allowHttp: httpOk },
+    { timeoutMs, extraConfig, allowHttp: httpOk, envConfig },
   ).catch((e: GitError) => {
     if (opts.ref && /Remote branch .* not found|couldn't find remote ref/i.test(e.stderr))
       throw new GitError("ref_not_found", `ref ${opts.ref} not found`, e.stderr);

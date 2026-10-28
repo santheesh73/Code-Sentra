@@ -76,6 +76,8 @@ export const EnvSchema = z.object({
   GITHUB_OAUTH_CLIENT_SECRET: secret(10),
   GITHUB_OAUTH_BASE_URL: url().default("https://github.com"),
   GITHUB_API_BASE_URL: url().default("https://api.github.com"),
+  /** Where worker-scan clones repositories from (`<base>/<owner>/<repo>.git`). */
+  GITHUB_GIT_BASE_URL: url().default("https://github.com"),
   /** Slack OAuth (oauth.v2.access); tests point it at a local fake. */
   SLACK_API_BASE_URL: url().default("https://slack.com"),
   /** The App's URL name (github.com/apps/<slug>), for the install link in Settings. */
@@ -201,6 +203,7 @@ export const SERVICE_ENV = {
       "SCAN_TEST_MODEL",
       "PULSE_TEST_ALLOW_HOSTS",
       "GITHUB_API_BASE_URL",
+      "GITHUB_GIT_BASE_URL",
       "SCAN_MAX_UPLOAD_BYTES",
     ],
     integrations: ["s3", "github_app", "anthropic"],

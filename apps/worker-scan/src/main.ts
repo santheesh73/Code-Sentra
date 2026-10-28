@@ -95,6 +95,7 @@ const github =
         appId: config.GITHUB_APP_ID,
         privateKey: config.GITHUB_APP_PRIVATE_KEY,
         apiBaseUrl: config.GITHUB_API_BASE_URL,
+        gitBaseUrl: config.GITHUB_GIT_BASE_URL,
       })
     : null;
 const scan = scanHandler({

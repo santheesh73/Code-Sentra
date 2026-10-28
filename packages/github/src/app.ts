@@ -11,6 +11,8 @@ export interface GithubAppConfig {
   clientId?: string;
   clientSecret?: string;
   oauthBaseUrl?: string;
+  /** Where repositories are cloned from: `<gitBaseUrl>/<owner>/<repo>.git` (default https://github.com). */
+  gitBaseUrl?: string;
   /** Clock override for tests (ms since epoch). */
   now?: () => number;
   timeoutMs?: number;
@@ -132,6 +134,19 @@ export class GithubApp {
     if (!OWNER_REPO.test(owner) || !OWNER_REPO.test(repo))
       throw new GithubError(400, "bad repository name");
     return `/repos/${owner}/${repo}`;
+  }
+
+  /** The https URL git clones `owner/repo` from. */
+  gitUrl(owner: string, repo: string): string {
+    if (!OWNER_REPO.test(owner) || !OWNER_REPO.test(repo) || repo.startsWith("."))
+      throw new GithubError(0, `invalid repository ${owner}/${repo}`);
+    return `${(this.cfg.gitBaseUrl ?? "https://github.com").replace(/\/$/, "")}/${owner}/${repo}.git`;
+  }
+
+  /** `Authorization` for git over HTTPS as the installation (the token is short-lived). */
+  async gitAuthorization(installationId: number): Promise<string> {
+    const token = await this.installationToken(installationId);
+    return `Basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
   }
 
   async createCheckRun(installationId: number, owner: string, repo: string, input: CheckRunInput) {

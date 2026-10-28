@@ -37,9 +37,10 @@ let orgId: string;
 const store = memoryStore();
 const REPO = "acme/status-board";
 const INSTALLATION = 7001;
-const shaA = "a".repeat(40);
-const shaB = "b".repeat(40);
-const shaC = "c".repeat(40);
+// Real commits in the fake's git server (set in beforeAll): PR scans clone them with history.
+let shaA: string;
+let shaB: string;
+let shaC: string;
 const app = loadFixtureApps().find((a) => a.manifest.name === "env-undefined");
 
 function tree(dir: string): Record<string, string> {
@@ -71,6 +72,7 @@ beforeAll(async () => {
     clientId: gh.clientId,
     clientSecret: gh.clientSecret,
     oauthBaseUrl: gh.url,
+    gitBaseUrl: gh.gitBaseUrl,
   });
   const pulse = pulseHandler({
     policy: testPolicy(["127.0.0.1"], { ca: h.caCertPem }),
@@ -116,12 +118,12 @@ beforeAll(async () => {
   // variable (the fixed build).
   const head = tree(app.dir);
   const page = head["app/page.tsx"] as string;
-  gh.commit(REPO, shaA, {
+  shaA = gh.gitCommit(REPO, {
     ...head,
     "app/page.tsx": page.replace(/\n {2}useEffect\([\s\S]*?\}, \[\]\);\n/, "\n"),
   });
-  gh.commit(REPO, shaB, head);
-  gh.commit(REPO, shaC, { ...head, ".env.example": "NEXT_PUBLIC_API_URL=\n" });
+  shaB = gh.gitCommit(REPO, head, "call the API");
+  shaC = gh.gitCommit(REPO, { ...head, ".env.example": "NEXT_PUBLIC_API_URL=\n" }, "document it");
 }, 180_000);
 
 afterAll(async () => {
@@ -269,6 +271,21 @@ describe("GitHub App (Phase 5)", () => {
     const opened = await deliver("pull_request", pr("opened", shaB, shaA), { id });
     expect(opened.statusCode, opened.body).toBe(200);
     const prLink = await waitForRun(linkRunOf(opened));
+    // The head commit was cloned with its history (not the zipball): history ran.
+    const prScan = prLink.children.find((k: { type: string }) => k.type === "scan");
+    const scanRun = await (
+      await api.app.inject({ method: "GET", url: `/v1/runs/${prScan.id}`, headers: { cookie } })
+    ).json();
+    expect(
+      scanRun.steps.find((x: { name: string }) => x.name === "history")?.status,
+      JSON.stringify(scanRun.steps),
+    ).toBe("done");
+    const [row] = await api.t.db.system
+      .select({ snap: s.snapshots })
+      .from(s.runs)
+      .innerJoin(s.snapshots, eq(s.snapshots.id, s.runs.snapshotId))
+      .where(eq(s.runs.id, prScan.id));
+    expect(row?.snap).toMatchObject({ kind: "github", hasHistory: true, commitSha: shaB });
     expect(prLink.outcome).toMatchObject({ mode: "pr", changed_files: ["app/page.tsx"] });
     const dup = await deliver("pull_request", pr("opened", shaB, shaA), { id });
     expect(dup.json()).toMatchObject({ status: "duplicate" });

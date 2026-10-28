@@ -49,7 +49,21 @@ gVisor, and npm publish (plus a license choice).
 
 ### Gate result
 
-Running; replaced with the recorded output once the gate finishes.
+Run on this machine on 2026-10-28, after the last code change (sandbox runtime `runc`).
+
+```
+pnpm lint          1 error in that run: ADR 0025 not yet formatted (written while the gate
+                   started). After `biome check --write`: Checked 519 files. No fixes applied.
+pnpm typecheck     exit 0
+pnpm build         Tasks: 30 successful, 30 total
+pnpm test          20 packages, 568 tests, 0 failed
+  @codesentra/core     70 passed  (same-code split, discriminator re-checks)
+  @codesentra/checks   38 passed  (network idle with an unread body; TLS endpoint port)
+  @codesentra/api      64 passed  @codesentra/scan  66 passed  @codesentra/ssrf  71 passed
+  (and fixture-harness 46, claims 36, db 28, cli 26, parsers 26, link 21, config 19,
+   graph 10, prompts 10, sandbox 10, github 9, queue 6, storage 6, notify 3, telemetry 3)
+pnpm e2e           13 passed (2.0m, previously 2.8m)
+```
 
 ## Phase 6 — Closing the Phase 1–5 gaps (2026-10-28)
 

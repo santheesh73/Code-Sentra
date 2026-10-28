@@ -182,7 +182,7 @@ describe("Go, Ruby and Java routes are trace targets (ADR 0026)", () => {
       { code: "ROUTE_BROKEN", locator: url, message: "" },
       await graphOf(join(repos, repo, "repo")),
     );
-    expect(t.verified, t.reason).toBe(true);
+    expect(t.verified, t.reason ?? undefined).toBe(true);
     expect(t.sites[0]).toMatchObject({ path, line });
   });
 });

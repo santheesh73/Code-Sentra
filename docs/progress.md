@@ -54,7 +54,32 @@ publish (plus a license choice).
 
 ### Gate result
 
-Running; replaced with the recorded output once the gate finishes.
+Run on this machine on 2026-10-28 (sandbox runtime `runc`, Go 1.27.2 in the sandbox image).
+
+The first full run failed three ways:
+- **Lint:** ADR 0026 was not yet formatted when the run started.
+- **Typecheck:** a type error in the new Link test.
+- **e2e:** `java-shop-api`'s report overflowed a 375 px screen. Java paths and Maven
+  coordinates are long tokens that did not wrap.
+
+All three are fixed. The phone-width check now names the elements that overflow, and the
+issue lists wrap long tokens (`overflow-wrap: anywhere`). Reruns after the fixes:
+
+```
+pnpm lint          Checked 680 files. No fixes applied.
+pnpm typecheck     Tasks: 61 successful, 61 total
+pnpm build         Tasks: 30 successful, 30 total
+pnpm test          20 packages, 651 tests, 0 failed
+  @codesentra/scan             113 passed  (Scan gate on 5 fixture repos; Go probes in the
+                                            sandbox; Go/RubyGems/Maven audit)
+  @codesentra/fixture-harness   64 passed  @codesentra/parsers  33 passed
+  @codesentra/claims            39 passed  @codesentra/link     24 passed
+  @codesentra/graph             15 passed  (and api 64, ssrf 71, core 70, checks 38, db 28,
+                                            cli 26, config 19, sandbox 10, prompts 10,
+                                            github 9, queue 6, storage 6, notify 3,
+                                            telemetry 3)
+pnpm e2e           16 passed (2.9m)  (the Phase 3 gate now runs all five fixture repos)
+```
 
 ## Phase 7 — Hardening and the Phase 6 leftovers (2026-10-28)
 

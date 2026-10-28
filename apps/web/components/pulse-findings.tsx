@@ -58,7 +58,8 @@ export function PulseFindings({
             {d.outcome?.gaps.length ? " (see what was not checked above)" : ""}.
           </p>
         ) : (
-          <ul className="flex flex-col gap-6" data-testid="run-issues">
+          // Paths and package coordinates are long unbroken tokens: let them wrap anywhere.
+          <ul className="flex flex-col gap-6 [overflow-wrap:anywhere]" data-testid="run-issues">
             {d.issues.map((i) => (
               <li
                 key={i.finding_ids[0] ?? i.title}
@@ -99,7 +100,7 @@ export function PulseFindings({
       {info.length > 0 && (
         <Card>
           <CardTitle className="mb-3">Notes</CardTitle>
-          <ul className="flex flex-col gap-1 text-sm">
+          <ul className="flex flex-col gap-1 text-sm [overflow-wrap:anywhere]">
             {info.map((f) => (
               <li key={f.id} className="flex flex-wrap items-baseline gap-2">
                 <span>{f.message}</span>

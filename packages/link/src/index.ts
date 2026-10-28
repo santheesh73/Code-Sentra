@@ -1,4 +1,5 @@
 export { type BlastEntry, blastRadius } from "./blast.js";
+export { type CheckRunReport, checkRunReport, type ReportedIssue } from "./check-run.js";
 export {
   hostPortOf,
   type LinkEdge,

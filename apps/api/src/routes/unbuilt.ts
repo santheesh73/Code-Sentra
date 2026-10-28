@@ -18,36 +18,7 @@ interface Unbuilt {
  * Section 12 endpoints that later phases build. They authenticate and authorize like
  * the real thing (so cross-org tests cover them) and then answer 501 (Rule 6).
  */
-export const UNBUILT: Unbuilt[] = [
-  {
-    method: "POST",
-    url: "/v1/projects/:id/schedules",
-    summary: "Create a recurring Pulse",
-    phase: "Phase 5",
-    scope: "project",
-  },
-  {
-    method: "GET",
-    url: "/v1/projects/:id/schedules",
-    summary: "List schedules",
-    phase: "Phase 5",
-    scope: "project",
-  },
-  {
-    method: "DELETE",
-    url: "/v1/projects/:id/schedules",
-    summary: "Delete a schedule",
-    phase: "Phase 5",
-    scope: "project",
-  },
-  {
-    method: "POST",
-    url: "/v1/webhooks/github",
-    summary: "GitHub App webhooks",
-    phase: "Phase 5",
-    scope: "none",
-  },
-];
+export const UNBUILT: Unbuilt[] = [];
 
 export function unbuiltRoutes(ctx: AppContext): FastifyPluginAsyncZod {
   return async (app) => {

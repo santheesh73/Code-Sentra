@@ -1,3 +1,4 @@
+import { reportError } from "@codesentra/telemetry";
 import type { FastifyError, FastifyInstance, FastifyReply } from "fastify";
 import {
   hasZodFastifySchemaValidationErrors,
@@ -26,10 +27,17 @@ export class HttpError extends Error {
     readonly slug: string,
     readonly title: string,
     readonly detail?: string,
+    readonly headers: Record<string, string> = {},
   ) {
     super(detail ?? title);
   }
 }
+
+/** Section 17 run limits; Retry-After says when the window has room again. */
+export const tooManyRuns = (detail: string, retryAfterSeconds: number) =>
+  new HttpError(429, "rate-limited", "Too many requests", detail, {
+    "retry-after": String(retryAfterSeconds),
+  });
 
 export const notFound = (what = "Resource", detail?: string) =>
   new HttpError(404, "not-found", "Not found", detail ?? `${what} not found`);
@@ -63,6 +71,7 @@ export function sendProblem(reply: FastifyReply, p: Problem): FastifyReply {
 export function registerErrorHandling(app: FastifyInstance): void {
   app.setErrorHandler((err: FastifyError, req, reply) => {
     if (err instanceof HttpError) {
+      for (const [k, v] of Object.entries(err.headers)) reply.header(k, v);
       return sendProblem(reply, {
         type: TYPE_BASE + err.slug,
         title: err.title,
@@ -95,7 +104,10 @@ export function registerErrorHandling(app: FastifyInstance): void {
     }
     const status =
       err.statusCode && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500;
-    if (status >= 500) req.log.error({ err }, "unhandled error");
+    if (status >= 500) {
+      req.log.error({ err }, "unhandled error");
+      reportError(err, { route: req.routeOptions.url ?? "unknown" });
+    }
     return sendProblem(reply, {
       type:
         TYPE_BASE + (status === 429 ? "rate-limited" : status >= 500 ? "internal" : "bad-request"),

@@ -204,6 +204,7 @@ export function scanRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           orgId: access.orgId,
           projectId: project.id,
           userId: access.user.id,
+          trigger: req.tokenOrgId ? "cli" : "manual",
           children: [
             { job: "scan.run", run: { type: "scan", snapshotId, steps: ScanStage.options } },
           ],

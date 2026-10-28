@@ -6,10 +6,18 @@ import { createDatabase } from "@codesentra/db";
 import { diagnosticHandler, startQueueClient, startWorker } from "@codesentra/queue";
 import { defaultPolicy, type FetchPolicy, testPolicy } from "@codesentra/ssrf";
 import { objectStoreFromEnv } from "@codesentra/storage";
+import { initTelemetry } from "@codesentra/telemetry/init";
 import pino from "pino";
 import type { Browser } from "playwright-core";
 
 const config = loadConfig("worker-pulse");
+// Tracing (OTLP) and error reporting (Sentry), each only when configured (Section 19).
+const telemetry = initTelemetry({
+  service: "worker-pulse",
+  environment: config.NODE_ENV,
+  otlpEndpoint: config.OTEL_EXPORTER_OTLP_ENDPOINT,
+  sentryDsn: config.SENTRY_DSN,
+});
 const log = pino({ level: config.LOG_LEVEL, base: { service: "worker-pulse" } });
 
 const store = objectStoreFromEnv(config);
@@ -61,6 +69,7 @@ const pulse = pulseHandler({
   store,
   getBrowser,
   slowThresholdMs: config.PULSE_SLOW_THRESHOLD_MS,
+  encryptionKey: config.ENCRYPTION_KEY,
 });
 const worker = await startWorker({
   db,
@@ -81,6 +90,7 @@ const shutdown = async (signal: string) => {
   await queue.stop();
   await browser?.close().catch(() => {});
   await db.close();
+  await telemetry.shutdown();
   process.exit(0);
 };
 process.on("SIGTERM", () => void shutdown("SIGTERM"));

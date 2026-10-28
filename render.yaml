@@ -1,0 +1,122 @@
+# Render Blueprint (Section 18, Phase 5): the API, worker-link, worker-pulse and Postgres.
+# The web app runs on Vercel (apps/web/vercel.json); worker-scan needs a Docker daemon
+# with gVisor, which Render does not offer, so it runs on a VM (infra/deploy/).
+# Nothing here is deployed automatically: see docs/runbook.md before the first deploy.
+databases:
+  - name: codesentra-db
+    databaseName: codesentra
+    postgresMajorVersion: "16"
+    plan: basic-1gb
+    ipAllowList: [] # private network only
+
+envVarGroups:
+  # Shared by every service. Secrets are entered in the dashboard (sync: false) or
+  # generated once by Render; none of them live in this file.
+  - name: codesentra-core
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: ENCRYPTION_KEY # 32 random bytes, base64 (Render generates 256-bit base64)
+        generateValue: true
+      - key: PUBLIC_APP_URL # e.g. https://app.example.com (the Vercel domain)
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+  - name: codesentra-github
+    envVars:
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_APP_PRIVATE_KEY
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: GITHUB_APP_CLIENT_ID
+        sync: false
+      - key: GITHUB_APP_CLIENT_SECRET
+        sync: false
+  - name: codesentra-notify
+    envVars:
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_PROVIDER_API_KEY
+        sync: false
+      - key: SLACK_CLIENT_ID
+        sync: false
+      - key: SLACK_CLIENT_SECRET
+        sync: false
+
+services:
+  - type: web
+    name: codesentra-api
+    runtime: docker
+    dockerContext: .
+    dockerfilePath: ./infra/node/Dockerfile
+    plan: standard
+    healthCheckPath: /health
+    # Migrations are idempotent and run before each new version takes traffic.
+    preDeployCommand: node node_modules/@codesentra/db/dist/migrate-cli.js
+    autoDeploy: false
+    envVars:
+      - key: SERVICE # Docker build arg: which app infra/node/Dockerfile builds
+        value: api
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: API_PORT
+        value: "10000"
+      - key: DATABASE_URL
+        fromDatabase: { name: codesentra-db, property: connectionString }
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GITHUB_OAUTH_CLIENT_ID
+        sync: false
+      - key: GITHUB_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_APP_SLUG
+        sync: false
+      - fromGroup: codesentra-core
+      - fromGroup: codesentra-github
+      - fromGroup: codesentra-notify
+
+  - type: worker
+    name: codesentra-worker-link
+    runtime: docker
+    dockerContext: .
+    dockerfilePath: ./infra/node/Dockerfile
+    plan: starter
+    autoDeploy: false
+    envVars:
+      - key: SERVICE
+        value: worker-link
+      - key: DATABASE_URL
+        fromDatabase: { name: codesentra-db, property: connectionString }
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        sync: false
+      - fromGroup: codesentra-core
+      - fromGroup: codesentra-github
+      - fromGroup: codesentra-notify
+
+  - type: worker
+    name: codesentra-worker-pulse
+    runtime: docker
+    dockerContext: .
+    dockerfilePath: ./infra/pulse/Dockerfile
+    plan: standard # Chromium needs ~1 GB
+    autoDeploy: false
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: { name: codesentra-db, property: connectionString }
+      - fromGroup: codesentra-core

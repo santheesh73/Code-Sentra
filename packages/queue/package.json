@@ -26,7 +26,8 @@
     "pg-boss": "12.38.0",
     "zod": "4.6.7",
     "drizzle-orm": "0.45.4",
-    "@codesentra/storage": "workspace:*"
+    "@codesentra/storage": "workspace:*",
+    "@codesentra/telemetry": "workspace:*"
   },
   "devDependencies": {
     "@types/pg": "8.23.1",

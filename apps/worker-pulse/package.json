@@ -21,6 +21,7 @@
     "@codesentra/storage": "workspace:*",
     "drizzle-orm": "0.45.4",
     "pino": "10.4.0",
-    "playwright-core": "1.64.1"
+    "playwright-core": "1.64.1",
+    "@codesentra/telemetry": "workspace:*"
   }
 }

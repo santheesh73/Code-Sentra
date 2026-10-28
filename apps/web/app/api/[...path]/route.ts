@@ -17,6 +17,11 @@ const REQUEST_HEADERS = [
   "referer",
   "user-agent",
   "last-event-id",
+  // API tokens (CLI) and GitHub App webhooks reach the API through this origin too.
+  "authorization",
+  "x-github-event",
+  "x-github-delivery",
+  "x-hub-signature-256",
 ];
 const RESPONSE_HEADERS = [
   "content-type",

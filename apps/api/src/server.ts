@@ -1,14 +1,23 @@
 import { loadConfig } from "@codesentra/config";
 import { createDatabase } from "@codesentra/db";
+import { GithubApp } from "@codesentra/github";
+import { type EmailTransport, outboxTransport, resendTransport } from "@codesentra/notify";
 import { createRunEventListener, startQueueClient } from "@codesentra/queue";
 import { objectStoreFromEnv } from "@codesentra/storage";
+import { initTelemetry } from "@codesentra/telemetry/init";
 import pino from "pino";
 import { buildApp } from "./app.js";
 import { createAuthService } from "./auth/service.js";
 import { createAuthz } from "./authz.js";
-import { type EmailTransport, outboxTransport, resendTransport } from "./email.js";
 
 const config = loadConfig("api");
+// Tracing (OTLP) and error reporting (Sentry), each only when configured (Section 19).
+const telemetry = initTelemetry({
+  service: "api",
+  environment: config.NODE_ENV,
+  otlpEndpoint: config.OTEL_EXPORTER_OTLP_ENDPOINT,
+  sentryDsn: config.SENTRY_DSN,
+});
 const log = pino({
   level: config.LOG_LEVEL,
   redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'],
@@ -52,6 +61,17 @@ const { app } = await buildApp(
     store: objectStoreFromEnv(config),
     cookie: { secure: new URL(config.PUBLIC_APP_URL).protocol === "https:" },
     fetch,
+    github:
+      config.integrations.github_app && config.GITHUB_APP_ID && config.GITHUB_APP_PRIVATE_KEY
+        ? new GithubApp({
+            appId: config.GITHUB_APP_ID,
+            privateKey: config.GITHUB_APP_PRIVATE_KEY,
+            apiBaseUrl: config.GITHUB_API_BASE_URL,
+            clientId: config.GITHUB_APP_CLIENT_ID,
+            clientSecret: config.GITHUB_APP_CLIENT_SECRET,
+            oauthBaseUrl: config.GITHUB_OAUTH_BASE_URL,
+          })
+        : null,
   },
   { logger: log },
 );
@@ -70,6 +90,7 @@ const shutdown = async (signal: string) => {
   await events.close();
   await queue.stop();
   await db.close();
+  await telemetry.shutdown();
   process.exit(0);
 };
 process.on("SIGTERM", () => void shutdown("SIGTERM"));

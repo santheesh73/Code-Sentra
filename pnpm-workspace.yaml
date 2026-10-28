@@ -6,3 +6,11 @@ packages:
   - e2e
 # fixtures/repos/* are scan *inputs* and are deliberately not workspace members:
 # their dependencies (some intentionally vulnerable) must never be installed here.
+
+# Accepted audit findings (CI `deps` job). Each entry says why it cannot affect production.
+auditConfig:
+  ignoreGhsas:
+    # node-forge RSA PKCS#1 v1.5 signature verification: only fixtures/harness (test-only,
+    # never deployed) uses node-forge, and only to *generate* test certificates; it never
+    # verifies signatures. No patched version exists yet.
+    - GHSA-86w9-cpqp-85rv

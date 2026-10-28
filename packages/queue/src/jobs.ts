@@ -5,6 +5,11 @@ import { z } from "zod";
 export const RunJobPayload = z.object({
   runId: z.uuid(),
   orgId: z.uuid(),
+  /** W3C traceparent of the enqueuer, so the job's spans join its trace (Section 19). */
+  traceparent: z
+    .string()
+    .regex(/^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/)
+    .optional(),
 });
 export type RunJobPayload = z.infer<typeof RunJobPayload>;
 

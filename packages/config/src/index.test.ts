@@ -28,6 +28,8 @@ function validEnv(): Record<string, string> {
     GITHUB_OAUTH_CLIENT_ID: "Iv1.abc",
     GITHUB_OAUTH_CLIENT_SECRET: randomBytes(20).toString("hex"),
     GITHUB_APP_ID: "123456",
+    GITHUB_APP_CLIENT_ID: "Iv1.abcdef0123456789",
+    GITHUB_APP_CLIENT_SECRET: "app-client-secret-for-tests",
     GITHUB_APP_PRIVATE_KEY: pem.replace(/\n/g, "\\n"),
     GITHUB_WEBHOOK_SECRET: randomBytes(20).toString("hex"),
     EMAIL_FROM: "alerts@codesentra.dev",

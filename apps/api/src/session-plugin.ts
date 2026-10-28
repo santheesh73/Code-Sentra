@@ -7,6 +7,8 @@ export const SESSION_COOKIE = "cs_session";
 declare module "fastify" {
   interface FastifyRequest {
     user: UserRow | null;
+    /** Set when the request authenticated with an API token: the only org it may act in. */
+    tokenOrgId: string | null;
   }
 }
 
@@ -50,8 +52,24 @@ export function registerSession(
   opts: { appOrigin: string; cookie: CookieSettings; exemptPrefixes: string[] },
 ): void {
   app.decorateRequest("user", null);
+  app.decorateRequest("tokenOrgId", null);
   app.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {
     const path = req.url.split("?")[0] ?? "";
+    // API tokens (CLI): no ambient credential, so no CSRF check; cookies are ignored.
+    const bearer = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization ?? "")?.[1];
+    if (bearer && !opts.exemptPrefixes.some((p) => path.startsWith(p))) {
+      const found = await auth.lookupApiToken(bearer);
+      if (!found)
+        throw new HttpError(
+          401,
+          "unauthorized",
+          "Authentication required",
+          "The API token is invalid, expired or revoked",
+        );
+      req.user = found.user;
+      req.tokenOrgId = found.orgId;
+      return;
+    }
     if (!SAFE_METHODS.has(req.method) && !opts.exemptPrefixes.some((p) => path.startsWith(p))) {
       const origin = req.headers.origin;
       const referer = req.headers.referer;

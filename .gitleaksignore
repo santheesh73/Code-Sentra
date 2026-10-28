@@ -1,0 +1,3 @@
+# A fake bypass value for the fixture harness's access-protected simulator (test only),
+# committed in 1488c2b and replaced by an obviously fake string in the next commit.
+1488c2b5a5af8d3e34a0095138b79c46910bdd15:fixtures/harness/src/harness.ts:generic-api-key:11

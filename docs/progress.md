@@ -1,5 +1,132 @@
 # Progress
 
+## Phase 5 — GitHub, schedules and hardening (2026-10-28)
+
+### Built
+
+- **GitHub App (ADR 0021).**
+  - `packages/github`: App JWT, cached installation tokens, check runs, compare, zipballs
+    (size-capped), and the OAuth proof that a user can access an installation.
+  - `POST /v1/webhooks/github`: the signature is checked over the raw bytes; each
+    delivery is processed once (a failed one can be redelivered). It handles
+    `installation`, `installation_repositories`, `pull_request`, `deployment_status` and
+    `push`.
+  - Pull requests: a `github` snapshot of the head commit → `scan.incremental` → Link in
+    PR mode → one "CodeSentra" check run per (project, head SHA).
+  - Deployments: preview deployments run Pulse into the same check run, traced against
+    the commit's Scan. Production deployments and default-branch pushes
+    (`check_on_push`) update the project's issues.
+  - Installation linking needs a signed state plus GitHub's confirmation that the user
+    can access the installation. Installation data is sealed at rest.
+- **PR mode.** A branch never opens or resolves project issues. Its check reports the
+  drafts that are not already open, with Scan findings limited to the changed files and
+  their blast radius. The check-run text holds each issue's prompt.
+- **Schedules (ADR 0022).** Recurring Pulse with five-field UTC cron (pure parser in
+  core), at least 5 minutes apart. worker-link's ticker claims due schedules with
+  `SKIP LOCKED`.
+- **Alerts.** `packages/notify` renders one alert per run (email text/HTML and Slack
+  blocks), each issue with its prompt. Link sends it after a sync run opens or regresses
+  issues.
+  - Email channels go to org members only.
+  - Slack is added by OAuth only.
+  - Destinations are sealed at rest.
+- **API tokens + CLI.**
+  - `cs_…` tokens are bound to one org, stored as sha256 only, expire in 90 days, and
+    their creation and revocation are audited.
+  - `codesentra login` verifies the token and stores it with mode 0600.
+  - `codesentra check --project <id> [--wait]` uses the Section 15 exit codes, and its
+    runs have trigger `cli`.
+- **Protected previews.** Per-environment bypass tokens are sealed, set by admins only,
+  never returned, and never recorded in evidence. The Pulse job uses them.
+- **Section 17 hardening** (mapped item by item in `docs/security.md`):
+  - run limits per org, user, run type and target host (429 + `Retry-After`);
+  - an audit-log endpoint;
+  - a test that no secret reaches the report model;
+  - CI dependency scanning (`pnpm audit`) and image scanning (Trivy, pinned by digest).
+- **Observability (ADR 0023).** `packages/telemetry`:
+  - API handlers, jobs and every worker step are spans;
+  - one trace runs API → queue → worker through `traceparent` in the job payload;
+  - Sentry gets final job failures and API 5xx, scrubbed of bodies, cookies and auth.
+- **Production images and deployment config:**
+  - images: `infra/node` (API, worker-link) and `infra/scan` (worker-scan), all non-root;
+  - `render.yaml` (no auto-deploy), `apps/web/vercel.json`,
+    `infra/deploy/worker-scan.compose.yml`;
+  - `docs/runbook.md`.
+- **Web.**
+  - Org settings: GitHub App, API tokens (shown once), audit log.
+  - Project settings: repository binding, bypass tokens, schedules, email and Slack
+    channels.
+  - The API proxy forwards `Authorization` and GitHub's webhook headers.
+
+### Decisions
+
+- ADR 0021: GitHub snapshots, PR mode, one check run per commit, installation-scoped
+  routing.
+- ADR 0022: the scheduler is a ticker; `startLinked` moves to `packages/queue`; alerts come
+  from Link; tokens are org-bound; limits are counted from `runs`.
+- ADR 0023: spans without auto-instrumentation; Sentry for errors only; image layout and
+  the deployment topology.
+
+### Deferred or partial
+
+- **The real-GitHub gate has not been run.** It needs a GitHub App, a test repository with
+  preview deployments, and hosting (`docs/runbook.md` §7). CI runs the same flow against a
+  local fake of the GitHub API.
+- **Nothing is deployed.** The configs are written but untested on Render and Vercel.
+  Render passing `SERVICE` to the Docker build, and `generateValue` producing a valid
+  `ENCRYPTION_KEY`, are to be confirmed on the first deploy.
+- **The worker-scan image's apt step** could not run here: this session's network blocks
+  the Debian mirrors. The CI `images` job builds and checks it.
+- **`ENCRYPTION_KEY` rotation** needs a re-seal command, which does not exist yet.
+- **`scan.incremental`** scans the whole head tree (cached by tree hash). Only Link's
+  reporting is incremental.
+- **Snapshots from GitHub have no git history,** so history-based checks are gaps for them.
+- **Schedules** are Pulse only (Section 12). A missed window is not replayed.
+
+### Known risks
+
+- **Vercel's 4.5 MB request limit** applies to the web proxy. Large zip uploads and GitHub
+  push payloads must go to the API's own URL (the runbook points the webhook there).
+- **Managed Postgres may refuse `CREATE ROLE`.** The runbook gives the one-time admin
+  statement.
+- **Bursts of webhooks for one org can hit the per-org run limit.** Those deliveries fail
+  with 429 and must be redelivered from GitHub.
+
+### Gate result
+
+The automated part of the gate runs in CI. Run after the last code change, on 2026-10-28:
+
+```
+pnpm lint          Checked 506 files. No fixes applied.
+pnpm typecheck     Tasks: 61 successful, 61 total
+pnpm build         Tasks: 30 successful, 30 total
+pnpm test          20 packages, 547 tests, 0 failed
+  @codesentra/api              58 passed   (incl. the Phase 5 gate below; schedules, alerts,
+                                            tokens, limits, bypass tokens, tracing; cross-org
+                                            on every route)
+  @codesentra/scan             64 passed   (incl. "no secret reaches the report model")
+  @codesentra/ssrf             71 passed   @codesentra/core      65 passed
+  @codesentra/fixture-harness  46 passed   @codesentra/cli       26 passed
+  (and config, parsers, storage, telemetry, sandbox, notify, prompts, claims, graph,
+   db, github, queue, link, checks)
+pnpm e2e           13 passed   (Phase 1–4 gates and the Phase 5 settings spec)
+```
+
+- **Gate, part 1** (`apps/api/src/__tests__/github.test.ts`, against a local fake of the
+  GitHub API and the real fixture apps in Chromium):
+  - A pull request introducing `env-undefined` gets a CodeSentra check that ends
+    `failure`, titled "Degraded", once its preview deployment is checked. Its text holds
+    the `UNDEFINED_IN_URL` issue with the `code_fix` prompt naming `NEXT_PUBLIC_API_URL`
+    and `app/page.tsx:9`.
+  - The follow-up commit that fixes it gets a `success` check ("Live").
+  - The project's issues are untouched.
+- **Gate, part 2:** the Section 17 checklist is ticked item by item, with the enforcing
+  code and tests, in `docs/security.md`.
+- **Not run:** the same flow on real GitHub with real preview deployments (runbook §7).
+  It needs the GitHub App credentials, a test repository and hosting, which only the
+  project owner can provide. **Phase 5 is complete in CI but not yet verified on real
+  GitHub.**
+
 ## Phase 4 — Sentra Link (2026-10-22)
 
 ### Built

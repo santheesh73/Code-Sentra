@@ -79,7 +79,12 @@ const NOT_TENANT_SCOPED: Record<string, string> = {
   "GET /v1/orgs": "lists only the caller's memberships",
   "POST /v1/orgs": "creates a new org owned by the caller",
 
-  "POST /v1/webhooks/github": "unbuilt; HMAC-authenticated by GitHub, not by session",
+  "POST /v1/webhooks/github":
+    "HMAC-authenticated by GitHub, not by session; routed by installation",
+  "GET /v1/slack/callback":
+    "the project comes from the signed state (bound to the caller) and is re-authorized",
+  "GET /v1/github/setup":
+    "the org comes from the signed state (bound to the caller) and is admin-checked",
 };
 
 const attacks = (): Record<string, Attack> => {
@@ -133,6 +138,38 @@ const attacks = (): Record<string, Attack> => {
     "GET /v1/runs/:id/report": { url: `/v1/runs/${B.run}/report` },
     "POST /v1/projects/:id/check": { url: `/v1/projects/${B.project}/check`, payload: {} },
     "POST /v1/issues/:id/recheck": { url: `/v1/issues/${B.issue}/recheck` },
+    "GET /v1/github/install": { url: `/v1/github/install?org_id=${B.org}` },
+    "GET /v1/orgs/:id/github/installations": { url: `/v1/orgs/${B.org}/github/installations` },
+    "POST /v1/projects/:id/schedules": {
+      url: `/v1/projects/${B.project}/schedules`,
+      payload: { environment_id: B.env, cron: "*/30 * * * *" },
+    },
+    "GET /v1/projects/:id/schedules": { url: `/v1/projects/${B.project}/schedules` },
+    "DELETE /v1/projects/:id/schedules": {
+      url: `/v1/projects/${B.project}/schedules?schedule_id=${B.project}`,
+    },
+    "GET /v1/projects/:id/notifications": { url: `/v1/projects/${B.project}/notifications` },
+    "POST /v1/projects/:id/notifications": {
+      url: `/v1/projects/${B.project}/notifications`,
+      payload: { kind: "email", email: "attacker@example.com" },
+    },
+    "DELETE /v1/projects/:id/notifications": {
+      url: `/v1/projects/${B.project}/notifications?channel_id=${B.project}`,
+    },
+    "GET /v1/projects/:id/notifications/slack/install": {
+      url: `/v1/projects/${B.project}/notifications/slack/install`,
+    },
+    "POST /v1/orgs/:id/tokens": { url: `/v1/orgs/${B.org}/tokens`, payload: { name: "evil" } },
+    "GET /v1/orgs/:id/tokens": { url: `/v1/orgs/${B.org}/tokens` },
+    "DELETE /v1/orgs/:id/tokens/:tokenId": { url: `/v1/orgs/${B.org}/tokens/${B.project}` },
+    "GET /v1/orgs/:id/audit": { url: `/v1/orgs/${B.org}/audit` },
+    "PUT /v1/projects/:id/environments/:envId/bypass-token": {
+      url: `/v1/projects/${B.project}/environments/${B.env}/bypass-token`,
+      payload: { token: "attacker-token-123" },
+    },
+    "DELETE /v1/projects/:id/environments/:envId/bypass-token": {
+      url: `/v1/projects/${B.project}/environments/${B.env}/bypass-token`,
+    },
   };
   for (const r of UNBUILT) {
     if (r.scope === "project")
@@ -182,7 +219,7 @@ describe("cross-org access", () => {
   it("answers 404 on every tenant route and leaves the other org untouched", async () => {
     const before = await snapshotB();
     for (const [key, attack] of Object.entries(attacks())) {
-      const method = key.split(" ")[0] as "GET" | "POST" | "PATCH" | "DELETE";
+      const method = key.split(" ")[0] as "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
       const res = await api.app.inject({
         method,
         url: attack.url,
@@ -197,7 +234,7 @@ describe("cross-org access", () => {
 
   it("unauthenticated requests to tenant routes get 401, not data", async () => {
     for (const [key, attack] of Object.entries(attacks())) {
-      const method = key.split(" ")[0] as "GET" | "POST" | "PATCH" | "DELETE";
+      const method = key.split(" ")[0] as "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
       const res = await api.app.inject({
         method,
         url: attack.url,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, FileArchive, GitBranch, ShieldCheck } from "lucide-react";
+import { Activity, FileArchive, GitBranch, Settings, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
@@ -102,6 +102,12 @@ export default function ProjectPage() {
           {p.repo_url && <p className="truncate text-sm text-muted-foreground">{p.repo_url}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/projects/${id}/settings`}
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <Settings aria-hidden className="size-4" /> Settings
+          </Link>
           <Button onClick={() => check.mutate()} disabled={check.isPending}>
             <ShieldCheck aria-hidden className="size-4" />
             {check.isPending ? "Starting…" : "Run full check"}

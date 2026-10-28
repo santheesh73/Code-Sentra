@@ -220,7 +220,13 @@ export function authRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             "Authentication required",
             "Sign in to continue",
           );
-        return { user: userDto(req.user), organizations: await listMyOrgs(ctx, req.user.id) };
+        const orgs = await listMyOrgs(ctx, req.user.id);
+        // An API token sees only the org it is bound to.
+        const token = req.tokenOrgId;
+        return {
+          user: userDto(req.user),
+          organizations: token ? orgs.filter((o) => o.id === token) : orgs,
+        };
       },
     );
   };

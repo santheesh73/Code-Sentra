@@ -18,6 +18,13 @@ export function requireUser(req: FastifyRequest): UserRow {
   return req.user;
 }
 
+/** Account-level actions (tokens, sign-out) need a signed-in session, not an API token. */
+export function requireSessionUser(req: FastifyRequest): UserRow {
+  const user = requireUser(req);
+  if (req.tokenOrgId) throw forbidden("This action needs a signed-in session, not an API token");
+  return user;
+}
+
 export function createAuthz(db: Database) {
   async function roleIn(userId: string, orgId: string): Promise<MembershipRole | null> {
     const [m] = await db.system
@@ -38,6 +45,8 @@ export function createAuthz(db: Database) {
     what = "Organization",
   ): Promise<OrgAccess> {
     const user = requireUser(req);
+    // An API token reaches only its own org; anything else looks absent.
+    if (req.tokenOrgId && req.tokenOrgId !== orgId) throw notFound(what);
     const role = await roleIn(user.id, orgId);
     if (!role) throw notFound(what);
     if (RANK[role] < RANK[minRole]) throw forbidden();

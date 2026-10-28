@@ -121,18 +121,66 @@ jobs:
       - if: always()
         run: docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures down -v
 
-  # The Pulse worker image: pinned Chromium must launch inside it.
-  pulse-image:
+  # Production images (Section 17: container image scanning). Each image is built, smoke
+  # tested, and scanned with Trivy: a CRITICAL vulnerability that has a fix fails the job;
+  # HIGH ones are listed for review (docs/security.md).
+  images:
     runs-on: ubuntu-24.04
+    env:
+      TRIVY: ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
     steps:
       - uses: actions/checkout@v5
-      - run: docker build -f infra/pulse/Dockerfile -t codesentra/worker-pulse:ci .
-      - name: Chromium launches in the image
+      - name: Build
+        run: |
+          docker build -f infra/node/Dockerfile --build-arg SERVICE=api -t codesentra/api:ci .
+          docker build -f infra/node/Dockerfile --build-arg SERVICE=worker-link -t codesentra/worker-link:ci .
+          docker build -f infra/scan/Dockerfile -t codesentra/worker-scan:ci .
+          docker build -f infra/pulse/Dockerfile -t codesentra/worker-pulse:ci .
+      - name: Chromium launches in the Pulse image
         run: >-
           docker run --rm codesentra/worker-pulse:ci node -e
           "import('@codesentra/checks').then(async (m) => { const r = await m.launchPulseBrowser();
           if (!r.browser) { console.error(r.reason); process.exit(1); }
           console.log('chromium', r.browser.version()); await r.browser.close(); })"
+      - name: The scan image has git and the Docker CLI, as a non-root user
+        run: |
+          docker run --rm --entrypoint sh codesentra/worker-scan:ci -c 'git --version && docker --version && test "$(id -u)" != 0'
+      - name: API migrates and answers /health
+        run: |
+          docker network create smoke
+          docker run -d --name pg --network smoke -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=cs postgres:16.15-alpine
+          for i in $(seq 1 30); do docker exec pg pg_isready -U postgres && break; sleep 1; done
+          ENVS="-e NODE_ENV=development -e DATABASE_URL=postgres://postgres:pw@pg:5432/cs -e SESSION_SECRET=$(openssl rand -hex 32) -e ENCRYPTION_KEY=$(openssl rand -base64 32) -e PUBLIC_APP_URL=https://app.example.test -e API_HOST=0.0.0.0"
+          docker run --rm --network smoke $ENVS --entrypoint node codesentra/api:ci node_modules/@codesentra/db/dist/migrate-cli.js
+          docker run -d --name api --network smoke $ENVS -p 4000:4000 codesentra/api:ci
+          docker run -d --name wl --network smoke $ENVS codesentra/worker-link:ci
+          for i in $(seq 1 30); do curl -fsS localhost:4000/health && break; sleep 1; done
+          curl -fsS localhost:4000/health | grep -q '"status":"ok"'
+          sleep 3 && docker logs wl 2>&1 | grep -q "worker-link ready"
+      - name: Scan images (Trivy)
+        run: |
+          for img in api worker-link worker-scan worker-pulse; do
+            echo "::group::codesentra/$img"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image \
+              --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --no-progress codesentra/$img:ci
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image \
+              --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --quiet codesentra/$img:ci
+            echo "::endgroup::"
+          done
+
+  # Dependency scanning (Section 17): known high/critical advisories in production
+  # dependencies fail the build. Accepted exceptions live in pnpm-workspace.yaml with a reason.
+  deps:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod --audit-level=high
 
   secrets:
     runs-on: ubuntu-24.04

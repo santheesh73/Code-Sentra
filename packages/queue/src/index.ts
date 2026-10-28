@@ -14,6 +14,13 @@ export {
 } from "./events.js";
 export { JOB_SPECS, type JobSpec, RunJobPayload, timeoutFor } from "./jobs.js";
 export {
+  type ChildRun,
+  type DueSchedulesResult,
+  runDueSchedules,
+  type StartLinkedInput,
+  startLinked,
+} from "./orchestrate.js";
+export {
   type JobContext,
   type JobHandler,
   type Logger,

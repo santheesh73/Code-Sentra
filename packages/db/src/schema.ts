@@ -18,6 +18,7 @@ import {
 } from "@codesentra/core";
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   foreignKey,
@@ -157,8 +158,16 @@ export const projects = pgTable(
     repoUrl: text("repo_url"),
     defaultBranch: text("default_branch"),
     platform: text("platform"),
+    /** `owner/repo` the org's GitHub App installation covers (Section 16). */
+    githubRepo: text("github_repo"),
+    /** Run a full check on every push to the default branch. */
+    checkOnPush: boolean("check_on_push").notNull().default(false),
   },
-  (t) => [unique("projects_org_id_id_key").on(t.orgId, t.id), index().on(t.orgId)],
+  (t) => [
+    unique("projects_org_id_id_key").on(t.orgId, t.id),
+    unique("projects_org_github_repo_key").on(t.orgId, t.githubRepo),
+    index().on(t.orgId),
+  ],
 );
 
 export const environments = pgTable(
@@ -458,6 +467,8 @@ export const snapshots = pgTable(
     storageKey: text("storage_key"),
     sizeBytes: integer("size_bytes"),
     fileCount: integer("file_count"),
+    /** kind github: fetched as the repository zipball with this installation's token. */
+    githubInstallationId: bigint("github_installation_id", { mode: "number" }),
   },
   (t) => [
     foreignKey({
@@ -645,6 +656,148 @@ export const claims = pgTable(
 );
 
 /** Tables with an `org_id` column, protected by the tenant RLS policy. */
+/**
+ * GitHub App installations. The installation webhook can arrive before anyone links it
+ * to an org, so `org_id` is null until the setup callback does (with a signed state).
+ * The account and repository list are sealed at rest (Section 17).
+ */
+export const githubInstallations = pgTable("github_installations", {
+  ...base,
+  installationId: bigint("installation_id", { mode: "number" }).notNull().unique(),
+  orgId: uuid("org_id").references(() => organizations.id, { onDelete: "set null" }),
+  /** sealSecret(JSON { account, repositories }) with purpose "github-installation". */
+  sealed: text("sealed").notNull(),
+  suspended: boolean("suspended").notNull().default(false),
+});
+
+/** Every webhook delivery, once (X-GitHub-Delivery is unique): replays are no-ops. */
+export const webhookDeliveries = pgTable("webhook_deliveries", {
+  ...base,
+  provider: text("provider").notNull(),
+  deliveryId: text("delivery_id").notNull().unique(),
+  event: text("event").notNull(),
+  status: text("status").notNull(),
+  detail: text("detail"),
+});
+
+/** The CodeSentra check run of one commit (Section 16: matched by head SHA). */
+export const githubCheckRuns = pgTable(
+  "github_check_runs",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    repo: text("repo").notNull(),
+    headSha: text("head_sha").notNull(),
+    baseSha: text("base_sha"),
+    prNumber: integer("pr_number"),
+    installationId: bigint("installation_id", { mode: "number" }).notNull(),
+    /** GitHub's id; null until it could be created. */
+    checkRunId: bigint("check_run_id", { mode: "number" }),
+    /** The commit's Scan (Link traces the deployment's Pulse against it). */
+    scanRunId: uuid("scan_run_id"),
+    /** The latest Link run reporting into this check run. */
+    linkRunId: uuid("link_run_id"),
+    changedFiles: text("changed_files").array().notNull().default(sql`'{}'::text[]`),
+  },
+  (t) => [
+    foreignKey({
+      name: "github_check_runs_project_fk",
+      columns: [t.orgId, t.projectId],
+      foreignColumns: [projects.orgId, projects.id],
+    }).onDelete("cascade"),
+    unique("github_check_runs_project_sha_key").on(t.projectId, t.headSha),
+    index().on(t.linkRunId),
+  ],
+);
+
+// --- Schedules, notifications, API tokens (Phase 5) --------------------------------
+
+/** A recurring Pulse of one environment (Section 6). `next_run_at` is when it is due. */
+export const schedules = pgTable(
+  "schedules",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    environmentId: uuid("environment_id").notNull(),
+    cron: text("cron").notNull(),
+    runType: text("run_type").notNull().default("pulse"),
+    enabled: boolean("enabled").notNull().default(true),
+    nextRunAt: tz("next_run_at").notNull(),
+    lastRunId: uuid("last_run_id"),
+    lastRunAt: tz("last_run_at"),
+    lastError: text("last_error"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    foreignKey({
+      name: "schedules_project_fk",
+      columns: [t.orgId, t.projectId],
+      foreignColumns: [projects.orgId, projects.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "schedules_environment_fk",
+      columns: [t.orgId, t.environmentId],
+      foreignColumns: [environments.orgId, environments.id],
+    }).onDelete("cascade"),
+    check("schedules_run_type", sql`${t.runType} = 'pulse'`),
+    index().on(t.nextRunAt),
+    index().on(t.projectId),
+  ],
+);
+
+/**
+ * Where a project's alerts go. `sealed` holds the destination (an email address or a
+ * Slack incoming-webhook URL), sealed with purpose "notification-target"; `label` is a
+ * masked form for display.
+ */
+export const notificationChannels = pgTable(
+  "notification_channels",
+  {
+    ...base,
+    orgId: uuid("org_id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    kind: text("kind").notNull(),
+    label: text("label").notNull(),
+    sealed: text("sealed").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    lastError: text("last_error"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    foreignKey({
+      name: "notification_channels_project_fk",
+      columns: [t.orgId, t.projectId],
+      foreignColumns: [projects.orgId, projects.id],
+    }).onDelete("cascade"),
+    check("notification_channels_kind", sql`${t.kind} in ('email', 'slack')`),
+    index().on(t.projectId),
+  ],
+);
+
+/** Bearer tokens for the CLI and API: bound to one user and one org; only the hash is kept. */
+export const apiTokens = pgTable(
+  "api_tokens",
+  {
+    ...base,
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    /** The first characters of the token, shown so a user can tell tokens apart. */
+    prefix: text("prefix").notNull(),
+    expiresAt: tz("expires_at"),
+    lastUsedAt: tz("last_used_at"),
+    revokedAt: tz("revoked_at"),
+  },
+  (t) => [uniqueIndex("api_tokens_token_hash_key").on(t.tokenHash), index().on(t.orgId, t.userId)],
+);
+
 export const TENANT_TABLES = [
   "memberships",
   "projects",
@@ -665,4 +818,8 @@ export const TENANT_TABLES = [
   "reports",
   "claims",
   "traces",
+  "github_check_runs",
+  "schedules",
+  "notification_channels",
+  "api_tokens",
 ] as const;

@@ -1,3 +1,4 @@
+import { withSpan } from "@codesentra/telemetry";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
@@ -14,13 +15,17 @@ import type { AppContext } from "./context.js";
 import { registerErrorHandling } from "./errors.js";
 import { authRoutes } from "./routes/auth.js";
 import { checkRoutes } from "./routes/check.js";
+import { githubRoutes } from "./routes/github.js";
 import { healthRoutes } from "./routes/health.js";
 import { issueRoutes } from "./routes/issues.js";
+import { notificationRoutes } from "./routes/notifications.js";
 import { orgRoutes } from "./routes/orgs.js";
 import { projectRoutes } from "./routes/projects.js";
 import { pulseRoutes } from "./routes/pulse.js";
 import { runRoutes } from "./routes/runs.js";
 import { scanRoutes } from "./routes/scan.js";
+import { scheduleRoutes } from "./routes/schedules.js";
+import { tokenRoutes } from "./routes/tokens.js";
 import { unbuiltRoutes } from "./routes/unbuilt.js";
 import { registerSession } from "./session-plugin.js";
 
@@ -50,6 +55,17 @@ export async function buildApp(
   app.setSerializerCompiler(serializerCompiler);
 
   const routes: RegisteredRoute[] = [];
+  // Every handler runs in a span named by its route (Section 19), so jobs it enqueues
+  // carry the request's trace to the workers.
+  app.addHook("onRoute", (r) => {
+    const handler = r.handler;
+    const name = `${[r.method].flat().join(",")} ${r.url}`;
+    r.handler = function traced(this: unknown, req, reply) {
+      return withSpan(name, { "http.route": r.url, "http.request.method": req.method }, () =>
+        Promise.resolve((handler as (...a: unknown[]) => unknown).call(this, req, reply)),
+      );
+    } as typeof r.handler;
+  });
   app.addHook("onRoute", (r) => {
     if (r.url.startsWith("/v1/") || r.url === "/health") {
       for (const m of [r.method].flat()) if (m !== "HEAD") routes.push({ method: m, url: r.url });
@@ -60,7 +76,9 @@ export async function buildApp(
   // Only JSON bodies are accepted, which (with SameSite=Lax and the Origin check) blocks
   // form-based CSRF: browsers cannot send application/json cross-site without CORS.
   app.removeAllContentTypeParsers();
-  app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
+    // Webhook signatures are over the exact bytes received.
+    if (req.url.startsWith("/v1/webhooks/")) (req as { rawBody?: string }).rawBody = body as string;
     if (body === "") return done(null, undefined);
     try {
       done(null, JSON.parse(body as string));
@@ -87,9 +105,12 @@ export async function buildApp(
           "Errors are RFC 9457 problem+json. Long operations return 202 with a run id. Endpoints for later phases answer 501.",
       },
       components: {
-        securitySchemes: { session: { type: "apiKey", in: "cookie", name: "cs_session" } },
+        securitySchemes: {
+          session: { type: "apiKey", in: "cookie", name: "cs_session" },
+          token: { type: "http", scheme: "bearer", description: "An API token (cs_…)" },
+        },
       },
-      security: [{ session: [] }],
+      security: [{ session: [] }, { token: [] }],
     },
     transform: jsonSchemaTransform,
     // Emits the `.meta({ id })` schemas as components, so every $ref resolves.
@@ -111,6 +132,10 @@ export async function buildApp(
   await app.register(scanRoutes(ctx));
   await app.register(checkRoutes(ctx));
   await app.register(issueRoutes(ctx));
+  await app.register(githubRoutes(ctx));
+  await app.register(scheduleRoutes(ctx));
+  await app.register(notificationRoutes(ctx));
+  await app.register(tokenRoutes(ctx));
   await app.register(unbuiltRoutes(ctx));
 
   app.get("/v1/openapi.json", { schema: { hide: true } }, async () => app.swagger());

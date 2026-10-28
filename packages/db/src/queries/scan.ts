@@ -22,8 +22,9 @@ export async function createSnapshot(
   input: {
     orgId: string;
     projectId: string;
-    kind: "git" | "zip";
+    kind: "git" | "zip" | "github";
     sourceUrl?: string | null;
+    githubInstallationId?: number | null;
     ref?: string | null;
     storageKey?: string | null;
     sizeBytes?: number | null;
@@ -39,6 +40,7 @@ export async function createSnapshot(
       ref: input.ref ?? null,
       storageKey: input.storageKey ?? null,
       sizeBytes: input.sizeBytes ?? null,
+      githubInstallationId: input.githubInstallationId ?? null,
       hasHistory: input.kind === "git",
     })
     .returning();

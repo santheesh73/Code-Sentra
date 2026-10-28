@@ -16,6 +16,10 @@
     "./hashing": {
       "types": "./dist/hashing.d.ts",
       "default": "./dist/hashing.js"
+    },
+    "./crypto": {
+      "types": "./dist/crypto.d.ts",
+      "default": "./dist/crypto.js"
     }
   },
   "scripts": {

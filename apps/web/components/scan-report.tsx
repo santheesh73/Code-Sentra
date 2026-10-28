@@ -111,7 +111,9 @@ export function ScanReportView({ runId }: { runId: string }) {
   };
 
   return (
-    <>
+    // Report text carries paths and package coordinates, long unbroken tokens that must
+    // wrap on a phone. `contents` keeps the parent's layout.
+    <div className="contents [overflow-wrap:anywhere]">
       {r.cached && (
         <Notice tone="info" title="Reused report">
           This tree is identical to one already scanned, so that scan&apos;s report is shown.
@@ -291,6 +293,6 @@ export function ScanReportView({ runId }: { runId: string }) {
 
       <PulseFindings runId={r.source_run_id} screenshot={false} />
       <EvidenceDrawer evidence={evidence} onClose={() => setEvidence(null)} />
-    </>
+    </div>
   );
 }

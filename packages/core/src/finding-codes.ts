@@ -59,7 +59,10 @@ export type RecheckDescriptor =
   | {
       module: "pulse";
       checkGroup: PulseCheckGroup;
-      /** Human-readable expectation; `{locator}` is replaced with the issue's locator. */
+      /**
+       * Human-readable expectation; `{locator}` is replaced with the issue's locator and
+       * `{discriminator}` with its discriminator (the locator when it has none).
+       */
       expectation: string;
     }
   | {
@@ -360,7 +363,7 @@ const PULSE_DECLS: Record<PulseCode, Decl> = {
     "warning",
     "config_fix",
     "Missing security header",
-    "response sets {locator}",
+    "the response from {locator} sets {discriminator}",
     50,
   ),
 };

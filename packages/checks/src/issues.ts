@@ -135,7 +135,7 @@ export function draftIssues(
       summary: leader.message,
       corroboratingCodes: members.slice(1).map((m) => m.code),
       findingIndexes: members.map((m) => m.index),
-      recheck: recheckFor(code, leader.locator, ctx.target.url),
+      recheck: recheckFor(code, leader.locator, ctx.target.url, leader.discriminator),
       prompt,
       trace: linked.trace,
     };

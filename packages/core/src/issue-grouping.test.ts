@@ -23,6 +23,26 @@ describe("groupFindings", () => {
     ]);
     expect(groups).toHaveLength(2);
   });
+
+  it("keeps same-code findings on shared evidence as separate issues", () => {
+    const groups = groupFindings([
+      {
+        code: "MISSING_SECURITY_HEADER" as const,
+        evidenceKey: "resp",
+        d: "Content-Security-Policy",
+      },
+      { code: "MISSING_SECURITY_HEADER" as const, evidenceKey: "resp", d: "X-Frame-Options" },
+      { code: "UNDEFINED_IN_URL" as const, evidenceKey: "req", d: "a" },
+      { code: "SAME_ORIGIN_FAILURE" as const, evidenceKey: "req", d: "b" },
+      { code: "UNDEFINED_IN_URL" as const, evidenceKey: "req", d: "c" },
+    ]);
+    expect(groups.map((g) => g.members.map((m) => m.d))).toEqual([
+      ["Content-Security-Policy"],
+      ["X-Frame-Options"],
+      ["a", "b"],
+      ["c"],
+    ]);
+  });
 });
 
 describe("recheckFor", () => {
@@ -35,5 +55,16 @@ describe("recheckFor", () => {
       target: "https://x.dev/",
       expectation: "no request matching https://x.dev/undefined/api/ping",
     });
+  });
+
+  it("names the discriminator where the declaration asks for it", () => {
+    expect(
+      recheckFor(
+        "MISSING_SECURITY_HEADER",
+        "https://x.dev/",
+        "https://x.dev/",
+        "Strict-Transport-Security",
+      ).expectation,
+    ).toBe("the response from https://x.dev/ sets Strict-Transport-Security");
   });
 });

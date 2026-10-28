@@ -86,7 +86,7 @@ function targetLine(ctx: PromptContext): string {
 }
 
 function fixedWhen(ctx: PromptContext): string {
-  const r = recheckFor(ctx.code, ctx.locator, ctx.target.url);
+  const r = recheckFor(ctx.code, ctx.locator, ctx.target.url, ctx.discriminator);
   if (r.module === "scan")
     return `## How CodeSentra will confirm the fix\nOn the next Scan of this project, CodeSentra re-runs its **${r.check_group}** checks and expects: _${r.expectation}_. When that holds, this issue closes on its own; if it comes back later, the issue reopens as regressed.`;
   return `## How CodeSentra will confirm the fix\nOn every later check of ${ctx.target.url}, CodeSentra re-runs its **${r.check_group}** checks and expects: _${r.expectation}_. When that holds, this issue closes on its own; if it comes back later, the issue reopens as regressed.`;

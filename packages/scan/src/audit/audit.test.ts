@@ -122,6 +122,7 @@ describe("Go, RubyGems and Maven lockfiles", () => {
     expect(p?.unpinned.map((u) => u.text)).toEqual(["y (git source)"]);
   });
 
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: a Maven property reference
   it("reads pom.xml dependencies, resolving ${properties}, and lists managed ones", () => {
     const p = parseLockfile(
       "pom.xml",
@@ -132,6 +133,7 @@ describe("Go, RubyGems and Maven lockfiles", () => {
         "    <dependency>",
         "      <groupId>com.fasterxml.jackson.core</groupId>",
         "      <artifactId>jackson-databind</artifactId>",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: a Maven property reference
         "      <version>${jackson.version}</version>",
         "    </dependency>",
         "    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>",

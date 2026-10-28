@@ -2,6 +2,7 @@ import { launchPulseBrowser, PULSE_GROUPS } from "@codesentra/checks";
 import { pulseHandler } from "@codesentra/checks/job";
 import { schema as s } from "@codesentra/db";
 import {
+  ACCESS_PROTECTED_BYPASS,
   type FakeSlack,
   type Harness,
   startFakeSlack,
@@ -41,6 +42,7 @@ beforeAll(async () => {
     store: null,
     getBrowser: async () => ({ browser }),
     slowThresholdMs: 3000,
+    encryptionKey: Buffer.alloc(32, 7).toString("base64"),
   });
   // Link's alerts go to an in-memory mailbox and the fake Slack.
   const sent: { to: string; subject: string; text: string }[] = [];
@@ -437,5 +439,62 @@ describe("CLI against the API (Section 15)", () => {
     const [run0] = await api.t.db.system.select().from(s.runs).where(eq(s.runs.id, result.run_id));
     expect(run0?.requestedBy).not.toBeNull();
     expect(run0?.trigger).toBe("cli");
+  }, 120_000);
+});
+
+describe("bypass tokens (Section 9, 17)", () => {
+  it("reach a protected preview, are sealed, and never appear in evidence", async () => {
+    const p = await project("protected", h.targets.simulators["access-protected"]?.url as string);
+    const env = p.environments[0]?.id as string;
+    const pulse = async () => {
+      const res = await api.app.inject({
+        method: "POST",
+        url: `/v1/projects/${p.id}/pulse`,
+        headers: as(cookie),
+        payload: { environment_id: env },
+      });
+      expect(res.statusCode, res.body).toBe(202);
+      return waitForRun(res.json().run_id);
+    };
+    expect((await pulse()).outcome.pulse_status).toBe("unverified");
+
+    const set = await api.app.inject({
+      method: "PUT",
+      url: `/v1/projects/${p.id}/environments/${env}/bypass-token`,
+      headers: as(cookie),
+      payload: { token: ACCESS_PROTECTED_BYPASS },
+    });
+    expect(set.statusCode, set.body).toBe(200);
+    expect(set.json().has_bypass_token).toBe(true);
+    expect(set.body).not.toContain(ACCESS_PROTECTED_BYPASS);
+    const [row] = await api.t.db.system
+      .select()
+      .from(s.environments)
+      .where(eq(s.environments.id, env));
+    expect(row?.bypassTokenRef).toMatch(/^v1\./);
+    expect(row?.bypassTokenRef).not.toContain(ACCESS_PROTECTED_BYPASS);
+
+    const run = await pulse();
+    expect(run.outcome.pulse_status).toBe("live");
+    const evidence = await api.t.db.system
+      .select()
+      .from(s.evidence)
+      .where(eq(s.evidence.runId, run.id));
+    expect(evidence.length).toBeGreaterThan(0);
+    expect(JSON.stringify(evidence)).not.toContain(ACCESS_PROTECTED_BYPASS);
+    const findings = await api.app.inject({
+      method: "GET",
+      url: `/v1/runs/${run.id}/findings`,
+      headers: { cookie },
+    });
+    expect(findings.body).not.toContain(ACCESS_PROTECTED_BYPASS);
+
+    const del = await api.app.inject({
+      method: "DELETE",
+      url: `/v1/projects/${p.id}/environments/${env}/bypass-token`,
+      headers: as(cookie),
+    });
+    expect(del.statusCode).toBe(204);
+    expect((await pulse()).outcome.pulse_status).toBe("unverified");
   }, 120_000);
 });

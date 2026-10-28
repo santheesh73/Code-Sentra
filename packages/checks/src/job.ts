@@ -1,4 +1,5 @@
 import type { PulseCheckGroup } from "@codesentra/core";
+import { openSecret } from "@codesentra/core/crypto";
 import {
   persistRunData,
   type RunWithSteps,
@@ -22,7 +23,12 @@ export interface PulseJobDeps {
   store: ObjectStore | null;
   getBrowser(): Promise<{ browser: Browser } | { browser: null; reason: string }>;
   slowThresholdMs: number;
+  /** ENCRYPTION_KEY, to open an environment's sealed bypass token (Section 9). */
+  encryptionKey?: string;
 }
+
+/** Purpose bound into sealed bypass tokens (apps/api routes/projects.ts). */
+export const BYPASS_PURPOSE = "bypass-token";
 
 /**
  * Steps of a Pulse run: one per check group. Issues are Sentra Link's job (its Link run
@@ -78,6 +84,18 @@ export function pulseHandler(deps: PulseJobDeps): JobHandler {
       run.type === "recheck" && recheck?.check_group
         ? [recheck.check_group as PulseCheckGroup]
         : undefined;
+    // A protected preview's bypass token is sent only to the target's own origin; it is
+    // never stored in evidence (request headers are not recorded).
+    let bypass: { header: string; value: string } | undefined;
+    if (info.env?.bypassTokenRef && deps.encryptionKey) {
+      try {
+        bypass = JSON.parse(
+          openSecret(info.env.bypassTokenRef, deps.encryptionKey, BYPASS_PURPOSE),
+        );
+      } catch {
+        bypass = undefined;
+      }
+    }
     const b = await deps.getBrowser();
 
     const result: PulseResult = await runPulse({
@@ -89,6 +107,7 @@ export function pulseHandler(deps: PulseJobDeps): JobHandler {
       scanRoutes: info.scanRoutes,
       onlyGroups: only,
       slowThresholdMs: deps.slowThresholdMs,
+      ...(bypass ? { bypass } : {}),
       onGroup: async (group, state, detail) => {
         if (state === "running") await ctx.beginStep(group);
         else if (state === "done") await ctx.endStep(group, { status: "done", log: detail });

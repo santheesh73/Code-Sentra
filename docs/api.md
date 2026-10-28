@@ -42,6 +42,8 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | POST | `/v1/projects/{id}/check` | Full check: Scan + Pulse in parallel, then Link | 202, 400, 401, 404 |
 | POST | `/v1/projects/{id}/diagnostic` | Run a platform diagnostic (database, queue, object storage) | 202, 401, 404 |
 | POST | `/v1/projects/{id}/environments` | Add a deploy URL | 201, 400, 401, 404, 409 |
+| PUT | `/v1/projects/{id}/environments/{envId}/bypass-token` | Set the environment's access-protection bypass token | 200, 400, 401, 403, 404 |
+| DELETE | `/v1/projects/{id}/environments/{envId}/bypass-token` | Remove the environment's bypass token | 204, 401, 403, 404 |
 | GET | `/v1/projects/{id}/issues` | Issues for a project, most severe first | 200, 401, 404 |
 | GET | `/v1/projects/{id}/notifications` | Notification channels | 200, 401, 404 |
 | POST | `/v1/projects/{id}/notifications` | Add an email channel | 201, 400, 401, 404 |

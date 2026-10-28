@@ -39,6 +39,8 @@ export interface Environment {
   created_at: string;
   /** Latest finished Pulse; null until checked (never assumed live). */
   status: { pulse_status: PulseStatus; run_id: string; checked_at: string; gaps: Gap[] } | null;
+  /** A bypass token for access-protected previews is stored (never returned). */
+  has_bypass_token: boolean;
 }
 export interface RunSummary {
   id: string;

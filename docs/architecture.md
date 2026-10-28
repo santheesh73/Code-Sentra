@@ -4,11 +4,11 @@ The kickoff document (Sections 1–20) is the source of truth. This file records
 exists in the repository now and how the pieces fit together. Decisions are in
 [`decisions/`](decisions/), and the HTTP API is in [`api.md`](api.md) and [`openapi.json`](openapi.json).
 
-## Current state: Phase 4 (Sentra Link)
+## Current state: Phase 5 (GitHub, schedules and hardening)
 
 ```
-Browser ──► apps/web (Next.js) ──/api/* proxy──► apps/api (Fastify) ──► Postgres 16
-                                                     │   ▲              (RLS, pg-boss)
+Browser, CLI ─► apps/web (Next.js) ──/api/* proxy──► apps/api (Fastify) ──► Postgres 16
+GitHub webhooks ─────────────────────────────────┘    │   ▲              (RLS, pg-boss)
                                                      │   └── LISTEN cs_run_events ◄──┐
                                                      └── enqueue (job id = run id)    │
                                                                                       │
@@ -31,25 +31,35 @@ Browser ──► apps/web (Next.js) ──/api/* proxy──► apps/api (Fasti
                                                │  link.run: trace → widen → prompt → verify
                                                │  (stored evidence + code graph → traces,
                                                │  blast radius, prompts, issue lifecycle)
-                                               └── started by the completion hook when every
-                                                   child Scan/Pulse run of a check finished
+                                               ├── started by the completion hook when every
+                                               │   child Scan/Pulse run of a check finished
+                                               ├── GitHub check runs (one per commit, ADR 0021)
+                                               ├── alerts: email (Resend) + Slack webhooks
+                                               └── scheduler: fires due schedules (ADR 0022)
+
+Every handler, job and worker step is an OpenTelemetry span; the job payload carries
+the W3C traceparent (ADR 0023). Sentry receives final job failures and API 5xx.
 
 codesentra pulse <url> ── runPulse in-process (no account, no database)
 codesentra scan [path|git-url] ── runScan in-process (same sandbox and model rules)
+codesentra login / check --project <id> [--wait] ── the API with an API token
 ```
 
 ```
 apps/
-  api/            Fastify + Zod, OpenAPI 3.1, auth, orgs, projects, runs, SSE, Pulse,
-                  Scan (snapshots, scan, report), issues, evidence, fix prompts; 501s
-                  for later phases
+  api/            Fastify + Zod, OpenAPI 3.1, auth (session or API token), orgs,
+                  projects, runs, SSE, Pulse, Scan, check, issues, evidence, fix prompts,
+                  GitHub App (webhooks, install), schedules, notifications, API tokens,
+                  audit log, run limits
   web/            sign-in, projects (health score), project (Scan card, environments
                   with Pulse status, issues), run (live; Pulse status or Scan report,
-                  gaps, issues with prompts), issue, Quick Pulse, settings
+                  gaps, issues with prompts), issue, Quick Pulse, settings (members,
+                  GitHub App, API tokens, audit log), project settings (repository,
+                  bypass tokens, schedules, notifications)
   worker-pulse/   `system.diagnostic` and `pulse.run`
-  worker-scan/    `scan.run`
-  worker-link/    `link.run` (Pulse also serves `issue.recheck`)
-  cli/            `codesentra pulse`, `codesentra scan` (Section 15 exit codes)
+  worker-scan/    `scan.run`, `scan.incremental` (GitHub commits)
+  worker-link/    `link.run` (Pulse also serves `issue.recheck`), alerts, the scheduler
+  cli/            `codesentra pulse`, `scan`, `login`, `check` (Section 15 exit codes)
 packages/
   core/           finding codes, schemas, fingerprints, Pulse status rule, issue grouping,
                   re-check specs and lifecycle, deriveRunStatus
@@ -69,14 +79,26 @@ packages/
   claims/         claim verifier: evidence, tokens, numbers, statuses, check assertions
   scan/           ingest (zip, git), map, probes and output parsers, OSV audit, gitleaks,
                   inventory, report model, pipeline; `./job` is the scan.run handler
-  link/           exact-join trace rules, blast radius; `./job` is the link.run handler
+  link/           exact-join trace rules, blast radius, check-run report; `./job` is the
+                  link.run handler (issues, check runs, alerts)
+  github/         GitHub App client (JWT, installation tokens, check runs, compare,
+                  zipballs, OAuth proof of access), webhook schemas and signature check
+  notify/         alert rendering (email, Slack), email transports, Slack delivery
+  telemetry/      spans and error reporting; `./init` starts OTLP export and Sentry
+infra/node/       production image for the API and worker-link
+infra/scan/       worker-scan image (git, checksum-pinned Docker CLI)
+infra/deploy/     worker-scan on a VM with Docker + gVisor
 infra/pulse/      worker-pulse image on Playwright 1.64.1 (pinned Chromium)
 infra/sandbox/    the probe image (Python 3.12.15 + Node 22.23.4, uid 10001)
 e2e/              Playwright gates: real Postgres + MinIO + API + worker + web + fixture harness
 fixtures/         Phase 0 fixture apps, harness and repos
 ```
 
-Not built yet: the GitHub App, schedules, notifications and API tokens (Phase 5).
+Deployment (nothing is deployed automatically; see [`runbook.md`](runbook.md)): the web app
+on Vercel (`apps/web/vercel.json`); the API, worker-link, worker-pulse and Postgres on
+Render (`render.yaml`); worker-scan on a VM with Docker and gVisor
+(`infra/deploy/worker-scan.compose.yml`). Section 17 is mapped to code and tests in
+[`security.md`](security.md).
 
 ## A Pulse run
 
@@ -163,14 +185,16 @@ with a `pg_notify`, and the API's single listener pushes full run snapshots over
 `partial`. A final failed attempt marks unstarted steps skipped with the reason. A sweep
 fails runs whose job died (ADR 0012).
 
-## Data model (Phase 1–4 tables)
+## Data model (Phase 1–5 tables)
 
 `organizations`, `users`, `memberships`, `auth_identities`, `sessions`, `magic_link_tokens`,
 `projects`, `environments`, `runs`, `run_steps`, `audit_log`, `evidence`, `findings`,
 `issues`, `issue_findings`, `issue_events` (append-only under RLS), `fix_prompts`, `snapshots`,
-`code_nodes`, `code_edges`, `features`, `reports`, `claims`, `traces`. All tables have `id`,
-`created_at` and `updated_at`. Tenant tables have `org_id` with RLS, and children use composite
-`(org_id, parent_id)` foreign keys. The other Section 6 tables arrive with the phases that use them.
+`code_nodes`, `code_edges`, `features`, `reports`, `claims`, `traces`, `github_installations`
+(sealed; readable by its own org only), `webhook_deliveries` (system only),
+`github_check_runs`, `schedules`, `notification_channels` (destinations sealed), `api_tokens`
+(sha256 only). All tables have `id`, `created_at` and `updated_at`. Tenant tables have `org_id`
+with RLS, and children use composite `(org_id, parent_id)` foreign keys.
 
 ## Local development
 

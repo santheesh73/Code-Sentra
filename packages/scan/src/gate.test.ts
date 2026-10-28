@@ -8,6 +8,7 @@ import { createSandbox, type Sandbox } from "@codesentra/sandbox";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { offlineSource } from "./audit/osv.js";
 import { listTree } from "./ingest/tree.js";
+import type { ReportModel } from "./model.js";
 import { runScan, type ScanResult } from "./pipeline.js";
 
 /**
@@ -21,6 +22,23 @@ const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
 const IMAGE = process.env.SANDBOX_IMAGE ?? "codesentra/sandbox:test";
 let sandbox: Sandbox;
 const results = new Map<string, ScanResult>();
+/** Everything each repo's scan sent to the report model (Section 17: no secrets to the LLM). */
+const modelInputs = new Map<string, string[]>();
+function recording(repo: string, m: ReportModel): ReportModel {
+  const sent: string[] = [];
+  modelInputs.set(repo, sent);
+  return {
+    name: m.name,
+    proposeFeatures: (bundle) => {
+      sent.push(JSON.stringify(bundle));
+      return m.proposeFeatures(bundle);
+    },
+    draftReport: (input) => {
+      sent.push(JSON.stringify(input));
+      return m.draftReport(input);
+    },
+  };
+}
 const scratch: string[] = [];
 
 beforeAll(async () => {
@@ -49,7 +67,7 @@ beforeAll(async () => {
         sandbox: { sandbox, image: IMAGE },
         osv: { source: osv },
         secrets: { enabled: true },
-        model: { model: fixtureReportModel() },
+        model: { model: recording(repo.expected.name, fixtureReportModel()) },
       }),
     );
   }
@@ -135,6 +153,10 @@ describe.each(loadFixtureRepos().map((r) => [r.expected.name, r] as const))(
         expect(JSON.stringify(r().evidence)).not.toContain(secret);
         expect(JSON.stringify(r().findings)).not.toContain(secret);
         expect(JSON.stringify(r().claims.filter((c) => c.verified))).not.toContain(secret);
+        // ...and never reaches the model: the bundle is built from redacted evidence.
+        const sent = modelInputs.get(name) ?? [];
+        expect(sent.length).toBeGreaterThan(0);
+        for (const input of sent) expect(input).not.toContain(secret);
       }
     });
 

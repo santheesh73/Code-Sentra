@@ -2,6 +2,7 @@ export { createTestPki, type TestPki } from "./certs.js";
 export { type FakeCheckRun, type FakeGithubApp, startFakeGithubApp } from "./fake-github.js";
 export { type FakeSlack, startFakeSlack } from "./fake-slack.js";
 export {
+  ACCESS_PROTECTED_BYPASS,
   type Harness,
   type HarnessOptions,
   type HarnessTargets,

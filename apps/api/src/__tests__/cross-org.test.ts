@@ -163,6 +163,13 @@ const attacks = (): Record<string, Attack> => {
     "GET /v1/orgs/:id/tokens": { url: `/v1/orgs/${B.org}/tokens` },
     "DELETE /v1/orgs/:id/tokens/:tokenId": { url: `/v1/orgs/${B.org}/tokens/${B.project}` },
     "GET /v1/orgs/:id/audit": { url: `/v1/orgs/${B.org}/audit` },
+    "PUT /v1/projects/:id/environments/:envId/bypass-token": {
+      url: `/v1/projects/${B.project}/environments/${B.env}/bypass-token`,
+      payload: { token: "attacker-token-123" },
+    },
+    "DELETE /v1/projects/:id/environments/:envId/bypass-token": {
+      url: `/v1/projects/${B.project}/environments/${B.env}/bypass-token`,
+    },
   };
   for (const r of UNBUILT) {
     if (r.scope === "project")
@@ -212,7 +219,7 @@ describe("cross-org access", () => {
   it("answers 404 on every tenant route and leaves the other org untouched", async () => {
     const before = await snapshotB();
     for (const [key, attack] of Object.entries(attacks())) {
-      const method = key.split(" ")[0] as "GET" | "POST" | "PATCH" | "DELETE";
+      const method = key.split(" ")[0] as "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
       const res = await api.app.inject({
         method,
         url: attack.url,
@@ -227,7 +234,7 @@ describe("cross-org access", () => {
 
   it("unauthenticated requests to tenant routes get 401, not data", async () => {
     for (const [key, attack] of Object.entries(attacks())) {
-      const method = key.split(" ")[0] as "GET" | "POST" | "PATCH" | "DELETE";
+      const method = key.split(" ")[0] as "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
       const res = await api.app.inject({
         method,
         url: attack.url,

@@ -41,6 +41,7 @@ export default function ProjectSettingsPage() {
         <h1 className="text-2xl font-semibold">Project settings</h1>
       </div>
       <GithubRepoCard project={p} />
+      <BypassCard project={p} />
       <SchedulesCard project={p} />
       <NotificationsCard project={p} />
     </div>
@@ -319,6 +320,102 @@ function NotificationsCard({ project }: { project: Project }) {
       {(add.isError || remove.isError) && (
         <p role="alert" className="text-sm text-danger">
           {problemMessage(add.error ?? remove.error)}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function BypassCard({ project }: { project: Project }) {
+  const qc = useQueryClient();
+  const [env, setEnv] = useState(project.environments[0]?.id ?? "");
+  const [header, setHeader] = useState("x-vercel-protection-bypass");
+  const [token, setToken] = useState("");
+  const done = () => {
+    setToken("");
+    void qc.invalidateQueries({ queryKey: ["project", project.id] });
+  };
+  const save = useMutation({
+    mutationFn: () =>
+      api(`/v1/projects/${project.id}/environments/${env}/bypass-token`, {
+        method: "PUT",
+        body: { header, token },
+      }),
+    onSuccess: done,
+  });
+  const remove = useMutation({
+    mutationFn: (eid: string) =>
+      api(`/v1/projects/${project.id}/environments/${eid}/bypass-token`, { method: "DELETE" }),
+    onSuccess: done,
+  });
+  if (project.environments.length === 0) return null;
+  return (
+    <Card className="flex flex-col gap-3">
+      <CardTitle>Protected previews</CardTitle>
+      <p className="text-sm text-muted-foreground">
+        If an environment is behind access protection (e.g. Vercel Deployment Protection), give
+        CodeSentra a bypass token. It is stored encrypted, never shown again, and sent only to that
+        environment's own origin.
+      </p>
+      <ul className="divide-y divide-border text-sm">
+        {project.environments.map((e) => (
+          <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+            <span>
+              {e.name} · {e.has_bypass_token ? "bypass token stored" : "no bypass token"}
+            </span>
+            {e.has_bypass_token && (
+              <Button variant="ghost" size="sm" onClick={() => remove.mutate(e.id)}>
+                Remove token
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+        className="grid gap-3 sm:grid-cols-[9rem_14rem_1fr_auto] sm:items-end"
+      >
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="bypass-env">Environment</Label>
+          <Select id="bypass-env" value={env} onChange={(e) => setEnv(e.target.value)}>
+            {project.environments.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="bypass-header">Header</Label>
+          <Input
+            id="bypass-header"
+            required
+            value={header}
+            onChange={(e) => setHeader(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="bypass-token">Bypass token</Label>
+          <Input
+            id="bypass-token"
+            type="password"
+            autoComplete="off"
+            required
+            minLength={8}
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+          />
+        </div>
+        <Button type="submit" variant="outline" disabled={save.isPending}>
+          Save token
+        </Button>
+      </form>
+      {(save.isError || remove.isError) && (
+        <p role="alert" className="text-sm text-danger">
+          {problemMessage(save.error ?? remove.error)}
         </p>
       )}
     </Card>

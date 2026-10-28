@@ -308,6 +308,26 @@ describe("GitHub App (Phase 5)", () => {
     expect(issues.json()).toEqual([]);
   }, 300_000);
 
+  it("lets a failed delivery be redelivered, but never a processed one", async () => {
+    const id = randomUUID();
+    const broken = await deliver("pull_request", { action: "opened", number: 1 }, { id });
+    expect(broken.statusCode).toBe(400);
+    const [row] = await api.t.db.system
+      .select()
+      .from(s.webhookDeliveries)
+      .where(eq(s.webhookDeliveries.deliveryId, id));
+    expect(row?.status).toBe("failed");
+    const redelivered = await deliver(
+      "pull_request",
+      { ...pr("opened", shaB, shaA), repository: { full_name: "acme/unbound" } },
+      { id },
+    );
+    expect(redelivered.json()).toMatchObject({ status: "ignored" });
+    const again = await deliver("pull_request", pr("opened", shaB, shaA), { id });
+    expect(again.json()).toMatchObject({ status: "duplicate" });
+    await api.t.db.system.delete(s.webhookDeliveries).where(eq(s.webhookDeliveries.deliveryId, id));
+  });
+
   it("ignores repositories no project is bound to, and other installations", async () => {
     const other = await deliver("pull_request", {
       ...pr("opened", shaB, shaA),

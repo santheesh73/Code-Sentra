@@ -470,10 +470,16 @@ export function githubRoutes(ctx: AppContext): FastifyPluginAsyncZod {
         const deliveryId = String(req.headers["x-github-delivery"] ?? "");
         if (!/^[A-Za-z0-9-]{1,100}$/.test(deliveryId) || !event)
           throw badRequest("X-GitHub-Delivery and X-GitHub-Event are required");
+        // A delivery is processed once. One that failed (a run limit, an outage) may be
+        // redelivered from GitHub, which reuses its delivery id.
         const inserted = await ctx.db.system
           .insert(s.webhookDeliveries)
           .values({ provider: "github", deliveryId, event, status: "received" })
-          .onConflictDoNothing()
+          .onConflictDoUpdate({
+            target: s.webhookDeliveries.deliveryId,
+            set: { status: "received", detail: null, updatedAt: new Date() },
+            setWhere: eq(s.webhookDeliveries.status, "failed"),
+          })
           .returning({ id: s.webhookDeliveries.id });
         if (inserted.length === 0)
           return { status: "duplicate" as const, detail: "this delivery was already received" };

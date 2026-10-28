@@ -1,3 +1,5 @@
+import { BYPASS_PURPOSE } from "@codesentra/checks/job";
+import { sealSecret } from "@codesentra/core/crypto";
 import { countOpenIssues, createRun, failRun, schema as s, type TenantTx } from "@codesentra/db";
 import { DIAGNOSTIC_STEPS, publishRunEvent } from "@codesentra/queue";
 import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
@@ -295,6 +297,99 @@ export function projectRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             throw conflict(`An environment named ${req.body.name} already exists`);
           throw e;
         }
+      },
+    );
+
+    app.put(
+      "/v1/projects/:id/environments/:envId/bypass-token",
+      {
+        schema: {
+          tags: ["projects"],
+          summary: "Set the environment's access-protection bypass token",
+          description:
+            "For protected previews (e.g. Vercel Deployment Protection's Protection Bypass for Automation). Stored sealed with ENCRYPTION_KEY, never returned, sent only to the environment's own origin, and never recorded in evidence.",
+          params: z.object({ id: z.uuid(), envId: z.uuid() }),
+          body: z.object({
+            header: z
+              .string()
+              .regex(/^[A-Za-z0-9-]{1,64}$/)
+              .default("x-vercel-protection-bypass")
+              .refine(
+                (h) =>
+                  !["host", "cookie", "authorization", "content-length"].includes(h.toLowerCase()),
+                {
+                  message: "that header cannot carry a bypass token",
+                },
+              ),
+            token: z.string().min(8).max(512),
+          }),
+          response: { 200: EnvironmentDto, 400: Problem, 401: Problem, 403: Problem, 404: Problem },
+        },
+      },
+      async (req) => {
+        const access = await ctx.authz.requireProject(req, req.params.id, "admin");
+        const env = await ctx.db.withOrg(access.orgId, async (tx) => {
+          const [e] = await tx
+            .update(s.environments)
+            .set({
+              bypassTokenRef: sealSecret(
+                JSON.stringify({ header: req.body.header.toLowerCase(), value: req.body.token }),
+                ctx.config.ENCRYPTION_KEY,
+                BYPASS_PURPOSE,
+              ),
+            })
+            .where(
+              and(
+                eq(s.environments.id, req.params.envId),
+                eq(s.environments.projectId, req.params.id),
+              ),
+            )
+            .returning();
+          if (!e) throw notFound("Environment");
+          await tx.insert(s.auditLog).values({
+            orgId: access.orgId,
+            actorId: access.user.id,
+            action: "bypass_token.set",
+            target: `environment:${e.id}`,
+          });
+          return e;
+        });
+        return environmentDto(env);
+      },
+    );
+
+    app.delete(
+      "/v1/projects/:id/environments/:envId/bypass-token",
+      {
+        schema: {
+          tags: ["projects"],
+          summary: "Remove the environment's bypass token",
+          params: z.object({ id: z.uuid(), envId: z.uuid() }),
+          response: { 204: z.null(), 401: Problem, 403: Problem, 404: Problem },
+        },
+      },
+      async (req, reply) => {
+        const access = await ctx.authz.requireProject(req, req.params.id, "admin");
+        await ctx.db.withOrg(access.orgId, async (tx) => {
+          const [e] = await tx
+            .update(s.environments)
+            .set({ bypassTokenRef: null })
+            .where(
+              and(
+                eq(s.environments.id, req.params.envId),
+                eq(s.environments.projectId, req.params.id),
+              ),
+            )
+            .returning({ id: s.environments.id });
+          if (!e) throw notFound("Environment");
+          await tx.insert(s.auditLog).values({
+            orgId: access.orgId,
+            actorId: access.user.id,
+            action: "bypass_token.removed",
+            target: `environment:${e.id}`,
+          });
+        });
+        return reply.code(204).send(null);
       },
     );
 

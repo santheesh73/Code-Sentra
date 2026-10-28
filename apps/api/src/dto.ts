@@ -50,6 +50,8 @@ export const EnvironmentDto = z
     url: z.url(),
     created_at: ts,
     status: EnvironmentStatusDto.nullable(),
+    /** A bypass token is stored (sealed; never returned). */
+    has_bypass_token: z.boolean(),
   })
   .meta({ id: "Environment" });
 
@@ -159,6 +161,7 @@ export const environmentDto = (
     name: e.name,
     url: e.url,
     created_at: e.createdAt.toISOString(),
+    has_bypass_token: e.bypassTokenRef !== null,
     status:
       latestPulse && parsed.success
         ? {

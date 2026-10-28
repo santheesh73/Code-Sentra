@@ -7,6 +7,9 @@ import { type CertPair, createTestPki } from "./certs.js";
 import { type FixtureApp, loadFixtureApps } from "./manifest.js";
 import { FIXTURE_SECURITY_HEADERS, serveExport } from "./static-server.js";
 
+/** The bypass secret the access-protected simulator accepts (tests only). */
+export const ACCESS_PROTECTED_BYPASS = "cs-test-bypass-0123456789abcdef";
+
 export const SIMULATORS = [
   "server-error",
   "service-unavailable",
@@ -181,12 +184,16 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
   };
   sim["access-protected"] = {
     // Vercel Deployment Protection's wall: 401 from Vercel's edge.
-    url: await http((_q, r) => {
+    url: await http((q, r) => {
       r.setHeader("server", "Vercel");
       r.setHeader("x-vercel-id", "sim1::protected");
+      // Vercel's "Protection Bypass for Automation": the right secret gets the page.
+      if (q.headers["x-vercel-protection-bypass"] === ACCESS_PROTECTED_BYPASS)
+        return sendHtml(r, 200, "Protected preview, reached with the bypass secret");
       sendHtml(r, 401, "Authentication Required");
     }),
-    produces: "ACCESS_PROTECTED; render, routes and hygiene not checked (unverified)",
+    produces:
+      "ACCESS_PROTECTED; render, routes and hygiene not checked (unverified); live with the bypass header",
   };
   sim["preview-deployment"] = {
     // A healthy page served by Vercel. Reached as <project>-git-<branch>-<scope>.vercel.app

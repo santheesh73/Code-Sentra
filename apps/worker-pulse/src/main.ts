@@ -69,6 +69,7 @@ const pulse = pulseHandler({
   store,
   getBrowser,
   slowThresholdMs: config.PULSE_SLOW_THRESHOLD_MS,
+  encryptionKey: config.ENCRYPTION_KEY,
 });
 const worker = await startWorker({
   db,

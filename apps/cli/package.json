@@ -12,9 +12,10 @@
   },
   "main": "./dist/cli.js",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node bundle/build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bundle": "node bundle/build.mjs"
   },
   "dependencies": {
     "@codesentra/checks": "workspace:*",
@@ -22,9 +23,11 @@
     "@codesentra/sandbox": "workspace:*",
     "@codesentra/scan": "workspace:*",
     "@codesentra/ssrf": "workspace:*",
-    "playwright-core": "1.64.1"
+    "playwright-core": "1.64.1",
+    "@codesentra/parsers": "workspace:*"
   },
   "devDependencies": {
-    "@codesentra/fixture-harness": "workspace:*"
+    "@codesentra/fixture-harness": "workspace:*",
+    "esbuild": "0.28.2"
   }
 }

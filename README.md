@@ -7,7 +7,7 @@ an exact, verifiable fix:
 - **Sentra Link:** where in the code does each problem come from, how do we fix it, and how
   do we prove the fix?
 
-**Status:** Phase 5 (GitHub, schedules and hardening).
+**Status:** Phase 6 (the Phase 1–5 gaps closed; ADR 0024).
 - **Pulse:** paste a URL, or check a project environment, and get `live`, `degraded`,
   `down` or `unverified`, with evidence-backed issues and a fix prompt for each.
 - **Scan:** upload a zip or point at a public repository. You get:
@@ -23,10 +23,10 @@ an exact, verifiable fix:
   if it comes back).
 - **GitHub:** pull requests get a "CodeSentra" check run with each new issue and its prompt;
   preview deployments are checked by Pulse into the same check run.
-- **Schedules and alerts:** recurring Pulse per environment; email and Slack alerts carry
+- **Schedules and alerts:** recurring Pulse or full checks; email and Slack alerts carry
   every new or regressed issue's prompt.
 - **Where:** in the dashboard, and from the CLI (`codesentra pulse`, `scan`, `login`,
-  `check --project <id> --wait`).
+  `check --project <id> --wait`), which also builds as one file for npm.
 
 Deploying needs accounts and secrets only you can provide: see
 [`docs/runbook.md`](docs/runbook.md). Section 17 is mapped to code and tests in
@@ -40,6 +40,7 @@ pnpm fixtures:serve       # serve the fixture apps and failure simulators locall
 node apps/cli/dist/main.js pulse https://example.com --fix-prompt
 docker build -t codesentra/sandbox:latest infra/sandbox
 node apps/cli/dist/main.js scan path/to/project --fix-prompt
+pnpm stack:up             # or: the whole app in docker-compose on http://localhost:3000
 ```
 
 - Architecture: [`docs/architecture.md`](docs/architecture.md)

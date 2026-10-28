@@ -11,6 +11,8 @@ export interface GithubAppConfig {
   clientId?: string;
   clientSecret?: string;
   oauthBaseUrl?: string;
+  /** Where repositories are cloned from: `<gitBaseUrl>/<owner>/<repo>.git` (default https://github.com). */
+  gitBaseUrl?: string;
   /** Clock override for tests (ms since epoch). */
   now?: () => number;
   timeoutMs?: number;
@@ -134,6 +136,19 @@ export class GithubApp {
     return `/repos/${owner}/${repo}`;
   }
 
+  /** The https URL git clones `owner/repo` from. */
+  gitUrl(owner: string, repo: string): string {
+    if (!OWNER_REPO.test(owner) || !OWNER_REPO.test(repo) || repo.startsWith("."))
+      throw new GithubError(0, `invalid repository ${owner}/${repo}`);
+    return `${(this.cfg.gitBaseUrl ?? "https://github.com").replace(/\/$/, "")}/${owner}/${repo}.git`;
+  }
+
+  /** `Authorization` for git over HTTPS as the installation (the token is short-lived). */
+  async gitAuthorization(installationId: number): Promise<string> {
+    const token = await this.installationToken(installationId);
+    return `Basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
+  }
+
   async createCheckRun(installationId: number, owner: string, repo: string, input: CheckRunInput) {
     const res = await this.call(`${this.repoPath(owner, repo)}/check-runs`, {
       method: "POST",
@@ -184,6 +199,26 @@ export class GithubApp {
     });
     const data = await this.json<{ installations: { id: number }[] }>(list, "user installations");
     return data.installations.some((i) => i.id === installationId);
+  }
+
+  /** The commit SHA a branch, tag or `HEAD` (the default branch) points at. */
+  async commitSha(
+    installationId: number,
+    owner: string,
+    repo: string,
+    ref: string,
+  ): Promise<string> {
+    if (!REF.test(ref)) throw new GithubError(400, "bad ref");
+    const res = await this.call(
+      `${this.repoPath(owner, repo)}/commits/${encodeURIComponent(ref)}`,
+      {
+        auth: await this.asInstallation(installationId),
+      },
+    );
+    const body = await this.json<{ sha?: string }>(res, "commit");
+    if (!body.sha || !/^[0-9a-f]{40}$/.test(body.sha))
+      throw new GithubError(502, "GitHub returned no commit SHA");
+    return body.sha;
   }
 
   /** Files changed between two commits (a PR's base and head). */

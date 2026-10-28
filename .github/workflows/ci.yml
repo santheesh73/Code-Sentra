@@ -66,6 +66,13 @@ jobs:
           SANDBOX_IMAGE: codesentra/sandbox:ci
       - name: OpenAPI docs are up to date
         run: pnpm openapi && git diff --exit-code docs/openapi.json docs/api.md
+      - name: The single-file CLI installs from its tarball and parses code
+        run: |
+          cd apps/cli/dist/npm && npm pack --pack-destination "$RUNNER_TEMP"
+          npm install -g --prefix "$RUNNER_TEMP/cli" "$RUNNER_TEMP"/codesentra-cli-*.tgz
+          cd "$RUNNER_TEMP" && cp -r "$GITHUB_WORKSPACE/fixtures/apps/env-undefined" app
+          "$RUNNER_TEMP/cli/bin/codesentra" scan app --json > scan.json || true
+          node -e 'const r=require(process.argv[1]); if (!r.summary.envVars.read.includes("NEXT_PUBLIC_API_URL")) { console.error(JSON.stringify(r.summary)); process.exit(1) }' "$RUNNER_TEMP/scan.json"
 
   # Phase 1–4 gates: real Postgres + MinIO (Testcontainers), API, worker-pulse (real
   # Chromium), worker-scan (sandbox, gitleaks, offline OSV), worker-link, web and the fixture harness on
@@ -100,6 +107,8 @@ jobs:
             e2e/playwright-report
           retention-days: 7
 
+  # The whole app in containers (profile "app"): infra, migrations, api, every worker
+  # and web; a sign-in email goes through the web proxy, the API and the outbox.
   compose:
     runs-on: ubuntu-24.04
     steps:
@@ -111,15 +120,26 @@ jobs:
             echo "S3_BUCKET=codesentra"
             echo "S3_ACCESS_KEY_ID=ci-$(openssl rand -hex 4)"
             echo "S3_SECRET_ACCESS_KEY=$(openssl rand -hex 20)"
+            echo "SESSION_SECRET=$(openssl rand -hex 32)"
+            echo "ENCRYPTION_KEY=$(openssl rand -base64 32)"
+            echo "DOCKER_GID=$(stat -c %g /var/run/docker.sock)"
           } > .env
-      # Wait only on long-running services: `up --wait` exits 1 when the one-shot minio-init finishes.
-      - run: docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures up -d --build --wait postgres minio fixture-harness
-      - name: Create bucket
-        run: docker compose --env-file .env -f infra/docker-compose.yml run --rm minio-init
-      - name: Smoke-test the harness
-        run: curl -fsS http://localhost:4100/ -o /dev/null
+      - name: Fixture harness
+        run: |
+          docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures up -d --build --wait postgres minio fixture-harness
+          curl -fsS http://localhost:4100/ -o /dev/null
+      - name: The app stack
+        run: |
+          docker compose --env-file .env -f infra/docker-compose.yml --profile app up -d --build
+          curl -fsS --retry 90 --retry-connrefused --retry-all-errors --retry-delay 2 http://127.0.0.1:3000/api/health | grep -q '"status":"ok"'
+          curl -fsS -X POST http://127.0.0.1:3000/api/v1/auth/email -H 'content-type: application/json' -H 'origin: http://localhost:3000' -d '{"email":"ci@example.com"}'
+          sleep 2
+          docker compose --env-file .env -f infra/docker-compose.yml --profile app exec -T api sh -c 'grep -l "sign-in link" /outbox/*.json'
+          for svc in worker-link worker-pulse worker-scan; do
+            docker compose --env-file .env -f infra/docker-compose.yml --profile app logs "$svc" | grep -q "$svc ready" || { docker compose --env-file .env -f infra/docker-compose.yml --profile app logs "$svc"; exit 1; }
+          done
       - if: always()
-        run: docker compose --env-file .env -f infra/docker-compose.yml --profile fixtures down -v
+        run: docker compose --env-file .env -f infra/docker-compose.yml --profile app --profile fixtures down -v
 
   # Production images (Section 17: container image scanning). Each image is built, smoke
   # tested, and scanned with Trivy: a CRITICAL vulnerability that has a fix fails the job;

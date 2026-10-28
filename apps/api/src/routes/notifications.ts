@@ -1,4 +1,4 @@
-import { sealSecret } from "@codesentra/core/crypto";
+import { keyring, sealSecret } from "@codesentra/core/crypto";
 import { schema as s } from "@codesentra/db";
 import { isSlackWebhookUrl, maskEmail, slackOauthExchange } from "@codesentra/notify";
 import { and, desc, eq } from "drizzle-orm";
@@ -52,7 +52,7 @@ interface SlackState {
  * "Add to Slack", never by pasting a URL.
  */
 export function notificationRoutes(ctx: AppContext): FastifyPluginAsyncZod {
-  const key = ctx.config.ENCRYPTION_KEY;
+  const key = keyring(ctx.config.ENCRYPTION_KEY, ctx.config.ENCRYPTION_KEY_PREVIOUS);
   const appUrl = ctx.config.PUBLIC_APP_URL;
   const redirectUri = `${appUrl}/api/v1/slack/callback`;
   const testAllow = testAllowHosts(ctx);

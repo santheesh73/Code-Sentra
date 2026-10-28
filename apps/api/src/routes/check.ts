@@ -9,7 +9,7 @@ import { RunAccepted } from "../dto.js";
 import { badRequest, notFound, Problem } from "../errors.js";
 import { type ChildRun, startLinked } from "../orchestrate.js";
 import { assertPublicTarget } from "./pulse.js";
-import { createGitSnapshot, testAllowHosts } from "./scan.js";
+import { projectSourceSnapshot, testAllowHosts } from "./scan.js";
 
 export function checkRoutes(ctx: AppContext): FastifyPluginAsyncZod {
   return async (app) => {
@@ -23,7 +23,7 @@ export function checkRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           tags: ["link"],
           summary: "Full check: Scan + Pulse in parallel, then Link",
           description:
-            "Scans the given snapshot (else the project's repo_url, else its latest uploaded snapshot) and runs Pulse on every environment (or the one given), in parallel. When both finish, a Link run traces each issue to code, writes its prompt and re-checks earlier issues. Returns the Link run. A module that cannot run (no snapshot, no environment, no object storage) is a gap of the Link run.",
+            "Scans the given snapshot (else the project's GitHub repository at its default branch when the GitHub App covers it, else its repo_url, else its latest uploaded snapshot) and runs Pulse on every environment (or the one given), in parallel. When both finish, a Link run traces each issue to code, writes its prompt and re-checks earlier issues. Returns the Link run. A module that cannot run (no snapshot, no environment, no object storage) is a gap of the Link run.",
           params: z.object({ id: z.uuid() }),
           body: z
             .object({ snapshot_id: z.uuid().optional(), environment_id: z.uuid().optional() })
@@ -70,15 +70,8 @@ export function checkRoutes(ctx: AppContext): FastifyPluginAsyncZod {
         // Scan: the given snapshot, a fresh clone of repo_url, or the latest upload.
         if (ctx.store) {
           let snapshotId: string | null = req.body?.snapshot_id ? (snapshot?.id ?? null) : null;
-          if (!snapshotId && project.repoUrl)
-            snapshotId = (
-              await createGitSnapshot(ctx, testAllow, {
-                orgId,
-                projectId: project.id,
-                url: project.repoUrl,
-                ref: project.defaultBranch,
-              })
-            ).id;
+          if (!snapshotId)
+            snapshotId = (await projectSourceSnapshot(ctx, testAllow, project))?.id ?? null;
           snapshotId ??= snapshot?.id ?? null;
           if (snapshotId)
             children.push({
@@ -116,7 +109,7 @@ export function checkRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           tags: ["issues"],
           summary: "Targeted re-check",
           description:
-            "Re-runs just the check group the issue's re-check names (Pulse: that group, after reachability and platform; Scan: a new Scan of the project's repo_url), then Link re-evaluates the issue. Returns the Link run.",
+            "Re-runs just the check group the issue's re-check names (Pulse: that group, after reachability and platform; Scan: a new Scan of the project's GitHub repository or repo_url), then Link re-evaluates the issue. Returns the Link run.",
           params: z.object({ id: z.uuid() }),
           response: { 202: RunAccepted, 400: Problem, 401: Problem, 404: Problem },
         },
@@ -156,16 +149,11 @@ export function checkRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             outcome: { recheck: { issue_id: issue.id, check_group: recheck.check_group } },
           };
         } else {
-          if (!ctx.store || !project.repoUrl)
+          const snap = ctx.store ? await projectSourceSnapshot(ctx, testAllow, project) : null;
+          if (!snap)
             throw badRequest(
-              "Scan issues are re-checked by a new Scan: upload a new zip and scan it, or set the project's repo_url",
+              "Scan issues are re-checked by a new Scan of the project's source: bind its GitHub repository, set its repo_url, or upload a new zip and scan it",
             );
-          const snap = await createGitSnapshot(ctx, testAllow, {
-            orgId,
-            projectId: project.id,
-            url: project.repoUrl,
-            ref: project.defaultBranch,
-          });
           child = {
             job: "scan.run",
             run: { type: "scan", snapshotId: snap.id, steps: ScanStage.options },

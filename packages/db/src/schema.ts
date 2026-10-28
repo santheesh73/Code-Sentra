@@ -741,7 +741,7 @@ export const schedules = pgTable(
       columns: [t.orgId, t.environmentId],
       foreignColumns: [environments.orgId, environments.id],
     }).onDelete("cascade"),
-    check("schedules_run_type", sql`${t.runType} = 'pulse'`),
+    check("schedules_run_type", sql`${t.runType} in ('pulse', 'check')`),
     index().on(t.nextRunAt),
     index().on(t.projectId),
   ],

@@ -122,7 +122,11 @@ test("Phase 4 gate: full check traces env-undefined to the line, then resolves a
   ).json()) as { id: string; code: string; corroborating_codes: string[] }[];
   expect(issues).toHaveLength(1);
   expect(issues[0]?.code).toBe(want.leadCode);
-  expect(issues[0]?.corroborating_codes).toEqual(want.corroboratedBy);
+  // The Scan finding that NEXT_PUBLIC_API_URL is undocumented at the traced file joins it.
+  expect(issues[0]?.corroborating_codes).toEqual([
+    ...(want.corroboratedBy ?? []),
+    "ENV_VAR_UNDOCUMENTED",
+  ]);
   const issueUrl = `${APP()}/issues/${issues[0]?.id}`;
 
   // The issue view: the verified trace, env var, and a code_fix prompt naming both.

@@ -6,20 +6,20 @@ is run by a person with access to the accounts.
 
 ## 1. What a person has to provide
 
-| Item                                 | Used by                                  | Where it goes                               |
-| ------------------------------------ | ---------------------------------------- | ------------------------------------------- |
-| Render account (or Fly)              | API, worker-link, worker-pulse, Postgres | `render.yaml` Blueprint                     |
-| Vercel account                       | web                                      | `apps/web` project                          |
-| A VM with Docker (Linux, x86_64)     | worker-scan                              | `infra/deploy/worker-scan.compose.yml`      |
-| S3-compatible bucket + keys          | snapshots, screenshots                   | `S3_*`                                      |
-| A container registry                 | the four images                          | pushed tags                                 |
-| GitHub App (section 4)               | PR checks, deployments                   | `GITHUB_APP_*`, `GITHUB_WEBHOOK_SECRET`     |
-| GitHub OAuth App (sign-in)           | "Sign in with GitHub"                    | `GITHUB_OAUTH_CLIENT_ID/SECRET`             |
-| Resend account + verified domain     | sign-in links, alerts                    | `EMAIL_FROM`, `EMAIL_PROVIDER_API_KEY`      |
-| Slack app                            | Slack alerts                             | `SLACK_CLIENT_ID/SECRET`                    |
-| Anthropic API key                    | Scan reports                             | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`      |
-| Sentry DSN, OTLP endpoint (optional) | errors, traces                           | `SENTRY_DSN`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
-| A domain                             | the app                                  | `PUBLIC_APP_URL`                            |
+| Item                                 | Used by                                    | Where it goes                                                        |
+| ------------------------------------ | ------------------------------------------ | -------------------------------------------------------------------- |
+| Render account (or Fly)              | API, worker-link, worker-pulse, Postgres   | `render.yaml` Blueprint                                              |
+| Vercel account                       | web                                        | `apps/web` project                                                   |
+| A VM with Docker (Linux, x86_64)     | worker-scan                                | `infra/deploy/worker-scan.compose.yml`                               |
+| S3-compatible bucket + keys          | snapshots, screenshots, direct zip uploads | `S3_*`, and `S3_PUBLIC_ENDPOINT` if browsers reach storage elsewhere |
+| A container registry                 | the four images                            | pushed tags                                                          |
+| GitHub App (section 4)               | PR checks, deployments                     | `GITHUB_APP_*`, `GITHUB_WEBHOOK_SECRET`                              |
+| GitHub OAuth App (sign-in)           | "Sign in with GitHub"                      | `GITHUB_OAUTH_CLIENT_ID/SECRET`                                      |
+| Resend account + verified domain     | sign-in links, alerts                      | `EMAIL_FROM`, `EMAIL_PROVIDER_API_KEY`                               |
+| Slack app                            | Slack alerts                               | `SLACK_CLIENT_ID/SECRET`                                             |
+| Anthropic API key                    | Scan reports                               | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`                               |
+| Sentry DSN, OTLP endpoint (optional) | errors, traces                             | `SENTRY_DSN`, `OTEL_EXPORTER_OTLP_ENDPOINT`                          |
+| A domain                             | the app                                    | `PUBLIC_APP_URL`                                                     |
 
 Generate the two local secrets once and keep them in the platform's secret store:
 `SESSION_SECRET` (`openssl rand -hex 32`) and `ENCRYPTION_KEY` (`openssl rand -base64 32`).
@@ -66,6 +66,14 @@ variable to `infra/node/Dockerfile` as a build argument; check this on the first
 
 Every service refuses to start with a missing or placeholder secret (`packages/config`).
 In production every integration it declares is required.
+
+### Direct uploads
+
+Zips go from the browser straight to the bucket under a presigned POST policy (key, type
+and size pinned), so the web proxy's 4.5 MB limit does not apply. The bucket must allow
+CORS `POST` from `PUBLIC_APP_URL`, for example:
+`aws s3api put-bucket-cors --bucket <bucket> --cors-configuration '{"CORSRules":[{"AllowedOrigins":["https://app.example.com"],"AllowedMethods":["POST"],"AllowedHeaders":["*"]}]}'`.
+MinIO allows cross-origin requests by default.
 
 ## 4. GitHub App
 
@@ -160,5 +168,28 @@ The real run:
   - `SESSION_SECRET`: signs out everyone.
   - `GITHUB_WEBHOOK_SECRET`: update GitHub and Render together.
   - API tokens: revoke in Settings.
-  - **`ENCRYPTION_KEY` rotation is not supported yet.** It needs a re-seal of every sealed
-    column (`docs/progress.md`).
+  - `ENCRYPTION_KEY` (rotation, ADR 0024):
+    1. Generate a new key (`openssl rand -base64 32`). On **every** service, set
+       `ENCRYPTION_KEY` to the new key and `ENCRYPTION_KEY_PREVIOUS` to the old one, then
+       deploy. New values are sealed with the new key, and old ones still open.
+    2. Run `node node_modules/@codesentra/db/dist/reseal-cli.js` once, in the API image with
+       the same environment. It rewrites every sealed column under the new key and prints a
+       count per column. It exits 1, listing row ids, if any value cannot be opened; keep
+       the key that sealed those values in `ENCRYPTION_KEY_PREVIOUS`. Running it again is
+       harmless.
+    3. Remove `ENCRYPTION_KEY_PREVIOUS` and deploy. Retire the old key.
+
+## 9. Publishing the CLI to npm
+
+Nothing publishes automatically. To publish:
+1. Choose a license for the repository. `apps/cli/bundle/build.mjs` writes
+   `"license": "UNLICENSED"` into the published manifest until you change it.
+2. Set the version in `apps/cli/package.json`.
+3. Run `pnpm --filter @codesentra/cli build`. This writes `apps/cli/dist/npm/`, which holds
+   `codesentra.mjs` (the whole CLI, grammars included) and its `package.json` (one
+   dependency: `playwright-core`).
+4. Run `cd apps/cli/dist/npm && npm publish --access public` with an npm account that
+   owns the `@codesentra` scope.
+
+After `npm i -g @codesentra/cli`, users run `codesentra …`. Pulse's render check needs
+Chromium: `npx playwright-core install chromium`, or set `CHROMIUM_EXECUTABLE`.

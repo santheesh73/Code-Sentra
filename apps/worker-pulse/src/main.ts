@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { launchPulseBrowser } from "@codesentra/checks";
 import { pulseHandler } from "@codesentra/checks/job";
 import { loadConfig } from "@codesentra/config";
+import { keyring } from "@codesentra/core/crypto";
 import { createDatabase } from "@codesentra/db";
 import { diagnosticHandler, startQueueClient, startWorker } from "@codesentra/queue";
 import { defaultPolicy, type FetchPolicy, testPolicy } from "@codesentra/ssrf";
@@ -69,7 +70,7 @@ const pulse = pulseHandler({
   store,
   getBrowser,
   slowThresholdMs: config.PULSE_SLOW_THRESHOLD_MS,
-  encryptionKey: config.ENCRYPTION_KEY,
+  encryptionKey: keyring(config.ENCRYPTION_KEY, config.ENCRYPTION_KEY_PREVIOUS),
 });
 const worker = await startWorker({
   db,

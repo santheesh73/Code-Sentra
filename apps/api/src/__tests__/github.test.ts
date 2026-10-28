@@ -1,8 +1,9 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { launchPulseBrowser } from "@codesentra/checks";
+import { launchPulseBrowser, PULSE_GROUPS } from "@codesentra/checks";
 import { pulseHandler } from "@codesentra/checks/job";
+import { ScanStage } from "@codesentra/core";
 import { schema as s } from "@codesentra/db";
 import {
   type FakeGithubApp,
@@ -14,6 +15,7 @@ import {
 } from "@codesentra/fixture-harness";
 import { GithubApp } from "@codesentra/github";
 import { linkHandler } from "@codesentra/link/job";
+import { runDueSchedules } from "@codesentra/queue";
 import { offlineSource } from "@codesentra/scan";
 import { scanHandler } from "@codesentra/scan/job";
 import { testPolicy } from "@codesentra/ssrf";
@@ -37,9 +39,10 @@ let orgId: string;
 const store = memoryStore();
 const REPO = "acme/status-board";
 const INSTALLATION = 7001;
-const shaA = "a".repeat(40);
-const shaB = "b".repeat(40);
-const shaC = "c".repeat(40);
+// Real commits in the fake's git server (set in beforeAll): PR scans clone them with history.
+let shaA: string;
+let shaB: string;
+let shaC: string;
 const app = loadFixtureApps().find((a) => a.manifest.name === "env-undefined");
 
 function tree(dir: string): Record<string, string> {
@@ -71,6 +74,7 @@ beforeAll(async () => {
     clientId: gh.clientId,
     clientSecret: gh.clientSecret,
     oauthBaseUrl: gh.url,
+    gitBaseUrl: gh.gitBaseUrl,
   });
   const pulse = pulseHandler({
     policy: testPolicy(["127.0.0.1"], { ca: h.caCertPem }),
@@ -116,12 +120,12 @@ beforeAll(async () => {
   // variable (the fixed build).
   const head = tree(app.dir);
   const page = head["app/page.tsx"] as string;
-  gh.commit(REPO, shaA, {
+  shaA = gh.gitCommit(REPO, {
     ...head,
     "app/page.tsx": page.replace(/\n {2}useEffect\([\s\S]*?\}, \[\]\);\n/, "\n"),
   });
-  gh.commit(REPO, shaB, head);
-  gh.commit(REPO, shaC, { ...head, ".env.example": "NEXT_PUBLIC_API_URL=\n" });
+  shaB = gh.gitCommit(REPO, head, "call the API");
+  shaC = gh.gitCommit(REPO, { ...head, ".env.example": "NEXT_PUBLIC_API_URL=\n" }, "document it");
 }, 180_000);
 
 afterAll(async () => {
@@ -243,7 +247,7 @@ describe("GitHub App (Phase 5)", () => {
     });
     // Installation data is sealed at rest.
     const [row] = await api.t.db.system.select().from(s.githubInstallations);
-    expect(row?.sealed).toMatch(/^v1\./);
+    expect(row?.sealed).toMatch(/^v2\./);
     expect(row?.sealed).not.toContain("acme");
   });
 
@@ -269,6 +273,21 @@ describe("GitHub App (Phase 5)", () => {
     const opened = await deliver("pull_request", pr("opened", shaB, shaA), { id });
     expect(opened.statusCode, opened.body).toBe(200);
     const prLink = await waitForRun(linkRunOf(opened));
+    // The head commit was cloned with its history (not the zipball): history ran.
+    const prScan = prLink.children.find((k: { type: string }) => k.type === "scan");
+    const scanRun = await (
+      await api.app.inject({ method: "GET", url: `/v1/runs/${prScan.id}`, headers: { cookie } })
+    ).json();
+    expect(
+      scanRun.steps.find((x: { name: string }) => x.name === "history")?.status,
+      JSON.stringify(scanRun.steps),
+    ).toBe("done");
+    const [row] = await api.t.db.system
+      .select({ snap: s.snapshots })
+      .from(s.runs)
+      .innerJoin(s.snapshots, eq(s.snapshots.id, s.runs.snapshotId))
+      .where(eq(s.runs.id, prScan.id));
+    expect(row?.snap).toMatchObject({ kind: "github", hasHistory: true, commitSha: shaB });
     expect(prLink.outcome).toMatchObject({ mode: "pr", changed_files: ["app/page.tsx"] });
     const dup = await deliver("pull_request", pr("opened", shaB, shaA), { id });
     expect(dup.json()).toMatchObject({ status: "duplicate" });
@@ -321,6 +340,73 @@ describe("GitHub App (Phase 5)", () => {
       headers: { cookie },
     });
     expect(issues.json()).toEqual([]);
+  }, 300_000);
+
+  it("full checks and scheduled full checks scan the GitHub repository's head, with history", async () => {
+    const env = await api.app.inject({
+      method: "POST",
+      url: `/v1/projects/${projectId}/environments`,
+      headers: as(cookie),
+      payload: { name: "production", url: h.targets.apps.healthy?.url },
+    });
+    expect(env.statusCode, env.body).toBe(201);
+    const scanOf = async (linkRunId: string) => {
+      const link = await waitForRun(linkRunId);
+      const scan = link.children.find((k: { type: string }) => k.type === "scan");
+      expect(scan, JSON.stringify(link.children)).toBeDefined();
+      const [row] = await api.t.db.system
+        .select({ snap: s.snapshots })
+        .from(s.runs)
+        .innerJoin(s.snapshots, eq(s.snapshots.id, s.runs.snapshotId))
+        .where(eq(s.runs.id, scan.id));
+      const run = await (
+        await api.app.inject({ method: "GET", url: `/v1/runs/${scan.id}`, headers: { cookie } })
+      ).json();
+      return { link, snap: row?.snap, steps: JSON.stringify(run.steps?.[0]) };
+    };
+
+    // A full check: no snapshot given, no repo_url, but the App covers the repository.
+    const check = await api.app.inject({
+      method: "POST",
+      url: `/v1/projects/${projectId}/check`,
+      headers: as(cookie),
+      payload: {},
+    });
+    expect(check.statusCode, check.body).toBe(202);
+    const full = await scanOf(check.json().run_id);
+    expect(full.snap, full.steps).toMatchObject({
+      kind: "github",
+      commitSha: shaC,
+      hasHistory: true,
+    });
+    expect(full.link.children.map((k: { type: string }) => k.type).sort()).toEqual([
+      "pulse",
+      "scan",
+    ]);
+
+    // A scheduled full check does the same from worker-link's scheduler.
+    const sched = await api.app.inject({
+      method: "POST",
+      url: `/v1/projects/${projectId}/schedules`,
+      headers: as(cookie),
+      payload: { environment_id: env.json().id, cron: "0 6 * * *", run_type: "check" },
+    });
+    expect(sched.statusCode, sched.body).toBe(201);
+    expect(sched.json().run_type).toBe("check");
+    const fired = await runDueSchedules(
+      {
+        db: api.t.db,
+        queue: api.queue,
+        pulseSteps: PULSE_GROUPS,
+        scanSteps: ScanStage.options,
+        encryptionKey: Buffer.alloc(32, 7).toString("base64"),
+      },
+      new Date(Date.now() + 2 * 86_400_000),
+    );
+    expect(fired.failed).toEqual([]);
+    const scheduled = await scanOf(fired.started[0]?.linkRunId as string);
+    expect(scheduled.link.trigger).toBe("schedule");
+    expect(scheduled.snap).toMatchObject({ kind: "github", ref: "HEAD", commitSha: shaC });
   }, 300_000);
 
   it("lets a failed delivery be redelivered, but never a processed one", async () => {

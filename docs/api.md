@@ -30,6 +30,7 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | GET | `/v1/orgs/{id}/tokens` | Your API tokens in this organization | 200, 401, 403, 404 |
 | POST | `/v1/orgs/{id}/tokens` | Create an API token | 201, 400, 401, 403, 404 |
 | DELETE | `/v1/orgs/{id}/tokens/{tokenId}` | Revoke an API token | 204, 401, 403, 404 |
+| DELETE | `/v1/orgs/{orgId}` | Delete an organization (owner) | 204, 400, 401, 403, 404 |
 | GET | `/v1/orgs/{orgId}/members` | Members of an organization | 200, 401, 404 |
 | POST | `/v1/orgs/{orgId}/members` | Add a member by email (admin or owner) | 201, 401, 403, 404, 409 |
 | PATCH | `/v1/orgs/{orgId}/members/{userId}` | Change a member's role (owner) | 200, 400, 401, 403, 404 |
@@ -53,9 +54,11 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | GET | `/v1/projects/{id}/runs` | Recent runs for a project | 200, 401, 404 |
 | POST | `/v1/projects/{id}/scan` | Start Sentra Scan | 202, 400, 401, 404, 501 |
 | GET | `/v1/projects/{id}/schedules` | List schedules | 200, 401, 404 |
-| POST | `/v1/projects/{id}/schedules` | Create a recurring Pulse | 201, 400, 401, 404 |
+| POST | `/v1/projects/{id}/schedules` | Create a recurring Pulse or full check | 201, 400, 401, 404 |
 | DELETE | `/v1/projects/{id}/schedules` | Delete a schedule | 204, 401, 404 |
 | POST | `/v1/projects/{id}/snapshots` | Upload a zip or register a git ref | 201, 400, 401, 404, 413, 501 |
+| POST | `/v1/projects/{id}/uploads` | Start a direct upload of a zip | 201, 401, 404, 501 |
+| POST | `/v1/projects/{id}/uploads/{snapshotId}/complete` | Finish a direct upload | 200, 400, 401, 404, 501 |
 | POST | `/v1/pulse` | Quick Pulse: check any public URL, no project needed | 202, 400, 401, 404, 429 |
 | GET | `/v1/runs/{id}` | A run with its steps and coverage gaps | 200, 401, 404 |
 | GET | `/v1/runs/{id}/findings` | Findings for a run, grouped into issues with fix prompts | 200, 401, 404 |

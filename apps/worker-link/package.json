@@ -13,14 +13,15 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@codesentra/config": "workspace:*",
-    "@codesentra/github": "workspace:*",
-    "@codesentra/db": "workspace:*",
-    "@codesentra/link": "workspace:*",
-    "@codesentra/queue": "workspace:*",
-    "pino": "10.4.0",
-    "@codesentra/notify": "workspace:*",
     "@codesentra/checks": "workspace:*",
-    "@codesentra/telemetry": "workspace:*"
+    "@codesentra/config": "workspace:*",
+    "@codesentra/core": "workspace:*",
+    "@codesentra/db": "workspace:*",
+    "@codesentra/github": "workspace:*",
+    "@codesentra/link": "workspace:*",
+    "@codesentra/notify": "workspace:*",
+    "@codesentra/queue": "workspace:*",
+    "@codesentra/telemetry": "workspace:*",
+    "pino": "10.4.0"
   }
 }

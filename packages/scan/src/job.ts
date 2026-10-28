@@ -1,5 +1,5 @@
 import { createWriteStream } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { type JsonValue, type ScanStage, ScanStage as ScanStageEnum } from "@codesentra/core";
@@ -75,6 +75,8 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
       // --- Ingest ------------------------------------------------------------------------
       await ctx.beginStep("ingest");
       let root = join(scratch.path, "tree");
+      let hasHistory = snapshot.kind === "git";
+      let historyGap: string | null = null;
       let files: TreeEntry[];
       try {
         if (!deps.store)
@@ -85,8 +87,9 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
           await writeFile(zipPath, await deps.store.get(snapshot.storageKey));
           await extractZip(zipPath, root, DEFAULT_ZIP_LIMITS);
         } else if (snapshot.kind === "github") {
-          // A GitHub repository at a commit: the zipball, fetched with the installation's
-          // token and checked under the same zip limits as an upload (ADR 0021).
+          // A GitHub repository at a commit (ADR 0021, 0024): cloned with the installation's
+          // token through the SSRF-pinned git path, so history checks run. If the clone
+          // fails, the zipball (no history) is used and the history stage is a gap.
           if (!deps.github)
             throw new Error(
               "the GitHub App is not configured (GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY)",
@@ -94,22 +97,43 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
           const [owner, repo] = (snapshot.sourceUrl ?? "").split("/");
           if (!owner || !repo || !snapshot.ref || !snapshot.githubInstallationId)
             throw new Error("github snapshot is missing its repository, commit or installation");
-          const zipPath = join(scratch.path, "zipball.zip");
-          const archive = await deps.github.zipball(
-            snapshot.githubInstallationId,
-            owner,
-            repo,
-            snapshot.ref,
-            deps.maxArchiveBytes ?? DEFAULT_ZIP_LIMITS.maxBytes,
-          );
-          await writeFile(zipPath, archive);
-          await extractZip(zipPath, root, DEFAULT_ZIP_LIMITS);
-          // GitHub wraps the tree in one `owner-repo-sha/` directory.
-          const top = await readdir(root, { withFileTypes: true });
-          if (top.length === 1 && top[0]?.isDirectory()) root = join(root, top[0].name);
-          snapshot.commitSha = snapshot.ref;
-          snapshot.storageKey = `snapshots/${orgId}/${snapshot.id}.zip`;
-          await deps.store.put(snapshot.storageKey, archive, "application/zip");
+          // Scheduled checks and re-checks name a branch (or HEAD); the scan pins its commit.
+          const commit = /^[0-9a-f]{40}$/.test(snapshot.ref)
+            ? snapshot.ref
+            : await deps.github.commitSha(snapshot.githubInstallationId, owner, repo, snapshot.ref);
+          try {
+            const { commitSha } = await cloneRepo(deps.github.gitUrl(owner, repo), root, {
+              policy: deps.gitPolicy,
+              maxCommits: deps.maxCommits,
+              allowHttp: deps.allowHttpGit,
+              commit,
+              authorization: await deps.github.gitAuthorization(snapshot.githubInstallationId),
+            });
+            snapshot.commitSha = commitSha;
+            hasHistory = true;
+          } catch (e) {
+            historyGap = `git clone failed (${e instanceof GitError ? `${e.code}: ${e.stderr.split("\n").filter(Boolean).at(-1) ?? e.message}` : (e as Error).message}); scanned the zipball, which has no history`;
+            await rm(root, { recursive: true, force: true });
+            await mkdir(root, { recursive: true });
+            const zipPath = join(scratch.path, "zipball.zip");
+            const archive = await deps.github
+              .zipball(
+                snapshot.githubInstallationId,
+                owner,
+                repo,
+                commit,
+                deps.maxArchiveBytes ?? DEFAULT_ZIP_LIMITS.maxBytes,
+              )
+              .catch((z: Error) => {
+                throw new Error(`${historyGap}; the zipball also failed: ${z.message}`);
+              });
+            await writeFile(zipPath, archive);
+            await extractZip(zipPath, root, DEFAULT_ZIP_LIMITS);
+            // GitHub wraps the tree in one `owner-repo-sha/` directory.
+            const top = await readdir(root, { withFileTypes: true });
+            if (top.length === 1 && top[0]?.isDirectory()) root = join(root, top[0].name);
+            snapshot.commitSha = commit;
+          }
         } else {
           if (!snapshot.sourceUrl) throw new Error("git snapshot has no URL");
           const { commitSha } = await cloneRepo(snapshot.sourceUrl, root, {
@@ -127,7 +151,7 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
         if (bytes > DEFAULT_ZIP_LIMITS.maxBytes || files.length > DEFAULT_ZIP_LIMITS.maxFiles)
           throw new Error(`the tree is too large (${files.length} files, ${bytes} bytes)`);
         let storageKey = snapshot.storageKey;
-        if (snapshot.kind === "git") {
+        if (snapshot.kind !== "zip") {
           const archive = join(scratch.path, "tree.zip");
           await archiveTree(root, files, archive);
           storageKey = `snapshots/${orgId}/${snapshot.id}.zip`;
@@ -140,7 +164,7 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
             sizeBytes: bytes,
             storageKey,
             commitSha: snapshot.commitSha,
-            hasHistory: snapshot.kind === "git",
+            hasHistory,
           }),
         );
         const reuse = await ctx.db.withOrg(orgId, (tx) =>
@@ -177,7 +201,7 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
         }
         await ctx.endStep("ingest", {
           status: "done",
-          log: `${files.length} files, ${bytes} bytes, tree ${hash.slice(0, 12)}${snapshot.commitSha ? `, commit ${snapshot.commitSha.slice(0, 12)}` : ""}${listing.skippedSymlinks.length ? `; ${listing.skippedSymlinks.length} symlinks not followed` : ""}`,
+          log: `${files.length} files, ${bytes} bytes, tree ${hash.slice(0, 12)}${snapshot.commitSha ? `, commit ${snapshot.commitSha.slice(0, 12)}` : ""}${historyGap ? `; ${historyGap}` : ""}${listing.skippedSymlinks.length ? `; ${listing.skippedSymlinks.length} symlinks not followed` : ""}`,
         });
       } catch (e) {
         const msg =
@@ -197,7 +221,7 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
       const result = await runScan({
         root,
         tree: files,
-        hasHistory: snapshot.kind === "git",
+        hasHistory,
         scratchDir: join(scratch.path, "probe"),
         sandbox,
         osv: deps.osv,

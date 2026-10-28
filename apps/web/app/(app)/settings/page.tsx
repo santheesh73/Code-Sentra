@@ -107,6 +107,7 @@ export default function SettingsPage() {
         Settings.
       </p>
       <AuditCard org={org} />
+      {org.role === "owner" && <DeleteOrg org={org} />}
     </div>
   );
 }
@@ -206,6 +207,59 @@ function CreateOrg() {
       {create.isError && (
         <p role="alert" className="text-sm text-danger">
           {problemMessage(create.error)}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function DeleteOrg({ org }: { org: Org }) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const { setOrgId, me } = useOrg();
+  const [confirm, setConfirm] = useState("");
+  const del = useMutation({
+    mutationFn: () => api(`/v1/orgs/${org.id}`, { method: "DELETE", body: { confirm } }),
+    onSuccess: async () => {
+      const next = me.organizations.find((o) => o.id !== org.id);
+      await qc.invalidateQueries({ queryKey: ["me"] });
+      if (next) setOrgId(next.id);
+      router.push("/projects");
+    },
+  });
+  return (
+    <Card className="flex flex-col gap-3 border-danger/40">
+      <CardTitle>Delete organization</CardTitle>
+      <p className="text-sm text-muted-foreground">
+        Deletes {org.name} and everything in it: projects, runs, evidence, issues, schedules,
+        notification channels, API tokens, the audit log and stored snapshots and screenshots. This
+        cannot be undone.
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          del.mutate();
+        }}
+        className="flex flex-wrap items-end gap-3"
+      >
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <Label htmlFor="delete-confirm">
+            Type <code>{org.slug}</code> to confirm
+          </Label>
+          <Input
+            id="delete-confirm"
+            autoComplete="off"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+          />
+        </div>
+        <Button type="submit" variant="outline" disabled={confirm !== org.slug || del.isPending}>
+          Delete organization
+        </Button>
+      </form>
+      {del.isError && (
+        <p role="alert" className="text-sm text-danger">
+          {problemMessage(del.error)}
         </p>
       )}
     </Card>

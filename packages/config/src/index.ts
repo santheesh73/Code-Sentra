@@ -62,6 +62,23 @@ export const EnvSchema = z.object({
   DATABASE_URL: postgresUrl(),
   SESSION_SECRET: secret(32),
   ENCRYPTION_KEY: encryptionKey(),
+  /**
+   * Retired encryption keys, comma-separated: sealed values still open with them until
+   * `reseal` rewrites them under ENCRYPTION_KEY (key rotation, ADR 0024).
+   */
+  ENCRYPTION_KEY_PREVIOUS: z
+    .string()
+    .optional()
+    .refine(
+      (v) =>
+        !v ||
+        v
+          .split(",")
+          .map((k) => k.trim())
+          .filter(Boolean)
+          .every((k) => /^[A-Za-z0-9+/]+={0,2}$/.test(k) && Buffer.from(k, "base64").length === 32),
+      "must be comma-separated 32-byte base64 keys",
+    ),
   PUBLIC_APP_URL: url(),
   API_HOST: z.string().default("127.0.0.1"),
   API_PORT: port(4000),
@@ -76,6 +93,8 @@ export const EnvSchema = z.object({
   GITHUB_OAUTH_CLIENT_SECRET: secret(10),
   GITHUB_OAUTH_BASE_URL: url().default("https://github.com"),
   GITHUB_API_BASE_URL: url().default("https://api.github.com"),
+  /** Where worker-scan clones repositories from (`<base>/<owner>/<repo>.git`). */
+  GITHUB_GIT_BASE_URL: url().default("https://github.com"),
   /** Slack OAuth (oauth.v2.access); tests point it at a local fake. */
   SLACK_API_BASE_URL: url().default("https://slack.com"),
   /** The App's URL name (github.com/apps/<slug>), for the install link in Settings. */
@@ -105,6 +124,8 @@ export const EnvSchema = z.object({
   /** Directory with an OSV dump (osv-scanner offline format); unset uses the OSV API. */
   OSV_OFFLINE_DIR: z.string().optional(),
   SCAN_MAX_COMMITS: z.coerce.number().int().min(1).max(50_000).default(2000),
+  /** The object-storage endpoint browsers reach for direct uploads (default: S3_ENDPOINT). */
+  S3_PUBLIC_ENDPOINT: url().optional(),
   /** How often worker-link looks for due schedules (Section 6 `schedules`); 0 turns it off. */
   SCHEDULER_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(3600).default(30),
   /** Largest accepted zip upload (compressed), bytes. */
@@ -181,6 +202,8 @@ export const SERVICE_ENV = {
       "EMAIL_OUTBOX_DIR",
       "PULSE_TEST_ALLOW_HOSTS",
       "SCAN_MAX_UPLOAD_BYTES",
+      "S3_PUBLIC_ENDPOINT",
+      "ENCRYPTION_KEY_PREVIOUS",
     ],
     integrations: ["s3", "github_oauth", "github_app", "email", "slack"],
   },
@@ -201,13 +224,19 @@ export const SERVICE_ENV = {
       "SCAN_TEST_MODEL",
       "PULSE_TEST_ALLOW_HOSTS",
       "GITHUB_API_BASE_URL",
+      "GITHUB_GIT_BASE_URL",
       "SCAN_MAX_UPLOAD_BYTES",
     ],
     integrations: ["s3", "github_app", "anthropic"],
   },
   "worker-pulse": {
     required: ["DATABASE_URL", "ENCRYPTION_KEY"],
-    settings: ["PULSE_SLOW_THRESHOLD_MS", "PULSE_TEST_ALLOW_HOSTS", "PULSE_TEST_CA_FILE"],
+    settings: [
+      "PULSE_SLOW_THRESHOLD_MS",
+      "PULSE_TEST_ALLOW_HOSTS",
+      "PULSE_TEST_CA_FILE",
+      "ENCRYPTION_KEY_PREVIOUS",
+    ],
     integrations: ["s3"],
   },
   "worker-link": {
@@ -218,6 +247,7 @@ export const SERVICE_ENV = {
       "GITHUB_API_BASE_URL",
       "PULSE_TEST_ALLOW_HOSTS",
       "SCHEDULER_INTERVAL_SECONDS",
+      "ENCRYPTION_KEY_PREVIOUS",
     ],
     integrations: ["anthropic", "github_app", "email", "slack"],
   },

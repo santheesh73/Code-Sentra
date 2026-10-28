@@ -33,7 +33,8 @@ COPY --from=build --chown=node:node /out/node_modules ./node_modules
 COPY --from=build --chown=node:node /out/dist ./dist
 COPY --from=build --chown=node:node /out/package.json ./package.json
 # The entry file differs: the API is dist/server.js, workers dist/main.js.
-RUN if [ -f dist/server.js ]; then ln -s server.js dist/entry.js; else ln -s main.js dist/entry.js; fi
+RUN if [ -f dist/server.js ]; then ln -s server.js dist/entry.js; else ln -s main.js dist/entry.js; fi \
+ && mkdir -p /outbox && chown node:node /outbox
 USER node
 # `node node_modules/@codesentra/db/dist/migrate-cli.js` applies migrations (pre-deploy).
 CMD ["node", "--enable-source-maps", "dist/entry.js"]

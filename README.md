@@ -7,7 +7,7 @@ an exact, verifiable fix:
 - **Sentra Link:** where in the code does each problem come from, how do we fix it, and how
   do we prove the fix?
 
-**Status:** Phase 6 (the Phase 1–5 gaps closed; ADR 0024).
+**Status:** Phase 7 (hardening; ADR 0025). The Phase 1–5 gaps were closed in Phase 6 (ADR 0024).
 - **Pulse:** paste a URL, or check a project environment, and get `live`, `degraded`,
   `down` or `unverified`, with evidence-backed issues and a fix prompt for each.
 - **Scan:** upload a zip or point at a public repository. You get:

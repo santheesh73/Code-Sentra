@@ -4,7 +4,7 @@ The kickoff document (Sections 1–20) is the source of truth. This file records
 exists in the repository now and how the pieces fit together. Decisions are in
 [`decisions/`](decisions/), and the HTTP API is in [`api.md`](api.md) and [`openapi.json`](openapi.json).
 
-## Current state: Phase 6 (closing the Phase 1–5 gaps, ADR 0024)
+## Current state: Phase 7 (hardening, ADR 0025; Phase 6 gaps closed, ADR 0024)
 
 ```
 Browser, CLI ─► apps/web (Next.js) ──/api/* proxy──► apps/api (Fastify) ──► Postgres 16

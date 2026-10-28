@@ -75,6 +75,20 @@ describe("fixture apps produce their documented status and findings (Phase 2 gat
   }
 });
 
+describe("network idle", () => {
+  it("is reached when the page never reads a response body (env-undefined's fetch)", async () => {
+    // Chromium keeps an intercepted response open until the page reads its body, so
+    // waiting for Chromium's own networkidle took the whole 15 s budget here.
+    const target = h.targets.apps["env-undefined"];
+    if (!target) throw new Error("not served");
+    const started = Date.now();
+    const r = await pulse(target.url);
+    const summary = r.evidence.find((e) => e.kind === "render_summary");
+    expect(summary?.payload.network_idle).toBe(true);
+    expect(Date.now() - started).toBeLessThan(8000);
+  });
+});
+
 describe("simulators", () => {
   const cases: [string, PulseStatus, string[], Partial<Parameters<typeof runPulse>[0]>?][] = [
     ["server-error", "down", ["SERVER_ERROR /"]],
@@ -101,6 +115,17 @@ describe("simulators", () => {
     if (status === "down") {
       expect(r.gaps.map((g) => g.group)).toEqual(["platform", "render", "routes", "hygiene"]);
     }
+  });
+});
+
+describe("TLS findings name the endpoint", () => {
+  it("keeps the port, so two sites on one host are two issues", async () => {
+    const target = h.targets.simulators["tls-expiring"];
+    if (!target) throw new Error("not served");
+    const r = await pulse(target.url);
+    const f = r.findings.find((x) => x.code === "TLS_EXPIRING");
+    expect(f?.locator).toBe(`https://${new URL(target.url).host}/`);
+    expect(new URL(f?.locator as string).port).not.toBe("");
   });
 });
 

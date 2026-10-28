@@ -60,6 +60,9 @@ export function isLoopbackHost(hostname: string): boolean {
 const fulfillHeaders = (h: Record<string, string>) =>
   Object.fromEntries(Object.entries(h).filter(([k]) => !DROP_RESPONSE_HEADERS.has(k)));
 
+const LOAD_BUDGET_MS = 15_000;
+const IDLE_QUIET_MS = 500;
+
 /**
  * Section 9.3: Chromium, fresh context, 1366×768, networkidle capped at 15 s. Every
  * request is fulfilled by the SSRF-safe fetch (Chromium never connects on its own), only
@@ -76,6 +79,12 @@ export async function checkRender(
   const tracked: TrackedRequest[] = [];
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
+  // Network idle is measured here, at the interception layer, rather than by Chromium's
+  // `networkidle`: Chromium keeps an intercepted request open until the page reads its
+  // body, so a page that ignores a response body (fetch(...).then((r) => r.ok)) would
+  // never be idle and would cost the whole budget.
+  let inFlight = 0;
+  let lastActivity = Date.now();
 
   const context = await browser.newContext({
     viewport: { width: 1366, height: 768 },
@@ -85,6 +94,16 @@ export async function checkRender(
   });
   try {
     await context.route("**/*", async (route: Route) => {
+      inFlight++;
+      try {
+        await handle(route);
+      } finally {
+        inFlight--;
+        lastActivity = Date.now();
+      }
+    });
+
+    async function handle(route: Route): Promise<void> {
       const req = route.request();
       const entry: TrackedRequest = {
         url: req.url(),
@@ -149,7 +168,7 @@ export async function checkRender(
           )
           .catch(() => {});
       }
-    });
+    }
 
     const page = await context.newPage();
     page.on("console", (m) => {
@@ -157,9 +176,20 @@ export async function checkRender(
     });
     page.on("pageerror", (err) => pageErrors.push(err.message));
 
+    const started = Date.now();
+    /** True once nothing has been in flight for IDLE_QUIET_MS; false at the budget. */
+    const waitForQuiet = async (): Promise<boolean> => {
+      for (;;) {
+        const now = Date.now();
+        if (inFlight === 0 && now - lastActivity >= IDLE_QUIET_MS) return true;
+        if (now - started >= LOAD_BUDGET_MS) return false;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    };
     let idle = true;
     try {
-      await page.goto(pageUrl, { waitUntil: "networkidle", timeout: 15_000 });
+      await page.goto(pageUrl, { waitUntil: "load", timeout: LOAD_BUDGET_MS });
+      idle = await waitForQuiet();
     } catch (e) {
       if (!/Timeout/i.test((e as Error).message)) {
         return {

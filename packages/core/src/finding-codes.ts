@@ -59,7 +59,10 @@ export type RecheckDescriptor =
   | {
       module: "pulse";
       checkGroup: PulseCheckGroup;
-      /** Human-readable expectation; `{locator}` is replaced with the issue's locator. */
+      /**
+       * Human-readable expectation; `{locator}` is replaced with the issue's locator and
+       * `{discriminator}` with its discriminator (the locator when it has none).
+       */
       expectation: string;
     }
   | {
@@ -123,7 +126,13 @@ const pulse = (
 
 const SCAN_DECLS: Record<ScanCode, Decl> = {
   BUILD_FAILED: scan("build", "error", "outage_triage", "Build fails", "install and build succeed"),
-  TESTS_FAILING: scan("tests", "error", "code_fix", "Tests are failing", "test {locator} passes"),
+  TESTS_FAILING: scan(
+    "tests",
+    "error",
+    "code_fix",
+    "Tests are failing",
+    "the test {discriminator} passes",
+  ),
   TYPECHECK_ERRORS: scan(
     "typecheck",
     "error",
@@ -151,14 +160,14 @@ const SCAN_DECLS: Record<ScanCode, Decl> = {
     "warning",
     "code_fix",
     "Environment variable is read but not documented",
-    "{locator} is documented in .env.example or docs",
+    "{discriminator} is documented in .env.example or docs",
   ),
   ENV_VAR_UNUSED: scan(
     "map",
     "info",
     "code_fix",
     "Documented environment variable is never read",
-    "{locator} is read in code or removed from docs",
+    "{discriminator} is read in code or removed from docs",
   ),
   TODO_MARKER: scan("map", "info", "code_fix", "TODO marker", "no TODO/FIXME marker at {locator}"),
   STUB_IMPLEMENTATION: scan(
@@ -312,7 +321,7 @@ const PULSE_DECLS: Record<PulseCode, Decl> = {
     "warning",
     "code_fix",
     "Console error",
-    "console error {locator} not logged",
+    '{locator} logs no console error "{discriminator}"',
     70,
   ),
   UNCAUGHT_EXCEPTION: pulse(
@@ -320,7 +329,7 @@ const PULSE_DECLS: Record<PulseCode, Decl> = {
     "error",
     "code_fix",
     "Uncaught exception",
-    "exception {locator} not thrown",
+    '{locator} throws no uncaught "{discriminator}"',
     80,
   ),
   BLANK_PAGE: pulse(
@@ -360,7 +369,7 @@ const PULSE_DECLS: Record<PulseCode, Decl> = {
     "warning",
     "config_fix",
     "Missing security header",
-    "response sets {locator}",
+    "the response from {locator} sets {discriminator}",
     50,
   ),
 };

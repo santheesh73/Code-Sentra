@@ -201,7 +201,7 @@ describe("renderPrompt", () => {
         code: "SECRET_EXPOSED",
         title: "Secret committed",
         locator: "src/config/defaults.ts:4",
-        message: "A aws-access-token secret pattern is committed (value redacted).",
+        message: "A secret matching the aws-access-token pattern is committed (value redacted).",
         corroborating: [],
         evidence: [
           {

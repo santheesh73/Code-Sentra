@@ -339,7 +339,8 @@ function pomXml(file: string, text: string): LockfileParse {
     const g = tag(body, "groupId");
     const a = tag(body, "artifactId");
     if (!g || !a) continue;
-    const locator = `${file}:${lineAt(m.index ?? 0)}`;
+    // The <artifactId> line names the package.
+    const locator = `${file}:${lineAt((m.index ?? 0) + Math.max(0, m[0].indexOf("<artifactId>")))}`;
     let v = tag(body, "version");
     const ref = v ? /^\$\{([\w.-]+)\}$/.exec(v) : null;
     if (ref) v = props.get(ref[1] as string) ?? null;

@@ -143,7 +143,7 @@ describe("Go, RubyGems and Maven lockfiles", () => {
       ].join("\n"),
     );
     expect(p?.packages.map((x) => `${x.name}@${x.version} ${x.locator} dev=${x.dev}`)).toEqual([
-      "com.fasterxml.jackson.core:jackson-databind@2.13.2 pom.xml:4 dev=false",
+      "com.fasterxml.jackson.core:jackson-databind@2.13.2 pom.xml:6 dev=false",
       "junit:junit@4.12 pom.xml:10 dev=true",
     ]);
     expect(p?.unpinned.map((u) => u.text)).toEqual([

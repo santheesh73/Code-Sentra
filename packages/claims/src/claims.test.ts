@@ -196,6 +196,8 @@ describe("adversarial suite: every fabricated claim is dropped", () => {
     ],
     ["fabricated database", "Tasks are stored in PostgreSQL.", [E.store], "unsupported_token"],
     ["wrong framework", "The API uses Django.", [E.manifest], "unsupported_token"],
+    ["wrong Go framework", "The API uses Gin.", [E.manifest], "unsupported_token"],
+    ["wrong JVM framework", "The API uses Quarkus.", [E.manifest], "unsupported_token"],
     ["wrong version", "It runs on Express 5.0.0.", [E.manifest], "unsupported_token"],
     [
       "fabricated advisory",
@@ -244,6 +246,7 @@ describe("adversarial suite: every fabricated claim is dropped", () => {
     // Asserting checks that failed or were skipped.
     ["failed tests asserted", "All tests pass.", [E.tests], "skipped_check_asserted"],
     ["counted tests asserted", "All 4 tests pass.", [E.tests], "skipped_check_asserted"],
+    ["specs asserted", "All 3 specs pass.", [E.tests], "skipped_check_asserted"],
     ["skipped lint asserted", "The code lints cleanly.", [E.manifest], "skipped_check_asserted"],
     [
       "failed audit asserted",

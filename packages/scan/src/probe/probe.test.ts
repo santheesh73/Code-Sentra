@@ -329,11 +329,15 @@ describe("probes in the sandbox (fixture repos)", () => {
         null,
         1,
       );
-      expect(run.fetch.status, ctx).toBe("pass");
+      const ran = repo.expected.probes.tests;
+      // Ecosystems whose download would run code fetch nothing and run nothing (ADR 0026).
+      expect(run.fetch.status, ctx).toBe(ran ? "pass" : "none");
       expect(by.install?.status, ctx).toBe(repo.expected.probes.install);
       expect(by.build?.status, ctx).toBe(repo.expected.probes.build);
-      expect(by.tests?.tests, ctx).toMatchObject(repo.expected.probes.tests);
-      expect(by.tests?.status).toBe("fail");
+      if (ran) {
+        expect(by.tests?.tests, ctx).toMatchObject(ran);
+        expect(by.tests?.status).toBe("fail");
+      } else expect(by.tests?.status, ctx).toBe("skipped");
       expect(["pass", "not_applicable", "skipped"]).toContain(by.typecheck?.status);
       // The original tree is untouched.
       expect(readdirSync(repo.repoDir)).not.toContain("node_modules");

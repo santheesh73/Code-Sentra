@@ -8,6 +8,7 @@ export interface ManifestInfo {
   /** The Go module path, the Maven `groupId:artifactId`, or null. */
   name: string | null;
   version: string | null;
+  description: string | null;
   /** Dependency name → declared version (or `*`). */
   dependencies: Record<string, string>;
 }
@@ -39,6 +40,7 @@ export function parseGoMod(file: string, text: string): ManifestInfo {
     packageManager: "go",
     name: /^module\s+(\S+)/m.exec(text)?.[1] ?? null,
     version: /^go\s+(\S+)/m.exec(text)?.[1] ?? null,
+    description: null,
     dependencies: deps,
   };
 }
@@ -54,6 +56,7 @@ export function parseGemfile(file: string, text: string): ManifestInfo {
     packageManager: "bundler",
     name: null,
     version: null,
+    description: null,
     dependencies: deps,
   };
 }
@@ -85,6 +88,7 @@ export function parsePom(file: string, text: string): ManifestInfo {
     packageManager: "maven",
     name: g && a ? `${g}:${a}` : a,
     version: tag(top, "version"),
+    description: tag(top, "description"),
     dependencies: deps,
   };
 }
@@ -102,6 +106,7 @@ export function parseGradle(file: string, text: string): ManifestInfo {
     packageManager: "gradle",
     name: null,
     version: null,
+    description: null,
     dependencies: deps,
   };
 }

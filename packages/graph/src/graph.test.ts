@@ -268,4 +268,25 @@ describe("Go, Ruby and Java resolution", () => {
       "file:cmd/shop/main.go -> file:internal/cart/total.go",
     ]);
   });
+
+  it("a Go or Java test file tests its own package without importing it", async () => {
+    const goTest = await parseFile(
+      "internal/cart/cart_test.go",
+      'package cart\nimport "testing"\nfunc TestTotal(t *testing.T) {}\n',
+    );
+    const javaTest = await parseFile(
+      "src/test/java/com/x/shop/ItemTest.java",
+      "package com.x.shop;\nclass ItemTest { @Test void ok() {} }\n",
+    );
+    const g = buildGraph({
+      files: [goTest as FileFacts, javaTest as FileFacts],
+      allPaths: [...files],
+      goModules: modules,
+    });
+    expect(g.edges.filter((e) => e.kind === "tests").map((e) => `${e.from} -> ${e.to}`)).toEqual([
+      "file:internal/cart/cart_test.go -> file:internal/cart/cart.go",
+      "file:internal/cart/cart_test.go -> file:internal/cart/total.go",
+      "file:src/test/java/com/x/shop/ItemTest.java -> file:src/main/java/com/x/shop/Item.java",
+    ]);
+  });
 });

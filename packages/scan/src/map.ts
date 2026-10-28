@@ -242,6 +242,7 @@ export async function mapProject(
       file: p,
       name: m.name,
       version: m.version,
+      ...(m.description ? { description: m.description } : {}),
       package_manager: m.packageManager,
       dependencies: m.dependencies,
     });

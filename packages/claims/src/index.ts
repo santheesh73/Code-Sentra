@@ -121,6 +121,24 @@ const TECH = [
   "uvicorn",
   "gunicorn",
   "Celery",
+  // Go, Ruby and JVM (ADR 0026).
+  "Gin",
+  "Echo",
+  "Chi",
+  "Fiber",
+  "Sinatra",
+  "Hanami",
+  "Rack",
+  "RSpec",
+  "Minitest",
+  "JUnit",
+  "Quarkus",
+  "Micronaut",
+  "Jakarta",
+  "Hibernate",
+  "Maven",
+  "Gradle",
+  "Bundler",
 ];
 const TECH_RE = new RegExp(
   `(?<![\\w.-])(${TECH.map((t) => t.replace(/[.]/g, "\\.")).join("|")})(?![\\w-])`,
@@ -314,10 +332,10 @@ function featuresIn(claim: ClaimDraft, ctx: VerifierContext) {
 }
 
 const CHECK_PATTERNS: [CheckName, RegExp][] = [
-  // "All tests pass" / "Tests pass" / "every test passes"; not "2 of 4 tests pass".
+  // "All tests pass" / "Tests pass" / "every test passes" (or specs); not "2 of 4 tests pass".
   [
     "tests",
-    /(\b(all|every)\s+(\w+\s+)?tests?\s+(pass|passes|passing|succeed|are green)\b|(^|[.!?]\s+)(the\s+)?tests\s+(all\s+)?pass(es|ing)?\b|\btest suite (passes|is green)\b|\bno (failing|broken) tests\b)/i,
+    /(\b(all|every)\s+(\w+\s+)?(tests?|specs?)\s+(pass|passes|passing|succeed|are green)\b|(^|[.!?]\s+)(the\s+)?(tests|specs)\s+(all\s+)?pass(es|ing)?\b|\b(test|spec) suite (passes|is green)\b|\bno (failing|broken) (tests|specs)\b)/i,
   ],
   [
     "build",

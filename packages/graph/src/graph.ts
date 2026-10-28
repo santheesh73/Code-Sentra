@@ -229,6 +229,36 @@ export function buildGraph(input: GraphInput): CodeGraph {
     edges.push({ from: fileKey(p), to: key, kind: "defines_route", weight: 1 });
   }
 
+  // A Go or Java test file sees its own package without importing it (Go `_test.go`
+  // files in the package's directory; Java tests in the same package under another
+  // source root), so it tests those files too.
+  const dirOf = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
+  const byDir = new Map<string, string[]>();
+  for (const p of input.allPaths) {
+    const list = byDir.get(dirOf(p));
+    if (list) list.push(p);
+    else byDir.set(dirOf(p), [p]);
+  }
+  for (const f of input.files) {
+    if (!isTestPath(f.path)) continue;
+    let siblings: string[] = [];
+    if (f.language === "go") {
+      siblings = (byDir.get(dirOf(f.path)) ?? []).filter(
+        (p) => p.endsWith(".go") && !p.endsWith("_test.go"),
+      );
+    } else if (f.language === "java") {
+      const root = javaRoots.find((r) => f.path.startsWith(`${r}/`));
+      if (root) {
+        const pkgDir = dirOf(f.path).slice(root.length);
+        siblings = javaRoots
+          .flatMap((r) => byDir.get(`${r}${pkgDir}`) ?? [])
+          .filter((p) => p.endsWith(".java") && !isTestPath(p));
+      }
+    }
+    for (const p of siblings)
+      edges.push({ from: fileKey(f.path), to: fileKey(p), kind: "tests", weight: 1 });
+  }
+
   // Test files test what they import.
   for (const e of edges.filter((x) => x.kind === "imports")) {
     const fromPath = nodes.get(e.from)?.path;

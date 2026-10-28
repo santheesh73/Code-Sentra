@@ -412,8 +412,9 @@ export async function runScan(o: ScanOptions): Promise<ScanResult> {
     const stack = [file];
     while (stack.length) {
       const cur = stack.pop() as string;
+      // `tests` edges carry same-package coverage (Go, Java), which needs no import.
       for (const e of map.graph.edges)
-        if (e.kind === "imports" && e.from === `file:${cur}`) {
+        if ((e.kind === "imports" || e.kind === "tests") && e.from === `file:${cur}`) {
           const to = e.to.slice(5);
           if (!r.has(to)) {
             r.add(to);

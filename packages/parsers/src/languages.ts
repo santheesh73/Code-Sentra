@@ -18,6 +18,8 @@ const BY_EXTENSION: Record<string, string> = {
   ".kt": "Kotlin",
   ".kts": "Kotlin",
   ".rb": "Ruby",
+  ".rake": "Ruby",
+  ".gemspec": "Ruby",
   ".php": "PHP",
   ".cs": "C#",
   ".c": "C",
@@ -40,6 +42,7 @@ const BY_EXTENSION: Record<string, string> = {
 const SHEBANG: [RegExp, string][] = [
   [/^#!.*\bpython[0-9.]*\b/, "Python"],
   [/^#!.*\b(node|deno|bun)\b/, "JavaScript"],
+  [/^#!.*\bruby\b/, "Ruby"],
   [/^#!.*\b(ba|z)?sh\b/, "Shell"],
 ];
 
@@ -54,6 +57,8 @@ function extensionOf(path: string): string {
 export function detectLanguage(path: string, firstLine = ""): string | null {
   const ext = extensionOf(path);
   if (ext === ".d.ts") return "TypeScript";
+  const base = path.slice(path.lastIndexOf("/") + 1);
+  if (base === "Gemfile" || base === "Rakefile") return "Ruby";
   if (BY_EXTENSION[ext]) return BY_EXTENSION[ext] as string;
   if (!ext && firstLine.startsWith("#!")) {
     for (const [re, name] of SHEBANG) if (re.test(firstLine)) return name;
@@ -69,17 +74,28 @@ export function parserLanguageFor(path: string, firstLine = ""): ParserLanguage 
   if (ext === ".jsx") return "tsx";
   if ([".js", ".mjs", ".cjs"].includes(ext)) return "javascript";
   if ([".py", ".pyi"].includes(ext)) return "python";
+  if (ext === ".go") return "go";
+  if ([".rb", ".rake", ".gemspec"].includes(ext)) return "ruby";
+  if (ext === ".java") return "java";
   const lang = detectLanguage(path, firstLine);
   if (lang === "Python") return "python";
   if (lang === "JavaScript") return "javascript";
+  if (lang === "Ruby") return "ruby";
   return null;
 }
 
 /** Languages that have a parser, by display name. */
-export const PARSED_LANGUAGES = new Set(["TypeScript", "JavaScript", "Python"]);
+export const PARSED_LANGUAGES = new Set([
+  "TypeScript",
+  "JavaScript",
+  "Python",
+  "Go",
+  "Ruby",
+  "Java",
+]);
 
 const TEST_PATH =
-  /(^|\/)(__tests__|tests?|spec)\/|\.(test|spec)\.[cm]?[jt]sx?$|(^|\/)test_[^/]*\.py$|_test\.py$/;
+  /(^|\/)(__tests__|tests?|spec)\/|\.(test|spec)\.[cm]?[jt]sx?$|(^|\/)test_[^/]*\.py$|_test\.(py|go|rb)$|_spec\.rb$|(^|\/)src\/test\/|Tests?\.java$/;
 
 export function isTestPath(path: string): boolean {
   return TEST_PATH.test(path);

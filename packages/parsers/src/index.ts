@@ -1,5 +1,8 @@
+import { extractGo } from "./extract-go.js";
+import { extractJava } from "./extract-java.js";
 import { extractJs } from "./extract-js.js";
 import { extractPy } from "./extract-py.js";
+import { extractRuby } from "./extract-ruby.js";
 import { parserLanguageFor } from "./languages.js";
 import { parserFor } from "./loader.js";
 import type { FileFacts, ParserLanguage } from "./types.js";
@@ -28,9 +31,18 @@ export async function parseFile(
     const tree = parser.parse(source);
     if (!tree) return null;
     try {
-      return language === "python"
-        ? extractPy(path, tree, source)
-        : extractJs(path, language, tree, source);
+      switch (language) {
+        case "python":
+          return extractPy(path, tree, source);
+        case "go":
+          return extractGo(path, tree, source);
+        case "ruby":
+          return extractRuby(path, tree, source);
+        case "java":
+          return extractJava(path, tree, source);
+        default:
+          return extractJs(path, language, tree, source);
+      }
     } finally {
       tree.delete();
     }

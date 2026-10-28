@@ -13,8 +13,8 @@ export interface ProbeStep {
 }
 
 export interface ProbePlan {
-  ecosystem: "node" | "python" | "none";
-  packageManager: "npm" | "pnpm" | "yarn" | "pip" | null;
+  ecosystem: "node" | "python" | "go" | "none";
+  packageManager: "npm" | "pnpm" | "yarn" | "pip" | "go" | null;
   /** Dependency download (network on, project code never runs); null when nothing to fetch. */
   fetch: { command: string[]; reason: string } | null;
   /** Files rewritten in the scratch copy before fetch (sanitized requirements, disabled .npmrc). */
@@ -328,6 +328,91 @@ function pythonPlan(view: ProjectView): ProbePlan {
   return plan;
 }
 
+/** The Go toolchain in the sandbox image (infra/sandbox/Dockerfile; a test keeps them equal). */
+export const SANDBOX_GO_VERSION = "1.27.2";
+const GO_PROXY = "https://proxy.golang.org";
+const GO_SUMDB = "sum.golang.org";
+
+const goVersionParts = (v: string) => v.split(".").map((x) => Number.parseInt(x, 10) || 0);
+function goAtLeast(have: string, need: string): boolean {
+  const a = goVersionParts(have);
+  const b = goVersionParts(need);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d) return d > 0;
+  }
+  return true;
+}
+
+/**
+ * Go (ADR 0026). `go mod download` fetches modules without running any code, from the
+ * public module proxy only (no `direct` fallback, so no VCS hosts) and checked against the
+ * public checksum database. Everything after runs offline from that cache, cgo off (the
+ * sandbox has no C toolchain).
+ */
+function goPlan(view: ProjectView): ProbePlan {
+  const plan: ProbePlan = {
+    ecosystem: "go",
+    packageManager: "go",
+    fetch: null,
+    prepare: [],
+    steps: [],
+    refused: null,
+  };
+  const gomod = view.read("go.mod") ?? "";
+  const need = /^go\s+(\d+(?:\.\d+){0,2})/m.exec(gomod)?.[1];
+  const all = ["install", "build", "typecheck", "lint", "tests"] as const;
+  if (need && !goAtLeast(SANDBOX_GO_VERSION, need)) {
+    for (const n of all)
+      plan.steps.push(
+        skip(n, "gap", `go.mod needs Go ${need}; the sandbox has Go ${SANDBOX_GO_VERSION}`),
+      );
+    return plan;
+  }
+  const common =
+    "GOTOOLCHAIN=local GOWORK=off GOENV=off GOMODCACHE=/work/.cs-gomod GOCACHE=/tmp/gocache CGO_ENABLED=0";
+  const offline = `${common} GOFLAGS=-mod=readonly GOPROXY=off`;
+  const requires = /^require\s/m.test(gomod);
+  if (requires) {
+    if (!view.files.has("go.sum")) {
+      plan.steps.push(
+        skip("install", "gap", "go.mod requires modules but there is no go.sum to verify them"),
+      );
+      for (const n of ["build", "typecheck", "lint", "tests"] as const)
+        plan.steps.push(skip(n, "gap", "dependencies were not downloaded"));
+      return plan;
+    }
+    plan.fetch = {
+      command: sh(
+        `${common} GOFLAGS=-mod=readonly GOPROXY=${GO_PROXY} GOSUMDB=${GO_SUMDB} GONOSUMDB= GONOPROXY= GOPRIVATE= GOINSECURE= go mod download`,
+      ),
+      reason: `go mod download from ${GO_PROXY} only, verified against ${GO_SUMDB} (no code runs)`,
+    };
+    plan.steps.push(step("install", sh(`${offline} go mod verify`), 5 * MIN));
+  } else {
+    plan.steps.push(skip("install", "not_applicable", "go.mod requires no modules"));
+  }
+  plan.steps.push(step("build", sh(`${offline} go build ./...`), 10 * MIN));
+  plan.steps.push(skip("typecheck", "not_applicable", "go build type-checks every package"));
+  plan.steps.push(step("lint", sh(`${offline} go vet ./...`), 5 * MIN));
+  plan.steps.push(step("tests", sh(`${offline} go test -json ./...`), 10 * MIN));
+  return plan;
+}
+
+/** Projects whose dependency download would run code: every step is a gap with that reason. */
+function refusedEcosystem(reason: string): ProbePlan {
+  return {
+    ecosystem: "none",
+    packageManager: null,
+    fetch: null,
+    prepare: [],
+    steps: (["install", "build", "typecheck", "lint", "tests"] as const).map((n) =>
+      skip(n, "gap", reason),
+    ),
+    refused: null,
+  };
+}
+
 /** Decides what to run for a project, from its manifests only. Pure. */
 export function planProbes(view: ProjectView): ProbePlan {
   if (view.files.has("package.json")) return nodePlan(view);
@@ -337,18 +422,20 @@ export function planProbes(view: ProjectView): ProbePlan {
     view.files.has("setup.py")
   )
     return pythonPlan(view);
-  return {
-    ecosystem: "none",
-    packageManager: null,
-    fetch: null,
-    prepare: [],
-    steps: (["install", "build", "typecheck", "lint", "tests"] as const).map((n) =>
-      skip(
-        n,
-        "gap",
-        "no supported manifest (package.json, requirements.txt, pyproject.toml) at the project root",
-      ),
-    ),
-    refused: null,
-  };
+  if (view.files.has("go.mod")) return goPlan(view);
+  if (view.files.has("Gemfile"))
+    return refusedEcosystem(
+      "not run: Bundler evaluates the Gemfile (Ruby code) to download gems, so the dependency download would run project code",
+    );
+  if (
+    view.files.has("pom.xml") ||
+    view.files.has("build.gradle") ||
+    view.files.has("build.gradle.kts")
+  )
+    return refusedEcosystem(
+      "not run: Maven and Gradle run build plugins or build scripts to resolve dependencies, so the dependency download would run code",
+    );
+  return refusedEcosystem(
+    "no supported manifest (package.json, requirements.txt, pyproject.toml, go.mod) at the project root",
+  );
 }

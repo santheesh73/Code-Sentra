@@ -8,7 +8,13 @@ import { createSandbox, type Sandbox } from "@codesentra/sandbox";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { scanSecrets } from "../secrets.js";
 import { parseErrorLines, parseTestOutput } from "./parse.js";
-import { checkNpmLockUrls, type ProjectView, planProbes, sanitizeRequirements } from "./plan.js";
+import {
+  checkNpmLockUrls,
+  type ProjectView,
+  planProbes,
+  SANDBOX_GO_VERSION,
+  sanitizeRequirements,
+} from "./plan.js";
 import { runProbes } from "./run.js";
 
 const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../..");
@@ -70,6 +76,26 @@ describe("test output parsing", () => {
       skip: 1,
     });
   });
+  it("go test -json: top-level tests, subtests rolled up, unbuilt packages as failures", () => {
+    const ev = (o: object) => JSON.stringify({ Time: "2026-10-28T00:00:00Z", ...o });
+    const out = [
+      ev({ Action: "run", Package: "ex/cart", Test: "TestAdd" }),
+      ev({ Action: "pass", Package: "ex/cart", Test: "TestAdd/one" }),
+      ev({ Action: "pass", Package: "ex/cart", Test: "TestAdd" }),
+      ev({ Action: "fail", Package: "ex/cart", Test: "TestTotal" }),
+      ev({ Action: "skip", Package: "ex/cart", Test: "TestExport" }),
+      ev({ Action: "fail", Package: "ex/cart" }),
+      ev({ Action: "output", Package: "ex/api", Output: "FAIL\tex/api [build failed]\n" }),
+      ev({ Action: "fail", Package: "ex/api" }),
+    ].join("\n");
+    expect(parseTestOutput(out)).toEqual({
+      runner: "go",
+      pass: 1,
+      fail: 2,
+      skip: 1,
+      failing: ["TestTotal"],
+    });
+  });
   it("returns null when there is no summary (unknown, never passing)", () => {
     expect(parseTestOutput("Segmentation fault")).toBeNull();
   });
@@ -81,10 +107,15 @@ describe("test output parsing", () => {
       '  File "/work/notes_api/app.py", line 12, in <module>',
       "/home/user/src/c.ts",
       "  4:2  error  'y' is defined but never used  no-unused-vars",
+      "./internal/cart/cart.go:12:5: undefined: total",
+      "vet: ./cmd/shop/main.go:9:2: fmt.Printf format %d has arg x of wrong type string",
+      "/work/.cs-gomod/github.com/x/y@v1.0.0/y.go:3:1: syntax error",
     ].join("\n");
     expect(parseErrorLines(out).map((e) => `${e.file}:${e.line}`)).toEqual([
       "src/a.ts:3",
       "src/b.ts:7",
+      "internal/cart/cart.go:12",
+      "cmd/shop/main.go:9",
       "notes_api/app.py:12",
     ]);
   });
@@ -167,6 +198,69 @@ describe("probe planning", () => {
       }),
     );
     expect(disabled.prepare).toContainEqual({ rename: [".npmrc", ".npmrc.codesentra-disabled"] });
+  });
+});
+
+describe("probe planning for Go, Ruby and JVM projects", () => {
+  const goMod = (go: string, requires = true) =>
+    `module example.com/shop\n\ngo ${go}\n${requires ? "\nrequire github.com/google/uuid v1.6.0\n" : ""}`;
+
+  it("Go: module-proxy-only download, offline verify, build, vet and go test -json", () => {
+    const p = planProbes(memView({ "go.mod": goMod("1.23"), "go.sum": "x" }));
+    expect(p.ecosystem).toBe("go");
+    const fetch = p.fetch?.command.join(" ") ?? "";
+    expect(fetch).toContain("GOPROXY=https://proxy.golang.org ");
+    expect(fetch).not.toMatch(/GOPROXY=\S*direct/);
+    expect(fetch).toContain("GOSUMDB=sum.golang.org");
+    expect(fetch).toContain("GOTOOLCHAIN=local");
+    expect(fetch).toContain("go mod download");
+    expect(
+      p.steps.map(
+        (s) => `${s.name}:${s.command ? s.command.join(" ").split(" go ")[1] : s.skip?.kind}`,
+      ),
+    ).toEqual([
+      "install:mod verify",
+      "build:build ./...",
+      "typecheck:not_applicable",
+      "lint:vet ./...",
+      "tests:test -json ./...",
+    ]);
+    for (const st of p.steps.filter((x) => x.command))
+      expect(st.command?.join(" ")).toContain("GOPROXY=off");
+  });
+  it("Go: gaps for a missing go.sum and for a Go newer than the sandbox's", () => {
+    const noSum = planProbes(memView({ "go.mod": goMod("1.23") }));
+    expect(noSum.fetch).toBeNull();
+    expect(noSum.steps.every((s) => s.skip?.kind === "gap")).toBe(true);
+    expect(noSum.steps[0]?.skip?.reason).toMatch(/no go\.sum/);
+    const newer = planProbes(memView({ "go.mod": goMod("9.0"), "go.sum": "x" }));
+    expect(newer.steps[0]?.skip?.reason).toBe(
+      `go.mod needs Go 9.0; the sandbox has Go ${SANDBOX_GO_VERSION}`,
+    );
+    const noDeps = planProbes(memView({ "go.mod": goMod("1.23", false) }));
+    expect(noDeps.fetch).toBeNull();
+    expect(noDeps.steps[0]?.skip?.kind).toBe("not_applicable");
+  });
+  it("Ruby and JVM: every step is a gap naming why the download would run code", () => {
+    const rb = planProbes(memView({ Gemfile: 'gem "sinatra"', "Gemfile.lock": "" }));
+    expect(rb.fetch).toBeNull();
+    expect(
+      rb.steps.every((s) => s.skip?.kind === "gap" && /Gemfile \(Ruby code\)/.test(s.skip.reason)),
+    ).toBe(true);
+    for (const f of ["pom.xml", "build.gradle", "build.gradle.kts"]) {
+      const j = planProbes(memView({ [f]: "" }));
+      expect(
+        j.steps.every((s) => /Maven and Gradle run build plugins/.test(s.skip?.reason ?? "")),
+        f,
+      ).toBe(true);
+    }
+  });
+  it("the sandbox image has the Go version the planner assumes", () => {
+    const dockerfile = readFileSync(
+      resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../../infra/sandbox/Dockerfile"),
+      "utf8",
+    );
+    expect(dockerfile).toContain(`FROM golang:${SANDBOX_GO_VERSION}-bookworm AS go`);
   });
 });
 

@@ -139,6 +139,23 @@ export function memoryStore(): ObjectStore & { objects: Map<string, Uint8Array> 
       objects.delete(key);
     },
     async check() {},
+    // Direct uploads: tests put the object themselves, as a browser would POST it.
+    async presignUpload(key, opts) {
+      return {
+        url: `memory://${key}`,
+        fields: { key, "Content-Type": opts.contentType, max: String(opts.maxBytes) },
+        expiresAt: new Date(Date.now() + 900_000),
+      };
+    },
+    async stat(key) {
+      const v = objects.get(key);
+      return v ? { size: v.byteLength } : null;
+    },
+    async getRange(key, start, end) {
+      const v = objects.get(key);
+      if (!v) throw new Error(`no such key: ${key}`);
+      return v.subarray(start, end + 1);
+    },
   };
 }
 

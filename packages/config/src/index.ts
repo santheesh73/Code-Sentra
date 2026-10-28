@@ -107,6 +107,8 @@ export const EnvSchema = z.object({
   /** Directory with an OSV dump (osv-scanner offline format); unset uses the OSV API. */
   OSV_OFFLINE_DIR: z.string().optional(),
   SCAN_MAX_COMMITS: z.coerce.number().int().min(1).max(50_000).default(2000),
+  /** The object-storage endpoint browsers reach for direct uploads (default: S3_ENDPOINT). */
+  S3_PUBLIC_ENDPOINT: url().optional(),
   /** How often worker-link looks for due schedules (Section 6 `schedules`); 0 turns it off. */
   SCHEDULER_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(3600).default(30),
   /** Largest accepted zip upload (compressed), bytes. */
@@ -183,6 +185,7 @@ export const SERVICE_ENV = {
       "EMAIL_OUTBOX_DIR",
       "PULSE_TEST_ALLOW_HOSTS",
       "SCAN_MAX_UPLOAD_BYTES",
+      "S3_PUBLIC_ENDPOINT",
     ],
     integrations: ["s3", "github_oauth", "github_app", "email", "slack"],
   },

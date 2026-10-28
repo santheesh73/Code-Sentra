@@ -163,6 +163,11 @@ const attacks = (): Record<string, Attack> => {
     "GET /v1/orgs/:id/tokens": { url: `/v1/orgs/${B.org}/tokens` },
     "DELETE /v1/orgs/:id/tokens/:tokenId": { url: `/v1/orgs/${B.org}/tokens/${B.project}` },
     "GET /v1/orgs/:id/audit": { url: `/v1/orgs/${B.org}/audit` },
+    "POST /v1/projects/:id/uploads": { url: `/v1/projects/${B.project}/uploads`, payload: {} },
+    "POST /v1/projects/:id/uploads/:snapshotId/complete": {
+      url: `/v1/projects/${B.project}/uploads/${B.snapshot}/complete`,
+      payload: {},
+    },
     "PUT /v1/projects/:id/environments/:envId/bypass-token": {
       url: `/v1/projects/${B.project}/environments/${B.env}/bypass-token`,
       payload: { token: "attacker-token-123" },

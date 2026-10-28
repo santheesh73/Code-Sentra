@@ -28,6 +28,10 @@ const isZip = (b: Buffer) =>
   (b[2] === 0x03 || b[2] === 0x05) &&
   (b[3] === 0x04 || b[3] === 0x06);
 
+/** Where a snapshot's zip lives (uploads through the API and direct uploads alike). */
+export const uploadKey = (orgId: string, snapshotId: string) =>
+  `snapshots/${orgId}/${snapshotId}.zip`;
+
 /** Test only; packages/config refuses PULSE_TEST_ALLOW_HOSTS unless NODE_ENV=test. */
 export function testAllowHosts(ctx: AppContext): ReadonlySet<string> {
   return new Set(
@@ -138,7 +142,7 @@ export function scanRoutes(ctx: AppContext): FastifyPluginAsyncZod {
               sizeBytes: body.length,
             }),
           );
-          const key = `snapshots/${access.orgId}/${snap.id}.zip`;
+          const key = uploadKey(access.orgId, snap.id);
           try {
             await ctx.store.put(key, body, "application/zip");
           } catch (e) {
@@ -177,7 +181,7 @@ export function scanRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           tags: ["scan"],
           summary: "Start Sentra Scan",
           description:
-            "Scans a snapshot (or, without snapshot_id, the project's repo_url at its default branch): map, history, sandboxed probes, dependency audit, secrets, feature inventory and an evidence-verified report.",
+            "Scans a snapshot (or, without snapshot_id, the project's GitHub repository or repo_url at its default branch): map, history, sandboxed probes, dependency audit, secrets, feature inventory and an evidence-verified report.",
           params: z.object({ id: z.uuid() }),
           body: z.object({ snapshot_id: z.uuid().optional() }).optional(),
           response: {
@@ -214,12 +218,15 @@ export function scanRoutes(ctx: AppContext): FastifyPluginAsyncZod {
               ),
           );
           if (!snap) throw notFound("Snapshot");
+          if (snap.kind === "zip" && !snap.storageKey)
+            throw badRequest("The upload of this snapshot was not completed");
         } else {
-          if (!project.repoUrl)
-            throw badRequest("Upload a zip snapshot first, or set the project's repo_url");
-          snapshotId = (
-            await gitSnapshot(access.orgId, project.id, project.repoUrl, project.defaultBranch)
-          ).id;
+          const snap = await projectSourceSnapshot(ctx, testAllow, project);
+          if (!snap)
+            throw badRequest(
+              "Upload a zip snapshot first, bind the project's GitHub repository, or set its repo_url",
+            );
+          snapshotId = snap.id;
         }
         // The Scan feeds a Link run, which stores and re-checks its issues (ADR 0019).
         const started = await startLinked(ctx, {
@@ -234,6 +241,106 @@ export function scanRoutes(ctx: AppContext): FastifyPluginAsyncZod {
         return reply
           .code(202)
           .send({ run_id: started.childRunIds[0] as string, link_run_id: started.linkRunId });
+      },
+    );
+
+    app.post(
+      "/v1/projects/:id/uploads",
+      {
+        config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+        schema: {
+          tags: ["scan"],
+          summary: "Start a direct upload of a zip",
+          description: `For zips of any size up to ${maxUpload} bytes: the browser POSTs the file straight to object storage with the returned form (the policy pins the key, the type and the size), then calls .../uploads/{snapshot_id}/complete. Nothing passes through the web app or this API.`,
+          params: z.object({ id: z.uuid() }),
+          response: {
+            201: z.object({
+              snapshot_id: z.uuid(),
+              url: z.string(),
+              fields: z.record(z.string(), z.string()),
+              expires_at: z.iso.datetime(),
+              max_bytes: z.number().int(),
+            }),
+            401: Problem,
+            404: Problem,
+            501: Problem,
+          },
+        },
+      },
+      async (req, reply) => {
+        const access = await ctx.authz.requireProject(req, req.params.id);
+        const store = ctx.store;
+        if (!store)
+          throw notConfigured(
+            "Uploads",
+            "S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY",
+          );
+        const snap = await ctx.db.withOrg(access.orgId, (tx) =>
+          createSnapshot(tx, { orgId: access.orgId, projectId: req.params.id, kind: "zip" }),
+        );
+        const post = await store.presignUpload(uploadKey(access.orgId, snap.id), {
+          maxBytes: maxUpload,
+          contentType: "application/zip",
+        });
+        return reply.code(201).send({
+          snapshot_id: snap.id,
+          url: post.url,
+          fields: post.fields,
+          expires_at: post.expiresAt.toISOString(),
+          max_bytes: maxUpload,
+        });
+      },
+    );
+
+    app.post(
+      "/v1/projects/:id/uploads/:snapshotId/complete",
+      {
+        schema: {
+          tags: ["scan"],
+          summary: "Finish a direct upload",
+          description:
+            "Checks the uploaded object (present, within the size limit, a zip by its signature) and marks the snapshot ready to scan. A rejected object is deleted.",
+          params: z.object({ id: z.uuid(), snapshotId: z.uuid() }),
+          response: { 200: SnapshotDto, 400: Problem, 401: Problem, 404: Problem, 501: Problem },
+        },
+      },
+      async (req) => {
+        const access = await ctx.authz.requireProject(req, req.params.id);
+        const store = ctx.store;
+        if (!store)
+          throw notConfigured(
+            "Uploads",
+            "S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY",
+          );
+        const [snap] = await ctx.db.withOrg(access.orgId, (tx) =>
+          tx
+            .select()
+            .from(s.snapshots)
+            .where(
+              and(
+                eq(s.snapshots.id, req.params.snapshotId),
+                eq(s.snapshots.projectId, req.params.id),
+              ),
+            ),
+        );
+        if (snap?.kind !== "zip") throw notFound("Snapshot");
+        if (snap.storageKey) return snapshotDto(snap);
+        const key = uploadKey(access.orgId, snap.id);
+        const stat = await store.stat(key);
+        if (!stat) throw badRequest("Nothing was uploaded for this snapshot");
+        const reject = async (why: string) => {
+          await store.delete(key).catch(() => {});
+          return badRequest(why);
+        };
+        if (stat.size > maxUpload) throw await reject(`The zip is larger than ${maxUpload} bytes`);
+        if (!isZip(Buffer.from(await store.getRange(key, 0, 3))))
+          throw await reject("The upload is not a zip archive");
+        const done = await ctx.db.withOrg(access.orgId, async (tx) => {
+          await updateSnapshot(tx, snap.id, { storageKey: key, sizeBytes: stat.size });
+          const [row] = await tx.select().from(s.snapshots).where(eq(s.snapshots.id, snap.id));
+          return row as typeof snap;
+        });
+        return snapshotDto(done);
       },
     );
 

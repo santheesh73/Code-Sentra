@@ -6,20 +6,20 @@ is run by a person with access to the accounts.
 
 ## 1. What a person has to provide
 
-| Item                                 | Used by                                  | Where it goes                               |
-| ------------------------------------ | ---------------------------------------- | ------------------------------------------- |
-| Render account (or Fly)              | API, worker-link, worker-pulse, Postgres | `render.yaml` Blueprint                     |
-| Vercel account                       | web                                      | `apps/web` project                          |
-| A VM with Docker (Linux, x86_64)     | worker-scan                              | `infra/deploy/worker-scan.compose.yml`      |
-| S3-compatible bucket + keys          | snapshots, screenshots                   | `S3_*`                                      |
-| A container registry                 | the four images                          | pushed tags                                 |
-| GitHub App (section 4)               | PR checks, deployments                   | `GITHUB_APP_*`, `GITHUB_WEBHOOK_SECRET`     |
-| GitHub OAuth App (sign-in)           | "Sign in with GitHub"                    | `GITHUB_OAUTH_CLIENT_ID/SECRET`             |
-| Resend account + verified domain     | sign-in links, alerts                    | `EMAIL_FROM`, `EMAIL_PROVIDER_API_KEY`      |
-| Slack app                            | Slack alerts                             | `SLACK_CLIENT_ID/SECRET`                    |
-| Anthropic API key                    | Scan reports                             | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`      |
-| Sentry DSN, OTLP endpoint (optional) | errors, traces                           | `SENTRY_DSN`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
-| A domain                             | the app                                  | `PUBLIC_APP_URL`                            |
+| Item                                 | Used by                                    | Where it goes                                                        |
+| ------------------------------------ | ------------------------------------------ | -------------------------------------------------------------------- |
+| Render account (or Fly)              | API, worker-link, worker-pulse, Postgres   | `render.yaml` Blueprint                                              |
+| Vercel account                       | web                                        | `apps/web` project                                                   |
+| A VM with Docker (Linux, x86_64)     | worker-scan                                | `infra/deploy/worker-scan.compose.yml`                               |
+| S3-compatible bucket + keys          | snapshots, screenshots, direct zip uploads | `S3_*`, and `S3_PUBLIC_ENDPOINT` if browsers reach storage elsewhere |
+| A container registry                 | the four images                            | pushed tags                                                          |
+| GitHub App (section 4)               | PR checks, deployments                     | `GITHUB_APP_*`, `GITHUB_WEBHOOK_SECRET`                              |
+| GitHub OAuth App (sign-in)           | "Sign in with GitHub"                      | `GITHUB_OAUTH_CLIENT_ID/SECRET`                                      |
+| Resend account + verified domain     | sign-in links, alerts                      | `EMAIL_FROM`, `EMAIL_PROVIDER_API_KEY`                               |
+| Slack app                            | Slack alerts                               | `SLACK_CLIENT_ID/SECRET`                                             |
+| Anthropic API key                    | Scan reports                               | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`                               |
+| Sentry DSN, OTLP endpoint (optional) | errors, traces                             | `SENTRY_DSN`, `OTEL_EXPORTER_OTLP_ENDPOINT`                          |
+| A domain                             | the app                                    | `PUBLIC_APP_URL`                                                     |
 
 Generate the two local secrets once and keep them in the platform's secret store:
 `SESSION_SECRET` (`openssl rand -hex 32`) and `ENCRYPTION_KEY` (`openssl rand -base64 32`).
@@ -66,6 +66,14 @@ variable to `infra/node/Dockerfile` as a build argument; check this on the first
 
 Every service refuses to start with a missing or placeholder secret (`packages/config`).
 In production every integration it declares is required.
+
+### Direct uploads
+
+Zips go from the browser straight to the bucket under a presigned POST policy (key, type
+and size pinned), so the web proxy's 4.5 MB limit does not apply. The bucket must allow
+CORS `POST` from `PUBLIC_APP_URL`, for example:
+`aws s3api put-bucket-cors --bucket <bucket> --cors-configuration '{"CORSRules":[{"AllowedOrigins":["https://app.example.com"],"AllowedMethods":["POST"],"AllowedHeaders":["*"]}]}'`.
+MinIO allows cross-origin requests by default.
 
 ## 4. GitHub App
 

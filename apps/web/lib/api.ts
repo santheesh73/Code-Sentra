@@ -325,7 +325,67 @@ export function isScanOutcome(o: unknown): o is ScanOutcome {
 }
 
 /** Uploads a zip as the raw request body (ADR 0018). */
+/**
+ * Uploads a zip straight to object storage (presigned POST, ADR 0024), so the web proxy's
+ * body limit never applies; then the API checks the object. Servers without direct
+ * uploads (501) get the zip through the proxy instead.
+ */
 export async function uploadZip(projectId: string, file: File): Promise<Snapshot> {
+  const start = await fetch(`/api/v1/projects/${projectId}/uploads`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+    credentials: "same-origin",
+  });
+  if (start.status === 501) return uploadThroughProxy(projectId, file);
+  const up = (await start.json().catch(() => ({}))) as Partial<Problem> & {
+    snapshot_id: string;
+    url: string;
+    fields: Record<string, string>;
+    max_bytes: number;
+  };
+  if (!start.ok) throw problemOf(start, up);
+  if (file.size > up.max_bytes)
+    throw new ApiError({
+      type: "about:blank",
+      title: "Too large",
+      status: 413,
+      detail: `The zip is ${file.size} bytes; this server accepts up to ${up.max_bytes}`,
+    });
+  const form = new FormData();
+  for (const [k, v] of Object.entries(up.fields)) form.append(k, v);
+  form.append("file", file);
+  const put = await fetch(up.url, { method: "POST", body: form });
+  if (!put.ok)
+    throw new ApiError({
+      type: "about:blank",
+      title: "Upload failed",
+      status: put.status,
+      detail: `Object storage refused the upload (HTTP ${put.status})`,
+    });
+  const done = await fetch(`/api/v1/projects/${projectId}/uploads/${up.snapshot_id}/complete`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+    credentials: "same-origin",
+  });
+  const snap = (await done.json().catch(() => ({}))) as Partial<Problem> & Snapshot;
+  if (!done.ok) throw problemOf(done, snap);
+  return snap;
+}
+
+function problemOf(res: Response, data: Partial<Problem>): ApiError {
+  return new ApiError({
+    type: data.type ?? "about:blank",
+    title: data.title ?? res.statusText,
+    status: res.status,
+    detail:
+      data.detail ??
+      (res.status === 413 ? "The zip is larger than this server accepts" : undefined),
+  });
+}
+
+async function uploadThroughProxy(projectId: string, file: File): Promise<Snapshot> {
   const res = await fetch(`/api/v1/projects/${projectId}/snapshots`, {
     method: "POST",
     headers: { "content-type": "application/zip" },
@@ -333,15 +393,7 @@ export async function uploadZip(projectId: string, file: File): Promise<Snapshot
     credentials: "same-origin",
   });
   const data = (await res.json().catch(() => ({}))) as Partial<Problem> & Snapshot;
-  if (!res.ok)
-    throw new ApiError({
-      type: data.type ?? "about:blank",
-      title: data.title ?? res.statusText,
-      status: res.status,
-      detail:
-        data.detail ??
-        (res.status === 413 ? "The zip is larger than this server accepts" : undefined),
-    });
+  if (!res.ok) throw problemOf(res, data);
   return data;
 }
 

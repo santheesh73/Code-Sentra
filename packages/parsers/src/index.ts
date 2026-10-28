@@ -5,6 +5,8 @@ import { parserFor } from "./loader.js";
 import type { FileFacts, ParserLanguage } from "./types.js";
 
 export { detectLanguage, isTestPath, PARSED_LANGUAGES, parserLanguageFor } from "./languages.js";
+export type { EmbeddedWasm } from "./loader.js";
+export { useEmbeddedWasm } from "./loader.js";
 export type { FileFacts, MarkerKind, ParserLanguage } from "./types.js";
 
 /** Files above this size are not parsed (generated bundles, minified code); listed as a gap. */

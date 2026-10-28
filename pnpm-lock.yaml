@@ -117,6 +117,9 @@ importers:
       '@codesentra/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@codesentra/parsers':
+        specifier: workspace:*
+        version: link:../../packages/parsers
       '@codesentra/sandbox':
         specifier: workspace:*
         version: link:../../packages/sandbox
@@ -133,6 +136,9 @@ importers:
       '@codesentra/fixture-harness':
         specifier: workspace:*
         version: link:../../fixtures/harness
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
 
   apps/web:
     dependencies:

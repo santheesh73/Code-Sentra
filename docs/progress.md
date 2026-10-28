@@ -1,5 +1,56 @@
 # Progress
 
+## Phase 7 — Hardening and the Phase 6 leftovers (2026-10-28)
+
+The user chose this scope; Section 18 ends at Phase 5 (ADR 0025). I ran the CLI against
+every fixture app, every failure simulator and both fixture repositories, and read each
+issue, re-check and prompt it produced.
+
+### Fixed
+
+- **Same-code findings were merged into one issue.**
+  - Before: one response missing three security headers was one issue, led by the first
+    header and listing `MISSING_SECURITY_HEADER` twice as corroboration. Fixing that
+    header resolved it, and the other two opened as new issues.
+  - Now: only different codes corroborate each other, so each missing header is its own
+    issue.
+- **Re-checks named the place instead of the thing.** For example, "app/page.tsx:9 is
+  documented in .env.example" and "console error https://x/ not logged". Six codes now
+  name the env var, test, header or message, clipped to 120 characters.
+- **Pulse waited 15 s on pages that ignore a response body.**
+  - Cause: Chromium keeps an intercepted response open until the page reads it, so
+    `networkidle` never fired.
+  - Fix: idle is now measured in Pulse's own request handler. On `env-undefined`, Pulse
+    took 15.8 s before and 1.4 s after, with the same findings. A regression test fails
+    on the old code.
+- **`TLS_EXPIRING` dropped the port** from its locator, so sites on one host with
+  different ports shared a fingerprint. Default ports are unaffected.
+- **Wording:** "A aws-access-token secret pattern" now reads "A secret matching the
+  aws-access-token pattern".
+
+### Looked at, not changed
+
+- **Missed schedule windows** were already caught up with one run; the existing test
+  covers six missed windows. The Phase 6 line saying they were "not replayed" was wrong
+  and is removed.
+- **A diff-only map step** is not worth building. Parsing takes about 1 s per 291 files
+  (1.4 MB, measured on this repository). A PR scan's time goes to the dependency
+  download, install, build and tests, which must run on the whole tree. The real speedup
+  would be a per-org dependency cache keyed by lockfile hash, which needs storage and a
+  cache-poisoning review. That is left for your decision.
+- **OSV lookups fail in this session** because its network only allows traffic through a
+  proxy and the SSRF-pinned fetch connects directly. Scan reports this as a gap.
+  Production has no such proxy.
+
+### Still open (needs the user)
+
+Unchanged from Phase 6: the real-GitHub gate, deployment, a real report-model run,
+gVisor, and npm publish (plus a license choice).
+
+### Gate result
+
+Running; replaced with the recorded output once the gate finishes.
+
 ## Phase 6 — Closing the Phase 1–5 gaps (2026-10-28)
 
 Section 18 stops at Phase 5. Phase 6 is the gaps from earlier entries that need no outside

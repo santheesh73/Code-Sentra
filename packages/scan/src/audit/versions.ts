@@ -1,6 +1,7 @@
 /**
- * Version ordering for OSV range evaluation. npm uses SemVer 2.0 (with a lenient parse of
- * `1.2` as `1.2.0`); PyPI uses PEP 440 (release segments, pre/post/dev releases, epochs).
+ * Version ordering for OSV range evaluation. npm and Go use SemVer 2.0 (with a lenient
+ * parse of `1.2` as `1.2.0`); PyPI uses PEP 440 (release segments, pre/post/dev releases,
+ * epochs); RubyGems and Maven have their own orderings below.
  * Returns negative, zero or positive; null when a version cannot be parsed.
  */
 export function compareSemver(a: string, b: string): number | null {
@@ -91,6 +92,99 @@ export function comparePep440(a: string, b: string): number | null {
   return 0;
 }
 
+/**
+ * RubyGems (`Gem::Version`): dot-separated segments, numbers compared as numbers; a segment
+ * with letters starts a prerelease, which sorts before the release (`1.0.a` < `1.0`).
+ */
+export function compareGem(a: string, b: string): number | null {
+  const parse = (v: string) => {
+    const t = v.trim();
+    if (!/^[0-9]+(\.[0-9a-zA-Z]+)*(-[0-9a-zA-Z._-]+)?$/.test(t)) return null;
+    // `1.0.0-x86_64-linux` is a platform build of 1.0.0.
+    const segs: (number | string)[] = [];
+    for (const part of t.replace(/-.*$/, "").split("."))
+      for (const m of part.matchAll(/[0-9]+|[a-zA-Z]+/g))
+        segs.push(/^\d+$/.test(m[0]) ? Number(m[0]) : m[0]);
+    // Trailing zeros do not count (1.0 == 1).
+    while (segs.length > 1 && segs.at(-1) === 0) segs.pop();
+    return segs;
+  };
+  const pa = parse(a);
+  const pb = parse(b);
+  if (!pa || !pb) return null;
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i];
+    const y = pb[i];
+    if (x === y) continue;
+    // A missing segment is 0 against a number; a prerelease (letters) sorts before it.
+    if (x === undefined) {
+      if (typeof y === "string") return 1;
+      if (y !== 0) return -1;
+      continue;
+    }
+    if (y === undefined) {
+      if (typeof x === "string") return -1;
+      if (x !== 0) return 1;
+      continue;
+    }
+    if (typeof x === "number" && typeof y === "number") return x - y;
+    if (typeof x === "string" && typeof y === "string") return x < y ? -1 : 1;
+    return typeof x === "string" ? -1 : 1;
+  }
+  return 0;
+}
+
+const MAVEN_QUALIFIERS = ["alpha", "beta", "milestone", "rc", "snapshot", "", "sp"];
+const MAVEN_ALIASES: Record<string, string> = {
+  a: "alpha",
+  b: "beta",
+  m: "milestone",
+  cr: "rc",
+  ga: "",
+  final: "",
+  release: "",
+};
+
+/**
+ * Maven (`ComparableVersion`, simplified): numbers compared numerically, trailing zeros
+ * ignored; qualifiers ordered alpha < beta < milestone < rc < snapshot < release < sp, and
+ * other qualifiers after those, alphabetically.
+ */
+export function compareMaven(a: string, b: string): number | null {
+  const parse = (v: string) => {
+    const t = v.trim().toLowerCase();
+    if (!t || !/^[0-9a-z._+-]+$/.test(t)) return null;
+    const items: (number | string)[] = [];
+    for (const m of t.matchAll(/[0-9]+|[a-z]+/g))
+      items.push(/^\d+$/.test(m[0]) ? Number(m[0]) : (MAVEN_ALIASES[m[0]] ?? m[0]));
+    while (items.length > 1 && (items.at(-1) === 0 || items.at(-1) === "")) items.pop();
+    return items;
+  };
+  const rank = (q: string) => {
+    const i = MAVEN_QUALIFIERS.indexOf(q);
+    return i >= 0 ? i : MAVEN_QUALIFIERS.length;
+  };
+  const pa = parse(a);
+  const pb = parse(b);
+  if (!pa || !pb) return null;
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] ?? (typeof pb[i] === "number" ? 0 : "");
+    const y = pb[i] ?? (typeof pa[i] === "number" ? 0 : "");
+    if (x === y) continue;
+    if (typeof x === "number" && typeof y === "number") return x - y;
+    // A number outranks a qualifier (1.1 > 1-rc).
+    if (typeof x === "number") return 1;
+    if (typeof y === "number") return -1;
+    const d = rank(x) - rank(y);
+    if (d) return d;
+    return x < y ? -1 : 1;
+  }
+  return 0;
+}
+
 export function compareFor(ecosystem: string): (a: string, b: string) => number | null {
-  return ecosystem === "PyPI" ? comparePep440 : compareSemver;
+  if (ecosystem === "PyPI") return comparePep440;
+  if (ecosystem === "RubyGems") return compareGem;
+  if (ecosystem === "Maven") return compareMaven;
+  return compareSemver; // npm, Go (v-prefixed semver, pseudo-versions as prereleases)
 }

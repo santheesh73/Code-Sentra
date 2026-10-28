@@ -17,7 +17,7 @@ import {
 } from "@codesentra/core";
 import { analyzeHistory, type GraphEdge, type GraphNode, parseGitLog } from "@codesentra/graph";
 import type { Sandbox } from "@codesentra/sandbox";
-import { isLockfile, type LockedPackage, parseLockfile } from "./audit/lockfiles.js";
+import { directOnly, isLockfile, type LockedPackage, parseLockfile } from "./audit/lockfiles.js";
 import { auditPackages, type OsvSource } from "./audit/osv.js";
 import { recordAudit, recordHistory, recordProbes, recordSecrets } from "./collect.js";
 import { gitLog } from "./ingest/git.js";
@@ -254,7 +254,14 @@ export async function runScan(o: ScanOptions): Promise<ScanResult> {
     if (!p) probeGaps.push(`dependency audit: ${f} could not be read`);
     else {
       pkgs.push(...p.packages);
-      if (p.ecosystem === "PyPI" && p.file.endsWith(".txt"))
+      if (p.unpinned.length)
+        probeGaps.push(
+          `dependency audit: ${p.unpinned.length} ${p.unpinned.length === 1 ? "entry" : "entries"} in ${f} not audited (no pinned version): ${p.unpinned
+            .slice(0, 5)
+            .map((u) => u.text)
+            .join(", ")}${p.unpinned.length > 5 ? ", …" : ""}`,
+        );
+      if (directOnly(p))
         probeGaps.push(
           `dependency audit: ${f} pins direct dependencies only; transitive dependencies were not audited`,
         );

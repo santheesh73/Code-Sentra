@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { isLockfile, type LockedPackage, parseLockfile } from "./lockfiles.js";
+import { directOnly, isLockfile, type LockedPackage, parseLockfile } from "./lockfiles.js";
 import { affects, auditPackages, type OsvRecord, offlineSource } from "./osv.js";
-import { comparePep440, compareSemver } from "./versions.js";
+import { compareFor, compareGem, compareMaven, comparePep440, compareSemver } from "./versions.js";
 
 const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../..");
 const SNAPSHOT = join(ROOT, "fixtures/osv");
@@ -34,6 +34,149 @@ describe("version ordering", () => {
       ).toBeLessThan(0);
     expect(comparePep440("3.1.2", "3.1.3")).toBeLessThan(0);
     expect(comparePep440("3.1", "3.1.0")).toBe(0);
+  });
+});
+
+describe("version ordering for Go, RubyGems and Maven", () => {
+  it("orders Go module versions as v-prefixed SemVer, pseudo-versions before releases", () => {
+    const go = compareFor("Go");
+    expect(go("v1.9.0", "v1.9.1")).toBeLessThan(0);
+    expect(go("v0.0.0-20230101000000-abcdef123456", "v0.0.1")).toBeLessThan(0);
+    expect(go("v2.1.0+incompatible", "v2.1.0")).toBe(0);
+  });
+  it("orders RubyGems versions, prereleases first, platforms ignored", () => {
+    expect(compareGem("2.2.3", "2.2.3.1")).toBeLessThan(0);
+    expect(compareGem("1.0", "1.0.0")).toBe(0);
+    expect(compareGem("3.0.0.beta1", "3.0.0")).toBeLessThan(0);
+    expect(compareGem("3.0.0.rc1", "3.0.0.beta2")).toBeGreaterThan(0);
+    expect(compareGem("1.16.0-x86_64-linux", "1.16.0")).toBe(0);
+    expect(compareGem("not a version!", "1")).toBeNull();
+  });
+  it("orders Maven versions with qualifiers", () => {
+    expect(compareMaven("2.13.2", "2.13.2.1")).toBeLessThan(0);
+    expect(compareMaven("2.13.4.1", "2.13.4")).toBeGreaterThan(0);
+    expect(compareMaven("1.0", "1.0.0")).toBe(0);
+    expect(compareMaven("1.0-rc1", "1.0")).toBeLessThan(0);
+    expect(compareMaven("1.0-alpha", "1.0-beta")).toBeLessThan(0);
+    expect(compareMaven("1.0-SNAPSHOT", "1.0")).toBeLessThan(0);
+    expect(compareMaven("1.0.Final", "1.0")).toBe(0);
+    expect(compareMaven("1.0-sp1", "1.0")).toBeGreaterThan(0);
+    expect(compareMaven("5.3.10", "5.3.9")).toBeGreaterThan(0);
+  });
+});
+
+describe("Go, RubyGems and Maven lockfiles", () => {
+  it("reads go.mod requires, applying replace directives", () => {
+    const p = parseLockfile(
+      "go.mod",
+      [
+        "module example.com/shop",
+        "go 1.23",
+        "require (",
+        "\tgithub.com/gin-gonic/gin v1.9.0",
+        "\tgolang.org/x/net v0.10.0 // indirect",
+        "\texample.com/local v0.0.0",
+        ")",
+        "replace example.com/local => ../local",
+        "replace golang.org/x/net => golang.org/x/net v0.23.0",
+      ].join("\n"),
+    );
+    expect(p?.ecosystem).toBe("Go");
+    expect(p?.packages.map((x) => `${x.name}@${x.version} ${x.locator}`)).toEqual([
+      "github.com/gin-gonic/gin@v1.9.0 go.mod:4",
+      "golang.org/x/net@v0.23.0 go.mod:5",
+    ]);
+    expect(p?.unpinned.map((u) => u.text)).toEqual([
+      "example.com/local (replaced by a local directory)",
+    ]);
+    expect(p && directOnly(p)).toBe(false);
+  });
+
+  it("reads Gemfile.lock GEM specs, not their dependency constraints", () => {
+    const p = parseLockfile(
+      "Gemfile.lock",
+      [
+        "GEM",
+        "  remote: https://rubygems.org/",
+        "  specs:",
+        "    rack (2.2.3)",
+        "    nokogiri (1.16.0-x86_64-linux)",
+        "      racc (~> 1.4)",
+        "    sinatra (3.0.5)",
+        "      rack (~> 2.2, >= 2.2.4)",
+        "",
+        "GIT",
+        "  remote: https://github.com/x/y.git",
+        "  specs:",
+        "    y (0.1.0)",
+        "",
+        "PLATFORMS",
+        "  ruby",
+      ].join("\n"),
+    );
+    expect(p?.packages.map((x) => `${x.name}@${x.version} ${x.locator}`)).toEqual([
+      "rack@2.2.3 Gemfile.lock:4",
+      "nokogiri@1.16.0 Gemfile.lock:5",
+      "sinatra@3.0.5 Gemfile.lock:7",
+    ]);
+    expect(p?.unpinned.map((u) => u.text)).toEqual(["y (git source)"]);
+  });
+
+  it("reads pom.xml dependencies, resolving ${properties}, and lists managed ones", () => {
+    const p = parseLockfile(
+      "pom.xml",
+      [
+        "<project>",
+        "  <properties><jackson.version>2.13.2</jackson.version></properties>",
+        "  <dependencies>",
+        "    <dependency>",
+        "      <groupId>com.fasterxml.jackson.core</groupId>",
+        "      <artifactId>jackson-databind</artifactId>",
+        "      <version>${jackson.version}</version>",
+        "    </dependency>",
+        "    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>",
+        "    <dependency><groupId>junit</groupId><artifactId>junit</artifactId><version>4.12</version><scope>test</scope></dependency>",
+        "  </dependencies>",
+        "</project>",
+      ].join("\n"),
+    );
+    expect(p?.packages.map((x) => `${x.name}@${x.version} ${x.locator} dev=${x.dev}`)).toEqual([
+      "com.fasterxml.jackson.core:jackson-databind@2.13.2 pom.xml:4 dev=false",
+      "junit:junit@4.12 pom.xml:10 dev=true",
+    ]);
+    expect(p?.unpinned.map((u) => u.text)).toEqual([
+      "org.springframework.boot:spring-boot-starter-web (version set by the parent POM or a BOM)",
+    ]);
+    expect(p && directOnly(p)).toBe(true);
+  });
+
+  it("reads gradle.lockfile and build.gradle", () => {
+    const lockP = parseLockfile(
+      "gradle.lockfile",
+      "# comment\ncom.google.guava:guava:31.0-jre=compileClasspath,runtimeClasspath\njunit:junit:4.12=testCompileClasspath\nempty=\n",
+    );
+    expect(lockP?.packages.map((x) => `${x.name}@${x.version} dev=${x.dev}`)).toEqual([
+      "com.google.guava:guava@31.0-jre dev=false",
+      "junit:junit@4.12 dev=true",
+    ]);
+    const build = parseLockfile(
+      "build.gradle",
+      "dependencies {\n  implementation 'com.google.guava:guava:31.0-jre'\n  implementation 'org.x:y'\n}\n",
+    );
+    expect(build?.packages.map((x) => x.name)).toEqual(["com.google.guava:guava"]);
+    expect(build?.unpinned.map((u) => u.text)).toEqual(["org.x:y (no fixed version)"]);
+  });
+
+  it("recognizes the new lockfile names", () => {
+    for (const f of [
+      "go.mod",
+      "Gemfile.lock",
+      "pom.xml",
+      "gradle.lockfile",
+      "svc/build.gradle.kts",
+    ])
+      expect(isLockfile(f), f).toBe(true);
+    expect(isLockfile("go.sum")).toBe(false);
   });
 });
 

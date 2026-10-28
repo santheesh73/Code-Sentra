@@ -1,6 +1,6 @@
 import { posix } from "node:path";
 
-export type Ecosystem = "npm" | "PyPI";
+export type Ecosystem = "npm" | "PyPI" | "Go" | "RubyGems" | "Maven";
 
 export interface LockedPackage {
   ecosystem: Ecosystem;
@@ -29,7 +29,25 @@ export const LOCKFILES = [
   "yarn.lock",
   "poetry.lock",
   "uv.lock",
+  // ADR 0026. go.mod lists every module the build selects (Go ≥ 1.17); pom.xml and
+  // build.gradle list direct dependencies only.
+  "go.mod",
+  "Gemfile.lock",
+  "gradle.lockfile",
+  "pom.xml",
+  "build.gradle",
+  "build.gradle.kts",
 ] as const;
+
+/** Lockfiles that pin direct dependencies only, so transitive ones go unaudited. */
+export function directOnly(p: LockfileParse): boolean {
+  const base = posix.basename(p.file);
+  return (
+    (p.ecosystem === "PyPI" && p.file.endsWith(".txt")) ||
+    base === "pom.xml" ||
+    base.startsWith("build.gradle")
+  );
+}
 
 const REQUIREMENTS =
   /(^|\/)(requirements[^/]*\.txt|requirements\/[^/]+\.txt|constraints[^/]*\.txt)$/;
@@ -191,6 +209,186 @@ function requirements(file: string, text: string): LockfileParse {
   return out;
 }
 
+/**
+ * go.mod `require` lines (block and single form) are the module versions the build selects.
+ * `replace` to a local path takes a module out of the audit; to another module, audits that.
+ */
+function goMod(file: string, text: string): LockfileParse {
+  const out: LockfileParse = { file, ecosystem: "Go", packages: [], unpinned: [] };
+  const replaced = new Map<string, { name: string; version: string } | null>();
+  const lines = text.split("\n").map((l) => l.replace(/\/\/.*$/, "").trim());
+  let block: "require" | "replace" | null = null;
+  const requires: { name: string; version: string; line: number; indirect: boolean }[] = [];
+  text.split("\n").forEach((raw, i) => {
+    const line = lines[i] as string;
+    const open = /^(require|replace)\s*\($/.exec(line);
+    if (open) {
+      block = open[1] as "require" | "replace";
+      return;
+    }
+    if (block && line === ")") {
+      block = null;
+      return;
+    }
+    const body = block ? line : line.replace(/^(require|replace)\s+/, "");
+    const kind = block ?? /^(require|replace)\s/.exec(line)?.[1];
+    if (kind === "require") {
+      const m = /^(\S+)\s+(v\S+)$/.exec(body);
+      if (m)
+        requires.push({
+          name: m[1] as string,
+          version: m[2] as string,
+          line: i + 1,
+          indirect: /\/\/\s*indirect/.test(raw),
+        });
+    } else if (kind === "replace") {
+      const m = /^(\S+)(?:\s+v\S+)?\s+=>\s+(\S+)(?:\s+(v\S+))?$/.exec(body);
+      if (m) replaced.set(m[1] as string, m[3] ? { name: m[2] as string, version: m[3] } : null);
+    }
+  });
+  for (const r of requires) {
+    const locator = `${file}:${r.line}`;
+    const rep = replaced.has(r.name) ? replaced.get(r.name) : undefined;
+    if (rep === null) {
+      out.unpinned.push({ locator, text: `${r.name} (replaced by a local directory)` });
+      continue;
+    }
+    out.packages.push({
+      ecosystem: "Go",
+      name: rep?.name ?? r.name,
+      version: rep?.version ?? r.version,
+      locator,
+      dev: false,
+      resolved: null,
+    });
+  }
+  return out;
+}
+
+/** Gemfile.lock: the `specs:` entries of each GEM section (`    name (1.2.3[-platform])`). */
+function gemfileLock(file: string, text: string): LockfileParse {
+  const out: LockfileParse = { file, ecosystem: "RubyGems", packages: [], unpinned: [] };
+  let section = "";
+  let inSpecs = false;
+  text.split("\n").forEach((raw, i) => {
+    if (/^\S/.test(raw)) {
+      section = raw.trim();
+      inSpecs = false;
+      return;
+    }
+    if (/^ {2}specs:\s*$/.test(raw)) {
+      inSpecs = true;
+      return;
+    }
+    if (!inSpecs) return;
+    const m = /^ {4}([A-Za-z0-9._-]+) \(([^)]+)\)\s*$/.exec(raw);
+    if (!m) return;
+    const locator = `${file}:${i + 1}`;
+    if (section !== "GEM") {
+      out.unpinned.push({ locator, text: `${m[1]} (${section.toLowerCase()} source)` });
+      return;
+    }
+    out.packages.push({
+      ecosystem: "RubyGems",
+      name: m[1] as string,
+      // `nokogiri (1.16.0-x86_64-linux)`: the platform is not part of the version.
+      version: (m[2] as string).replace(
+        /-(x86|x64|arm|aarch|universal|java|mingw|darwin|linux).*$/,
+        "",
+      ),
+      locator,
+      dev: false,
+      resolved: null,
+    });
+  });
+  return out;
+}
+
+/** gradle.lockfile: `group:artifact:version=configurations`. */
+function gradleLock(file: string, text: string): LockfileParse {
+  const out: LockfileParse = { file, ecosystem: "Maven", packages: [], unpinned: [] };
+  text.split("\n").forEach((raw, i) => {
+    const m = /^([\w.-]+):([\w.-]+):([\w.+-]+)=(.*)$/.exec(raw.trim());
+    if (m)
+      out.packages.push({
+        ecosystem: "Maven",
+        name: `${m[1]}:${m[2]}`,
+        version: m[3] as string,
+        locator: `${file}:${i + 1}`,
+        // Test-only when every configuration it is on is a test one.
+        dev: (m[4] as string).split(",").every((c) => /^test/i.test(c.trim())),
+        resolved: null,
+      });
+  });
+  return out;
+}
+
+/** pom.xml `<dependency>` entries with a literal (or `${property}`) version. */
+function pomXml(file: string, text: string): LockfileParse {
+  const out: LockfileParse = { file, ecosystem: "Maven", packages: [], unpinned: [] };
+  const xml = text.replace(/<!--[\s\S]*?-->/g, "");
+  const props = new Map<string, string>();
+  const propBlock = /<properties>([\s\S]*?)<\/properties>/.exec(xml)?.[1] ?? "";
+  for (const m of propBlock.matchAll(/<([\w.-]+)>\s*([^<]*?)\s*<\/\1>/g))
+    props.set(m[1] as string, m[2] as string);
+  const lineAt = (idx: number) => xml.slice(0, idx).split("\n").length;
+  const tag = (body: string, name: string) =>
+    new RegExp(`<${name}>\\s*([^<]*?)\\s*</${name}>`).exec(body)?.[1] ?? null;
+  for (const m of xml.matchAll(/<dependency>([\s\S]*?)<\/dependency>/g)) {
+    const body = m[1] as string;
+    const g = tag(body, "groupId");
+    const a = tag(body, "artifactId");
+    if (!g || !a) continue;
+    const locator = `${file}:${lineAt(m.index ?? 0)}`;
+    let v = tag(body, "version");
+    const ref = v ? /^\$\{([\w.-]+)\}$/.exec(v) : null;
+    if (ref) v = props.get(ref[1] as string) ?? null;
+    if (!v || /[[(,$]/.test(v)) {
+      out.unpinned.push({
+        locator,
+        text: `${g}:${a} (${v ? "version range" : "version set by the parent POM or a BOM"})`,
+      });
+      continue;
+    }
+    out.packages.push({
+      ecosystem: "Maven",
+      name: `${g}:${a}`,
+      version: v,
+      locator,
+      dev: tag(body, "scope") === "test",
+      resolved: null,
+    });
+  }
+  return out;
+}
+
+/** build.gradle(.kts) string-notation dependencies with a version (`"g:a:1.2.3"`). */
+function gradleBuild(file: string, text: string): LockfileParse {
+  const out: LockfileParse = { file, ecosystem: "Maven", packages: [], unpinned: [] };
+  text.split("\n").forEach((raw, i) => {
+    const m =
+      /^\s*(implementation|api|compileOnly|runtimeOnly|testImplementation|testRuntimeOnly)\s*\(?\s*["']([\w.-]+):([\w.-]+)(?::([^"']+))?["']/.exec(
+        raw,
+      );
+    if (!m) return;
+    const locator = `${file}:${i + 1}`;
+    const v = m[4];
+    if (!v || /[[(,+$]/.test(v)) {
+      out.unpinned.push({ locator, text: `${m[2]}:${m[3]} (no fixed version)` });
+      return;
+    }
+    out.packages.push({
+      ecosystem: "Maven",
+      name: `${m[2]}:${m[3]}`,
+      version: v,
+      locator,
+      dev: /^test/.test(m[1] as string),
+      resolved: null,
+    });
+  });
+  return out;
+}
+
 export function parseLockfile(path: string, text: string): LockfileParse | null {
   const base = posix.basename(path);
   try {
@@ -198,6 +396,11 @@ export function parseLockfile(path: string, text: string): LockfileParse | null 
     if (base === "pnpm-lock.yaml") return pnpmLock(path, text);
     if (base === "yarn.lock") return yarnLock(path, text);
     if (base === "poetry.lock" || base === "uv.lock") return tomlPackages(path, text);
+    if (base === "go.mod") return goMod(path, text);
+    if (base === "Gemfile.lock") return gemfileLock(path, text);
+    if (base === "gradle.lockfile") return gradleLock(path, text);
+    if (base === "pom.xml") return pomXml(path, text);
+    if (base === "build.gradle" || base === "build.gradle.kts") return gradleBuild(path, text);
     if (REQUIREMENTS.test(path)) return requirements(path, text);
   } catch {
     return null;

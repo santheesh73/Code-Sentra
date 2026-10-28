@@ -118,6 +118,17 @@ describe("simulators", () => {
   });
 });
 
+describe("TLS findings name the endpoint", () => {
+  it("keeps the port, so two sites on one host are two issues", async () => {
+    const target = h.targets.simulators["tls-expiring"];
+    if (!target) throw new Error("not served");
+    const r = await pulse(target.url);
+    const f = r.findings.find((x) => x.code === "TLS_EXPIRING");
+    expect(f?.locator).toBe(`https://${new URL(target.url).host}/`);
+    expect(new URL(f?.locator as string).port).not.toBe("");
+  });
+});
+
 describe("platform findings end to end", () => {
   it("access protection is a warning plus gaps, never live", async () => {
     const r = await pulse(h.targets.simulators["access-protected"].url);

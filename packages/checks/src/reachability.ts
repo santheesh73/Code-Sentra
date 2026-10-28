@@ -72,7 +72,9 @@ export async function checkReachability(
       truncated: res.truncated,
     });
     if (res.tls) {
-      const tlsKey = rec.addEvidence("tls_certificate", new URL(res.url).hostname, {
+      // A certificate belongs to the endpoint (host and port), not the host name alone.
+      const endpoint = new URL(res.url).host;
+      const tlsKey = rec.addEvidence("tls_certificate", endpoint, {
         authorized: res.tls.authorized,
         subject: res.tls.subject,
         issuer: res.tls.issuer,
@@ -85,7 +87,7 @@ export async function checkReachability(
         rec.addFinding(
           "TLS_EXPIRING",
           tlsKey,
-          `https://${new URL(res.url).hostname}/`,
+          `https://${endpoint}/`,
           `The TLS certificate expires in ${res.tls.daysRemaining} days (${res.tls.validTo}).`,
         );
       }

@@ -15,6 +15,7 @@ import {
   parseFile,
 } from "@codesentra/parsers";
 import { isVendored, type TreeEntry } from "./ingest/tree.js";
+import { MANIFEST_FILE, type ManifestInfo, parseManifest } from "./manifests.js";
 import type { ScanRecorder } from "./recorder.js";
 
 export interface MapResult {
@@ -55,6 +56,14 @@ const FRAMEWORKS: [string, RegExp][] = [
   ["Django", /^django$/],
   ["Flask", /^flask$/],
   ["FastAPI", /^fastapi$/],
+  ["Gin", /^github\.com\/gin-gonic\/gin$/],
+  ["Echo", /^github\.com\/labstack\/echo(\/v\d+)?$/],
+  ["Chi", /^github\.com\/go-chi\/chi(\/v\d+)?$/],
+  ["Fiber", /^github\.com\/gofiber\/fiber(\/v\d+)?$/],
+  ["Rails", /^rails$/],
+  ["Sinatra", /^sinatra$/],
+  ["Spring Boot", /^org\.springframework\.boot:/],
+  ["Jakarta REST", /^(jakarta|javax)\.ws\.rs:/],
 ];
 
 const ENV_EXAMPLES = new Set([
@@ -98,7 +107,8 @@ export async function mapProject(
       lang !== null ||
       isDocPath(t.path) ||
       ENV_EXAMPLES.has(posix.basename(t.path)) ||
-      /\.(json|toml|txt|ya?ml|lock|cfg)$/.test(t.path);
+      /\.(json|toml|txt|ya?ml|lock|cfg)$/.test(t.path) ||
+      MANIFEST_FILE.test(t.path);
     if (!wanted) continue;
     if (t.size > MAX_PARSE_BYTES) {
       tooBig.push(t.path);
@@ -219,16 +229,38 @@ export async function mapProject(
       dependencies: pyDeps,
     });
   }
+  // Go, Ruby and JVM manifests (ADR 0026), read as text: a Gemfile or build.gradle is code
+  // and is never evaluated.
+  const manifests: ManifestInfo[] = [];
+  for (const p of paths.filter((x) => MANIFEST_FILE.test(x)).sort()) {
+    const m = parseManifest(p, text.get(p) ?? "");
+    if (!m) continue;
+    manifests.push(m);
+    for (const d of Object.keys(m.dependencies)) deps.add(d);
+    if (!p.includes("/")) packageManager ??= m.packageManager;
+    rec.addEvidence("manifest", p, {
+      file: p,
+      name: m.name,
+      version: m.version,
+      package_manager: m.packageManager,
+      dependencies: m.dependencies,
+    });
+  }
+  if (!packageManager && manifests[0]) packageManager = manifests[0].packageManager;
   const frameworks = FRAMEWORKS.filter(([, re]) => [...deps].some((d) => re.test(d))).map(
     ([n]) => n,
   );
   if (frameworks.length || packageManager)
-    rec.addEvidence("manifest", pkgText ? "package.json" : (pyFiles[0] ?? "."), {
-      frameworks,
-      package_manager: packageManager,
-      languages: Object.keys(languages).sort(),
-      dependency_names: [...deps].sort(),
-    });
+    rec.addEvidence(
+      "manifest",
+      pkgText ? "package.json" : (pyFiles[0] ?? manifests[0]?.file ?? "."),
+      {
+        frameworks,
+        package_manager: packageManager,
+        languages: Object.keys(languages).sort(),
+        dependency_names: [...deps].sort(),
+      },
+    );
 
   // --- Docs (intent) ----------------------------------------------------------------
   let excerpts = 0;
@@ -275,7 +307,13 @@ export async function mapProject(
 
   // --- Code facts -------------------------------------------------------------------
   const allPaths = paths;
-  const graph = buildGraph({ files: facts, allPaths, aliases });
+  const goModules = manifests
+    .filter((m) => m.ecosystem === "go" && m.name)
+    .map((m) => ({
+      dir: posix.dirname(m.file) === "." ? "" : posix.dirname(m.file),
+      module: m.name as string,
+    }));
+  const graph = buildGraph({ files: facts, allPaths, aliases, goModules });
   const fileEvidence = new Map<string, string>();
   const testEvidence = new Map<string, string>();
   const envRead = new Map<string, { file: string; line: number; key: string }[]>();

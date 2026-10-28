@@ -18,7 +18,12 @@ export {
 } from "./history.js";
 export {
   aliasesFromTsconfig,
+  type GoModule,
+  javaRootsOf,
   type PathAliases,
+  resolveGoImport,
+  resolveJavaImport,
   resolveJsImport,
   resolvePyImport,
+  resolveRubyRequire,
 } from "./resolve.js";

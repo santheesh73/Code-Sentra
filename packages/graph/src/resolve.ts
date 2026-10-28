@@ -106,3 +106,99 @@ export function resolvePyImport(
   }
   return null;
 }
+
+const dirIndexes = new WeakMap<ReadonlySet<string>, Map<string, string[]>>();
+
+/** Files by their directory (`""` for the root), built once per file set. */
+function filesIn(files: ReadonlySet<string>, dir: string): string[] {
+  let index = dirIndexes.get(files);
+  if (!index) {
+    index = new Map();
+    for (const f of files) {
+      const d = posix.dirname(f) === "." ? "" : posix.dirname(f);
+      const list = index.get(d);
+      if (list) list.push(f);
+      else index.set(d, [f]);
+    }
+    dirIndexes.set(files, index);
+  }
+  return index.get(dir === "." ? "" : dir) ?? [];
+}
+
+/** A Go module rooted at `dir` (where its go.mod is), with its declared module path. */
+export interface GoModule {
+  dir: string;
+  module: string;
+}
+
+/**
+ * Resolves a Go import path to the package's non-test `.go` files: the module whose path
+ * prefixes the import (the longest one), then the directory below it. Standard library
+ * and third-party packages resolve to nothing.
+ */
+export function resolveGoImport(
+  importPath: string,
+  files: ReadonlySet<string>,
+  modules: GoModule[],
+): string[] {
+  const mod = [...modules]
+    .sort((a, b) => b.module.length - a.module.length)
+    .find((m) => importPath === m.module || importPath.startsWith(`${m.module}/`));
+  if (!mod) return [];
+  const dir = norm(posix.join(mod.dir || ".", importPath.slice(mod.module.length + 1)));
+  return filesIn(files, dir)
+    .filter((f) => f.endsWith(".go") && !f.endsWith("_test.go"))
+    .sort();
+}
+
+/**
+ * Resolves a Ruby `require_relative` (against the requiring file) or `require` (against
+ * `lib/`, `app/` and the repo root, as `$LOAD_PATH` usually holds) to a repo file.
+ */
+export function resolveRubyRequire(
+  fromFile: string,
+  spec: string,
+  relative: boolean,
+  files: ReadonlySet<string>,
+  roots: string[] = ["lib", "app", ""],
+): string | null {
+  const withExt = spec.endsWith(".rb") ? spec : `${spec}.rb`;
+  const bases = relative
+    ? [posix.join(posix.dirname(fromFile), withExt)]
+    : roots.map((r) => (r ? posix.join(r, withExt) : withExt));
+  for (const b of bases) {
+    const n = norm(b);
+    if (files.has(n)) return n;
+  }
+  return null;
+}
+
+/**
+ * Resolves a Java import (`a.b.C`, or the package `a.b` of a wildcard import) to files
+ * under the source roots (`src/main/java`, `src/test/java`, …).
+ */
+export function resolveJavaImport(
+  name: string,
+  wildcard: boolean,
+  files: ReadonlySet<string>,
+  roots: string[],
+): string[] {
+  const rel = name.replace(/\./g, "/");
+  const out: string[] = [];
+  for (const root of roots) {
+    const base = root ? `${root}/${rel}` : rel;
+    if (wildcard) out.push(...filesIn(files, base).filter((f) => f.endsWith(".java")));
+    else if (files.has(`${base}.java`)) out.push(`${base}.java`);
+  }
+  return [...new Set(out)].sort();
+}
+
+/** Java source roots: every `src/main/java`-style directory, else `src` and the root. */
+export function javaRootsOf(files: Iterable<string>): string[] {
+  const roots = new Set<string>();
+  for (const f of files) {
+    const m = /^(.*?(?:^|\/)src\/(?:main|test)\/java)\//.exec(f);
+    if (m) roots.add(m[1] as string);
+  }
+  return roots.size ? [...roots].sort() : ["src", ""];
+}

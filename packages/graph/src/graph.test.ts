@@ -10,10 +10,14 @@ import {
   type Commit,
   fanIn,
   hotspots,
+  javaRootsOf,
   nextRouteOf,
   parseGitLog,
+  resolveGoImport,
+  resolveJavaImport,
   resolveJsImport,
   resolvePyImport,
+  resolveRubyRequire,
 } from "./index.js";
 
 const REPOS = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../fixtures/repos");
@@ -190,6 +194,78 @@ describe("history", () => {
     expect(parseGitLog(out)).toEqual([
       { sha: "abc1234", author: "ana@x", date: "2026-01-01T00:00:00Z", files: ["src/a.ts"] },
       { sha: "def5678", author: "bo@x", date: "2026-01-02T00:00:00Z", files: ["b.py"] },
+    ]);
+  });
+});
+
+describe("Go, Ruby and Java resolution", () => {
+  const files = new Set([
+    "go.mod",
+    "cmd/shop/main.go",
+    "internal/cart/cart.go",
+    "internal/cart/total.go",
+    "internal/cart/cart_test.go",
+    "tools/go.mod",
+    "tools/gen/gen.go",
+    "app.rb",
+    "lib/store.rb",
+    "lib/notes/export.rb",
+    "src/main/java/com/x/shop/Item.java",
+    "src/main/java/com/x/shop/model/Cart.java",
+    "src/main/java/com/x/shop/model/Line.java",
+    "src/test/java/com/x/shop/ItemTest.java",
+  ]);
+  const modules = [
+    { dir: "", module: "example.com/shop" },
+    { dir: "tools", module: "example.com/shop/tools" },
+  ];
+
+  it("resolves a Go import to the package's non-test files, by the longest module", () => {
+    expect(resolveGoImport("example.com/shop/internal/cart", files, modules)).toEqual([
+      "internal/cart/cart.go",
+      "internal/cart/total.go",
+    ]);
+    expect(resolveGoImport("example.com/shop/tools/gen", files, modules)).toEqual([
+      "tools/gen/gen.go",
+    ]);
+    expect(resolveGoImport("net/http", files, modules)).toEqual([]);
+    expect(resolveGoImport("github.com/gin-gonic/gin", files, modules)).toEqual([]);
+  });
+
+  it("resolves require_relative against the file and require against lib/", () => {
+    expect(resolveRubyRequire("app.rb", "lib/store", true, files)).toBe("lib/store.rb");
+    expect(resolveRubyRequire("lib/store.rb", "notes/export", false, files)).toBe(
+      "lib/notes/export.rb",
+    );
+    expect(resolveRubyRequire("app.rb", "json", false, files)).toBeNull();
+  });
+
+  it("resolves Java types and wildcard packages under the source roots", () => {
+    const roots = javaRootsOf(files);
+    expect(roots).toEqual(["src/main/java", "src/test/java"]);
+    expect(resolveJavaImport("com.x.shop.Item", false, files, roots)).toEqual([
+      "src/main/java/com/x/shop/Item.java",
+    ]);
+    expect(resolveJavaImport("com.x.shop.model", true, files, roots)).toEqual([
+      "src/main/java/com/x/shop/model/Cart.java",
+      "src/main/java/com/x/shop/model/Line.java",
+    ]);
+    expect(resolveJavaImport("java.util.List", false, files, roots)).toEqual([]);
+  });
+
+  it("draws import edges for Go packages in the graph", async () => {
+    const main = await parseFile(
+      "cmd/shop/main.go",
+      'package main\nimport "example.com/shop/internal/cart"\nfunc main() { cart.New() }\n',
+    );
+    const g = buildGraph({
+      files: [main as FileFacts],
+      allPaths: [...files],
+      goModules: modules,
+    });
+    expect(g.edges.filter((e) => e.kind === "imports").map((e) => `${e.from} -> ${e.to}`)).toEqual([
+      "file:cmd/shop/main.go -> file:internal/cart/cart.go",
+      "file:cmd/shop/main.go -> file:internal/cart/total.go",
     ]);
   });
 });

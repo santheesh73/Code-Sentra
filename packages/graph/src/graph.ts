@@ -1,5 +1,14 @@
 import { type FileFacts, isTestPath } from "@codesentra/parsers";
-import { type PathAliases, resolveJsImport, resolvePyImport } from "./resolve.js";
+import {
+  type GoModule,
+  javaRootsOf,
+  type PathAliases,
+  resolveGoImport,
+  resolveJavaImport,
+  resolveJsImport,
+  resolvePyImport,
+  resolveRubyRequire,
+} from "./resolve.js";
 
 export type NodeKind =
   | "file"
@@ -43,6 +52,8 @@ export interface GraphInput {
   allPaths: string[];
   aliases?: PathAliases;
   pythonRoots?: string[];
+  /** go.mod modules (directory and module path), for Go import resolution. */
+  goModules?: GoModule[];
 }
 
 const NEXT_PAGE =
@@ -86,16 +97,40 @@ export function buildGraph(input: GraphInput): CodeGraph {
 
   for (const p of [...input.allPaths].sort()) fileKey(p);
 
+  const javaRoots = javaRootsOf(input.allPaths);
+  const resolveImport = (f: FileFacts, imp: FileFacts["imports"][number]): string[] => {
+    const one = (t: string | null) => (t ? [t] : []);
+    switch (imp.kind) {
+      case "go":
+        return resolveGoImport(imp.specifier, paths, input.goModules ?? []);
+      case "ruby":
+      case "ruby-relative":
+        return one(resolveRubyRequire(f.path, imp.specifier, imp.kind === "ruby-relative", paths));
+      case "java":
+      case "java-wildcard":
+        return resolveJavaImport(imp.specifier, imp.kind === "java-wildcard", paths, javaRoots);
+      case "python":
+      case "python-member":
+        return one(resolvePyImport(f.path, imp.specifier, paths, input.pythonRoots));
+      default:
+        return f.language === "python"
+          ? one(resolvePyImport(f.path, imp.specifier, paths, input.pythonRoots))
+          : one(resolveJsImport(f.path, imp.specifier, paths, input.aliases));
+    }
+  };
+
   for (const f of input.files) {
     const from = fileKey(f.path);
     for (const imp of f.imports) {
-      const target =
-        f.language === "python" || imp.kind === "python-member"
-          ? resolvePyImport(f.path, imp.specifier, paths, input.pythonRoots)
-          : resolveJsImport(f.path, imp.specifier, paths, input.aliases);
-      if (target) {
-        edges.push({ from, to: fileKey(target), kind: "imports", weight: 1 });
-      } else if (imp.kind !== "python-member" && imp.specifier.startsWith(".")) {
+      const targets = resolveImport(f, imp);
+      for (const target of targets)
+        if (target !== f.path)
+          edges.push({ from, to: fileKey(target), kind: "imports", weight: 1 });
+      if (
+        !targets.length &&
+        ((imp.kind !== "python-member" && imp.specifier.startsWith(".")) ||
+          imp.kind === "ruby-relative")
+      ) {
         unresolved.push({ from: f.path, specifier: imp.specifier, line: imp.line });
       }
     }

@@ -3,9 +3,7 @@
   "id": "GHSA-gjmw-vf9h-g25v",
   "published": "2019-11-13T00:32:38Z",
   "modified": "2024-03-16T05:19:37.211801Z",
-  "aliases": [
-    "CVE-2019-17531"
-  ],
+  "aliases": ["CVE-2019-17531"],
   "summary": "jackson-databind polymorphic typing issue",
   "details": "A Polymorphic Typing issue was discovered in FasterXML jackson-databind 2.0.0 prior to 2.9.10.1, 2.8.11.5, and 2.6.7.3. When Default Typing is enabled (either globally or for a specific property) for an externally exposed JSON endpoint and the service has the apache-log4j-extra (version 1.2.x) jar in the classpath, and an attacker can provide a JNDI service to access, it is possible to make the service execute a malicious payload. ",
   "affected": [
@@ -295,9 +293,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2019-11-13T00:30:58Z",
     "nvd_published_at": "2019-10-12T21:15:00Z",

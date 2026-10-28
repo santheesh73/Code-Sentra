@@ -3,9 +3,7 @@
   "id": "GHSA-p543-xpfm-54cp",
   "published": "2025-10-07T17:26:16Z",
   "modified": "2026-09-10T03:50:30.040266194Z",
-  "aliases": [
-    "CVE-2025-61770"
-  ],
+  "aliases": ["CVE-2025-61770"],
   "summary": "Rack's unbounded multipart preamble buffering enables DoS (memory exhaustion)",
   "details": "## Summary\n\n`Rack::Multipart::Parser` buffers the entire multipart **preamble** (bytes before the first boundary) in memory without any size limit. A client can send a large preamble followed by a valid boundary, causing significant memory use and potential process termination due to out-of-memory (OOM) conditions.\n\n## Details\n\nWhile searching for the first boundary, the parser appends incoming data into a shared buffer (`@sbuf.concat(content)`) and scans for the boundary pattern:\n\n```ruby\n@sbuf.scan_until(@body_regex)\n```\n\nIf the boundary is not yet found, the parser continues buffering data indefinitely. There is no trimming or size cap on the preamble, allowing attackers to send arbitrary amounts of data before the first boundary.\n\n## Impact\n\nRemote attackers can trigger large transient memory spikes by including a long preamble in multipart/form-data requests. The impact scales with allowed request sizes and concurrency, potentially causing worker crashes or severe slowdown due to garbage collection.\n\n## Mitigation\n\n* **Upgrade:** Use a patched version of Rack that enforces a preamble size limit (e.g., 16 KiB) or discards preamble data entirely per [RFC 2046 § 5.1.1](https://www.rfc-editor.org/rfc/rfc2046.html#section-5.1.1).\n* **Workarounds:**\n  * Limit total request body size at the proxy or web server level.\n  * Monitor memory and set per-process limits to prevent OOM conditions.",
   "affected": [
@@ -214,10 +212,7 @@
           ]
         }
       ],
-      "versions": [
-        "3.2.0",
-        "3.2.1"
-      ],
+      "versions": ["3.2.0", "3.2.1"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2025/10/GHSA-p543-xpfm-54cp/GHSA-p543-xpfm-54cp.json"
       }
@@ -254,9 +249,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-400"
-    ],
+    "cwe_ids": ["CWE-400"],
     "github_reviewed": true,
     "github_reviewed_at": "2025-10-07T17:26:16Z",
     "nvd_published_at": "2025-10-07T15:16:02Z",

@@ -3,9 +3,7 @@
   "id": "GHSA-c2q3-4qrh-fm48",
   "published": "2020-06-18T14:44:50Z",
   "modified": "2026-08-07T08:12:10.157882651Z",
-  "aliases": [
-    "CVE-2020-14061"
-  ],
+  "aliases": ["CVE-2020-14061"],
   "summary": "Deserialization of untrusted data in Jackson Databind",
   "details": "FasterXML jackson-databind 2.x before 2.9.10.5 mishandles the interaction between serialization gadgets and typing, related to oracle.jms.AQjmsQueueConnectionFactory, oracle.jms.AQjmsXATopicConnectionFactory, oracle.jms.AQjmsTopicConnectionFactory, oracle.jms.AQjmsXAQueueConnectionFactory, and oracle.jms.AQjmsXAConnectionFactory (aka weblogic/oracle-aqjms).",
   "affected": [
@@ -113,9 +111,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-18T13:06:14Z",
     "nvd_published_at": "2020-06-14T20:15:00Z",

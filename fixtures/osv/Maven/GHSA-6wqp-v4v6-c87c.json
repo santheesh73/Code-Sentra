@@ -3,9 +3,7 @@
   "id": "GHSA-6wqp-v4v6-c87c",
   "published": "2020-06-15T18:44:51Z",
   "modified": "2026-08-07T08:12:17.690351370Z",
-  "aliases": [
-    "CVE-2018-12023"
-  ],
+  "aliases": ["CVE-2018-12023"],
   "summary": "Deserialization of Untrusted Data",
   "details": "An issue was discovered in FasterXML jackson-databind prior to 2.7.9.4, 2.8.11.2, and 2.9.6. When Default Typing is enabled (either globally or for a specific property), the service has the Oracle JDBC jar in the classpath, and an attacker can provide an LDAP service to access, it is possible to make the service execute a malicious payload.",
   "affected": [
@@ -292,9 +290,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-11T21:43:23Z",
     "nvd_published_at": null,

@@ -3,9 +3,7 @@
   "id": "GHSA-vgpv-f759-9wx3",
   "published": "2026-04-02T20:30:40Z",
   "modified": "2026-09-10T03:51:03.337006080Z",
-  "aliases": [
-    "CVE-2026-26961"
-  ],
+  "aliases": ["CVE-2026-26961"],
   "summary": "Rack's greedy multipart boundary parsing can cause parser differentials and WAF bypass.",
   "details": "## Summary\n\n`Rack::Multipart::Parser` extracts the `boundary` parameter from `multipart/form-data` using a greedy regular expression. When a `Content-Type` header contains multiple `boundary` parameters, Rack selects the last one rather than the first.\n\nIn deployments where an upstream proxy, WAF, or intermediary interprets the first `boundary` parameter, this mismatch can allow an attacker to smuggle multipart content past upstream inspection and have Rack parse a different body structure than the intermediary validated.\n\n## Details\n\nRack identifies the multipart boundary using logic equivalent to:\n\n```ruby\nMULTIPART = %r|\\Amultipart/.*boundary=\\\"?([^\\\";,]+)\\\"?|ni\n```\n\nBecause the expression is greedy, it matches the last `boundary=` parameter in a header such as:\n\n```http\nContent-Type: multipart/form-data; boundary=safe; boundary=malicious\n```\n\nAs a result, Rack parses the request body using `malicious`, while another component may interpret the same header using `safe`.\n\nThis creates an interpretation conflict. If an upstream WAF or proxy inspects multipart parts using the first boundary and Rack later parses the body using the last boundary, a client may be able to place malicious form fields or uploaded content in parts that Rack accepts but the upstream component did not inspect as intended.\n\nThis issue is most relevant in layered deployments where security decisions are made before the request reaches Rack.\n\n## Impact\n\nApplications that accept `multipart/form-data` uploads behind an inspecting proxy or WAF may be affected.\n\nIn such deployments, an attacker may be able to bypass upstream filtering of uploaded files or form fields by sending a request with multiple `boundary` parameters and relying on the intermediary and Rack to parse the request differently.\n\nThe practical impact depends on deployment architecture. If no upstream component relies on a different multipart interpretation, this behavior may not provide meaningful additional attacker capability.\n\n## Mitigation\n\n* Update to a patched version of Rack that rejects ambiguous multipart `Content-Type` headers or parses duplicate `boundary` parameters consistently.\n* Reject requests containing multiple `boundary` parameters.\n* Normalize or regenerate multipart metadata at the trusted edge before forwarding requests to Rack.\n* Avoid relying on upstream inspection of malformed multipart requests unless duplicate parameter handling is explicitly consistent across components.",
   "affected": [
@@ -247,14 +245,7 @@
           ]
         }
       ],
-      "versions": [
-        "3.2.0",
-        "3.2.1",
-        "3.2.2",
-        "3.2.3",
-        "3.2.4",
-        "3.2.5"
-      ],
+      "versions": ["3.2.0", "3.2.1", "3.2.2", "3.2.3", "3.2.4", "3.2.5"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/04/GHSA-vgpv-f759-9wx3/GHSA-vgpv-f759-9wx3.json"
       }
@@ -279,9 +270,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-436"
-    ],
+    "cwe_ids": ["CWE-436"],
     "github_reviewed": true,
     "github_reviewed_at": "2026-04-02T20:30:40Z",
     "nvd_published_at": "2026-04-02T17:16:21Z",

@@ -3,9 +3,7 @@
   "id": "GHSA-625h-95r8-8xpm",
   "published": "2025-09-25T16:39:27Z",
   "modified": "2026-09-10T03:50:58.118464536Z",
-  "aliases": [
-    "CVE-2025-59830"
-  ],
+  "aliases": ["CVE-2025-59830"],
   "summary": "Rack has an unsafe default in Rack::QueryParser allows params_limit bypass via semicolon-separated parameters",
   "details": "## Summary\n\n`Rack::QueryParser` in version `< 2.2.18` enforces its `params_limit` only for parameters separated by `&`, while still splitting on both `&` and `;`. As a result, attackers could use `;` separators to bypass the parameter count limit and submit more parameters than intended.\n\n## Details\n\nThe issue arises because `Rack::QueryParser#check_query_string` counts only `&` characters when determining the number of parameters, but the default separator regex `DEFAULT_SEP = /[&;] */n` splits on both `&` and `;`. This mismatch means that queries using `;` separators were not included in the parameter count, allowing `params_limit` to be bypassed.\n\nOther safeguards (`bytesize_limit` and `key_space_limit`) still applied, but did not prevent this particular bypass.\n\n## Impact\n\nApplications or middleware that directly invoke `Rack::QueryParser` with its default configuration (no explicit delimiter) could be exposed to increased CPU and memory consumption. This can be abused as a limited denial-of-service vector.\n\n`Rack::Request`, the primary entry point for typical Rack applications, uses `QueryParser` in a safe way and does not appear vulnerable by default. As such, the severity is considered **low**, with the impact limited to edge cases where `QueryParser` is used directly.\n\n## Mitigation\n\n* Upgrade to a patched version of Rack where both `&` and `;` are counted consistently toward `params_limit`.\n* If upgrading is not immediately possible, configure `QueryParser` with an explicit delimiter (e.g., `&`) to avoid the mismatch.\n* As a general precaution, enforce query string and request size limits at the web server or proxy layer (e.g., Nginx, Apache, or a CDN) to mitigate excessive parsing overhead.",
   "affected": [
@@ -172,10 +170,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-400",
-      "CWE-770"
-    ],
+    "cwe_ids": ["CWE-400", "CWE-770"],
     "github_reviewed": true,
     "github_reviewed_at": "2025-09-25T16:39:27Z",
     "nvd_published_at": "2025-09-25T15:16:13Z",

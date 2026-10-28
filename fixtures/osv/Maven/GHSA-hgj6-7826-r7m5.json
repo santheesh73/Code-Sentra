@@ -3,9 +3,7 @@
   "id": "GHSA-hgj6-7826-r7m5",
   "published": "2026-06-23T21:22:54Z",
   "modified": "2026-09-10T03:50:49.909813840Z",
-  "aliases": [
-    "CVE-2026-54514"
-  ],
+  "aliases": ["CVE-2026-54514"],
   "summary": "jackson-databind: InetSocketAddress deserialization triggers eager DNS resolution (SSRF)",
   "details": "## Summary\n`JDKFromStringDeserializer` constructed `InetSocketAddress` with `new InetSocketAddress(host, port)`, which performs eager DNS name resolution for hostname inputs at deserialization time. An application that binds untrusted JSON into a type containing an `InetSocketAddress` field issues an attacker-chosen DNS query during `readValue`, before any application-level validation or connect logic. The fix uses `InetSocketAddress.createUnresolved(host, port)`, deferring DNS to an explicit connect.\n\n## Impact\nAn attacker controlling JSON deserialized into an `InetSocketAddress`-bearing type can force outbound DNS lookups for attacker-chosen hostnames at deserialization time (SSRF / DNS-based out-of-band interaction / internal-resolver probing), purely from binding.\n\n## Affected / Patched (verified via `git tag --contains` on `1f5a103`)\n- 2.18 line: `>= 2.18.0, < 2.18.8` -> fixed in **2.18.8**\n- 2.19-2.21 line: `>= 2.19.0, < 2.21.4` -> fixed in **2.21.4**\n- 3.x line: `>= 3.0.0, < 3.1.4` -> fixed in **3.1.4**\n\n## Severity / CWE\nMaintainer: minor. Reporter: LOW. CWE-918 (SSRF).\n\n## Upstream fix\nFasterXML/jackson-databind#5951 (\"Improve InetSocketAddress deserialization\"). Released 2026-06-04 in 2.18.8 / 2.21.4 / 3.1.4.\n\n## Credits\nOmkhar Arasaratnam (@omkhar) - finder.",
   "affected": [
@@ -383,9 +381,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-918"
-    ],
+    "cwe_ids": ["CWE-918"],
     "github_reviewed": true,
     "github_reviewed_at": "2026-06-23T21:22:54Z",
     "nvd_published_at": "2026-06-23T21:17:02Z",

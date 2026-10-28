@@ -3,9 +3,7 @@
   "id": "GHSA-qxxx-2pp7-5hmx",
   "published": "2018-10-16T17:21:35Z",
   "modified": "2024-03-11T05:19:49.080060Z",
-  "aliases": [
-    "CVE-2017-7525"
-  ],
+  "aliases": ["CVE-2017-7525"],
   "summary": "jackson-databind is vulnerable to a deserialization flaw",
   "details": "A deserialization flaw was discovered in the jackson-databind, versions before 2.6.7.1, 2.7.9.1 and 2.8.9, which could allow an unauthenticated user to perform code execution by sending the maliciously crafted input to the readValue method of the ObjectMapper.",
   "affected": [
@@ -437,10 +435,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-184",
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-184", "CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T21:53:14Z",
     "nvd_published_at": "2018-02-06T15:29:00Z",

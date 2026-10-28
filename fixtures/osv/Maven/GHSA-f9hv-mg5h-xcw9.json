@@ -3,9 +3,7 @@
   "id": "GHSA-f9hv-mg5h-xcw9",
   "published": "2019-01-04T19:06:57Z",
   "modified": "2026-08-07T08:12:09.905440486Z",
-  "aliases": [
-    "CVE-2018-19360"
-  ],
+  "aliases": ["CVE-2018-19360"],
   "summary": "Deserialization of Untrusted Data in jackson-databind due to polymorphic deserialization",
   "details": "FasterXML jackson-databind 2.x before 2.9.8 might allow attackers to have unspecified impact by leveraging failure to block the axis2-transport-jms class from polymorphic deserialization.",
   "affected": [
@@ -288,9 +286,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T21:34:16Z",
     "nvd_published_at": null,

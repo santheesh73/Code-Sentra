@@ -3,9 +3,7 @@
   "id": "GHSA-85r7-w5mv-c849",
   "published": "2017-10-24T18:33:37Z",
   "modified": "2024-11-29T05:29:20.852410Z",
-  "aliases": [
-    "CVE-2013-0262"
-  ],
+  "aliases": ["CVE-2013-0262"],
   "summary": "Rack Vulnerable to Path Traversal",
   "details": "`rack/file.rb` (`Rack::File`) in Rack 1.5.x before 1.5.2 and 1.4.x before 1.4.5 allows attackers to access arbitrary files outside the intended root directory via a crafted `PATH_INFO` environment variable, probably a directory traversal vulnerability that is remotely exploitable, aka \"symlink path traversals.\"",
   "affected": [
@@ -28,10 +26,7 @@
           ]
         }
       ],
-      "versions": [
-        "1.5.0",
-        "1.5.1"
-      ],
+      "versions": ["1.5.0", "1.5.1"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2017/10/GHSA-85r7-w5mv-c849/GHSA-85r7-w5mv-c849.json"
       }
@@ -55,13 +50,7 @@
           ]
         }
       ],
-      "versions": [
-        "1.4.0",
-        "1.4.1",
-        "1.4.2",
-        "1.4.3",
-        "1.4.4"
-      ],
+      "versions": ["1.4.0", "1.4.1", "1.4.2", "1.4.3", "1.4.4"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2017/10/GHSA-85r7-w5mv-c849/GHSA-85r7-w5mv-c849.json"
       }
@@ -114,9 +103,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-22"
-    ],
+    "cwe_ids": ["CWE-22"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T21:24:29Z",
     "nvd_published_at": "2013-02-08T20:55:00Z",

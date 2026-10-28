@@ -3,9 +3,7 @@
   "id": "GHSA-rgr4-9jh5-j4j6",
   "published": "2017-10-24T18:33:36Z",
   "modified": "2024-12-03T06:08:44.186371Z",
-  "aliases": [
-    "CVE-2015-3225"
-  ],
+  "aliases": ["CVE-2015-3225"],
   "summary": "Rack vulnerable to Denial of Service via large parameter depth request",
   "details": "lib/rack/utils.rb in Rack before 1.5.4 and 1.6.x before 1.6.2, as used with Ruby on Rails 3.x and 4.x and other products, allows remote attackers to cause a denial of service (SystemStackError) via a request with a large parameter depth.",
   "affected": [
@@ -28,12 +26,7 @@
           ]
         }
       ],
-      "versions": [
-        "1.5.0",
-        "1.5.1",
-        "1.5.2",
-        "1.5.3"
-      ],
+      "versions": ["1.5.0", "1.5.1", "1.5.2", "1.5.3"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2017/10/GHSA-rgr4-9jh5-j4j6/GHSA-rgr4-9jh5-j4j6.json"
       }
@@ -57,10 +50,7 @@
           ]
         }
       ],
-      "versions": [
-        "1.6.0",
-        "1.6.1"
-      ],
+      "versions": ["1.6.0", "1.6.1"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2017/10/GHSA-rgr4-9jh5-j4j6/GHSA-rgr4-9jh5-j4j6.json"
       }
@@ -84,14 +74,7 @@
           ]
         }
       ],
-      "versions": [
-        "1.4.0",
-        "1.4.1",
-        "1.4.2",
-        "1.4.3",
-        "1.4.4",
-        "1.4.5"
-      ],
+      "versions": ["1.4.0", "1.4.1", "1.4.2", "1.4.3", "1.4.4", "1.4.5"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2017/10/GHSA-rgr4-9jh5-j4j6/GHSA-rgr4-9jh5-j4j6.json"
       }

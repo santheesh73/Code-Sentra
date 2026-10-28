@@ -3,9 +3,7 @@
   "id": "GHSA-688c-3x49-6rqj",
   "published": "2018-03-07T22:22:22Z",
   "modified": "2024-02-16T07:58:58.375721Z",
-  "aliases": [
-    "CVE-2018-1000119"
-  ],
+  "aliases": ["CVE-2018-1000119"],
   "summary": "rack-protection gem timing attack vulnerability when validating CSRF token",
   "details": "Sinatra rack-protection versions 1.5.4 and 2.0.0.rc3 and earlier contains a timing attack vulnerability in the CSRF token checking that can result in signatures can be exposed. This attack appear to be exploitable via network connectivity to the ruby application. This vulnerability appears to have been fixed in 1.5.5 and 2.0.0.",
   "affected": [
@@ -112,9 +110,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-203"
-    ],
+    "cwe_ids": ["CWE-203"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T21:18:34Z",
     "nvd_published_at": null,

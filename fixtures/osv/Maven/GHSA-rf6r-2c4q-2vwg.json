@@ -3,9 +3,7 @@
   "id": "GHSA-rf6r-2c4q-2vwg",
   "published": "2020-05-15T18:58:54Z",
   "modified": "2026-08-07T08:12:05.828795573Z",
-  "aliases": [
-    "CVE-2020-10968"
-  ],
+  "aliases": ["CVE-2020-10968"],
   "summary": "jackson-databind mishandles the interaction between serialization gadgets and typing",
   "details": "FasterXML jackson-databind 2.x before 2.9.10.4 mishandles the interaction between serialization gadgets and typing, related to org.aoju.bus.proxy.provider.remoting.RmiProvider (aka bus-proxy).",
   "affected": [
@@ -108,9 +106,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-04-23T19:30:49Z",
     "nvd_published_at": "2020-03-26T13:15:00Z",

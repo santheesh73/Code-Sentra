@@ -3,9 +3,7 @@
   "id": "GHSA-8c4j-34r4-xr8g",
   "published": "2021-12-09T19:16:18Z",
   "modified": "2024-02-18T05:31:52.762759Z",
-  "aliases": [
-    "CVE-2020-36180"
-  ],
+  "aliases": ["CVE-2020-36180"],
   "summary": "Unsafe Deserialization in jackson-databind",
   "details": "FasterXML jackson-databind 2.x before 2.9.10.8 and 2.6.7.5 mishandles the interaction between serialization gadgets and typing, related to org.apache.commons.dbcp2.cpdsadapter.DriverAdapterCPDS.",
   "affected": [
@@ -242,9 +240,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2021-03-18T23:36:46Z",
     "nvd_published_at": "2021-01-07T00:15:00Z",

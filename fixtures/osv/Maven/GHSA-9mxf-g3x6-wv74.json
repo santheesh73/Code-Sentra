@@ -3,9 +3,7 @@
   "id": "GHSA-9mxf-g3x6-wv74",
   "published": "2019-01-04T19:07:06Z",
   "modified": "2026-08-07T08:12:24.128318809Z",
-  "aliases": [
-    "CVE-2018-14721"
-  ],
+  "aliases": ["CVE-2018-14721"],
   "summary": "Server-Side Request Forgery (SSRF) in jackson-databind",
   "details": "FasterXML jackson-databind 2.x before 2.9.7 might allow remote attackers to conduct server-side request forgery (SSRF) attacks by leveraging failure to block the axis2-jaxws class from polymorphic deserialization.",
   "affected": [
@@ -255,9 +253,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-918"
-    ],
+    "cwe_ids": ["CWE-918"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T21:29:04Z",
     "nvd_published_at": null,

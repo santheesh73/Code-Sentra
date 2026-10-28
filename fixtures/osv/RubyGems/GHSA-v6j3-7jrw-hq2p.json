@@ -3,9 +3,7 @@
   "id": "GHSA-v6j3-7jrw-hq2p",
   "published": "2022-05-17T04:59:13Z",
   "modified": "2024-11-30T05:29:12.044806Z",
-  "aliases": [
-    "CVE-2011-5036"
-  ],
+  "aliases": ["CVE-2011-5036"],
   "summary": "Rack Gem Subject to Denial of Service via Hash Collisions",
   "details": "Rack before 1.1.3, 1.2.x before 1.2.5, and 1.3.x before 1.3.6 computes hash values for form parameters without restricting the ability to trigger hash collisions predictably, which allows remote attackers to cause a denial of service (CPU consumption) by sending many crafted parameters.",
   "affected": [
@@ -65,13 +63,7 @@
           ]
         }
       ],
-      "versions": [
-        "1.2.0",
-        "1.2.1",
-        "1.2.2",
-        "1.2.3",
-        "1.2.4"
-      ],
+      "versions": ["1.2.0", "1.2.1", "1.2.2", "1.2.3", "1.2.4"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2022/05/GHSA-v6j3-7jrw-hq2p/GHSA-v6j3-7jrw-hq2p.json"
       }
@@ -95,14 +87,7 @@
           ]
         }
       ],
-      "versions": [
-        "1.3.0",
-        "1.3.1",
-        "1.3.2",
-        "1.3.3",
-        "1.3.4",
-        "1.3.5"
-      ],
+      "versions": ["1.3.0", "1.3.1", "1.3.2", "1.3.3", "1.3.4", "1.3.5"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2022/05/GHSA-v6j3-7jrw-hq2p/GHSA-v6j3-7jrw-hq2p.json"
       }
@@ -170,10 +155,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-328",
-      "CWE-400"
-    ],
+    "cwe_ids": ["CWE-328", "CWE-400"],
     "github_reviewed": true,
     "github_reviewed_at": "2023-03-27T16:12:55Z",
     "nvd_published_at": "2011-12-30T01:55:00Z",

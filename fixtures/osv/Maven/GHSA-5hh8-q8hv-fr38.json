@@ -3,9 +3,7 @@
   "id": "GHSA-5hh8-q8hv-fr38",
   "published": "2026-06-23T21:24:50Z",
   "modified": "2026-09-10T03:51:07.997389778Z",
-  "aliases": [
-    "CVE-2026-54517"
-  ],
+  "aliases": ["CVE-2026-54517"],
   "summary": "jackson-databind has @JsonView bypass for setterless creator properties",
   "details": "## Summary\nIn `BeanDeserializer._deserializeUsingPropertyBased`, the active-view (`@JsonView`) filter was applied only to creator properties; the regular property-buffering branch performed no `prop.visibleInView(activeView)` check. A change making `SetterlessProperty.isMerging()` return `true` routed setterless Collection/Map properties through this unguarded path, so a setterless collection annotated with a restricted `@JsonView` is populated from attacker JSON even when the active view excludes it.\n\n## Impact\nView-restricted (e.g. admin-only) setterless collection/map properties can be written from untrusted JSON despite `@JsonView` gating — an access-control / mass-assignment bypass. No RCE or DoS.\n\n## Affected / Patched (verified via `git tag --contains`)\n- 2.21 line: `>= 2.21.0, < 2.21.4` -> fixed in **2.21.4** (backport `94c5d21`, #5970)\n- 3.x line: `>= 3.0.0, < 3.1.4` -> fixed in **3.1.4** (#5969, `5bf23ed`)\n\n## Severity / CWE\nMaintainer: minor. Reporter: HIGH. CWE-863 (Incorrect Authorization); related CWE-1220.\n\n## Credits\nOmkhar Arasaratnam (@omkhar) - finder.",
   "affected": [
@@ -28,12 +26,7 @@
           ]
         }
       ],
-      "versions": [
-        "2.21.0",
-        "2.21.1",
-        "2.21.2",
-        "2.21.3"
-      ],
+      "versions": ["2.21.0", "2.21.1", "2.21.2", "2.21.3"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-5hh8-q8hv-fr38/GHSA-5hh8-q8hv-fr38.json"
       }
@@ -128,9 +121,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-863"
-    ],
+    "cwe_ids": ["CWE-863"],
     "github_reviewed": true,
     "github_reviewed_at": "2026-06-23T21:24:50Z",
     "nvd_published_at": "2026-06-23T21:17:02Z",

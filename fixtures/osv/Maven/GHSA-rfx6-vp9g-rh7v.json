@@ -3,9 +3,7 @@
   "id": "GHSA-rfx6-vp9g-rh7v",
   "published": "2018-10-18T17:42:48Z",
   "modified": "2024-03-11T05:17:47.425595Z",
-  "aliases": [
-    "CVE-2017-17485"
-  ],
+  "aliases": ["CVE-2017-17485"],
   "summary": "jackson-databind vulnerable to remote code execution due to incorrect deserialization and blocklist bypass",
   "details": "FasterXML jackson-databind through 2.8.10 and 2.9.x through 2.9.3 allows unauthenticated remote code execution because of an incomplete fix for the CVE-2017-7525 deserialization flaw. This is exploitable by sending maliciously crafted JSON input to the readValue method of the ObjectMapper, bypassing a blacklist that is ineffective if the Spring libraries are available in the classpath.",
   "affected": [
@@ -326,9 +324,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T21:54:38Z",
     "nvd_published_at": "2018-01-10T18:29:00Z",

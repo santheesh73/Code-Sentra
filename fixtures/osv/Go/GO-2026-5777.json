@@ -3,13 +3,8 @@
   "id": "GO-2026-5777",
   "published": "2026-07-24T18:35:55Z",
   "modified": "2026-08-15T05:19:15.756579600Z",
-  "aliases": [
-    "CVE-2026-72816",
-    "GHSA-rjr7-jggh-pgcp"
-  ],
-  "related": [
-    "CGA-3x7g-jp4q-h9fr"
-  ],
+  "aliases": ["CVE-2026-72816", "GHSA-rjr7-jggh-pgcp"],
+  "related": ["CGA-3x7g-jp4q-h9fr"],
   "summary": "Chi's RealIP Middleware allows IP spoofing via unvalidated X-Forwarded-For header in github.com/go-chi/chi",
   "details": "Chi's RealIP Middleware allows IP spoofing via unvalidated X-Forwarded-For header in github.com/go-chi/chi",
   "affected": [
@@ -36,9 +31,7 @@
         "imports": [
           {
             "path": "github.com/go-chi/chi/v5/middleware",
-            "symbols": [
-              "RealIP"
-            ]
+            "symbols": ["RealIP"]
           }
         ]
       },

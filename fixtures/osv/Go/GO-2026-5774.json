@@ -3,13 +3,8 @@
   "id": "GO-2026-5774",
   "published": "2026-07-24T18:35:55Z",
   "modified": "2026-08-15T05:18:57.642465257Z",
-  "aliases": [
-    "CVE-2026-72815",
-    "GHSA-3fxj-6jh8-hvhx"
-  ],
-  "related": [
-    "CGA-fv5x-24pc-x6fw"
-  ],
+  "aliases": ["CVE-2026-72815", "GHSA-3fxj-6jh8-hvhx"],
+  "related": ["CGA-fv5x-24pc-x6fw"],
   "summary": "Chi has an IP spoofing vulnerability in middleware.RealIP in github.com/go-chi/chi",
   "details": "Chi has an IP spoofing vulnerability in middleware.RealIP in github.com/go-chi/chi",
   "affected": [
@@ -36,9 +31,7 @@
         "imports": [
           {
             "path": "github.com/go-chi/chi/v5/middleware",
-            "symbols": [
-              "RealIP"
-            ]
+            "symbols": ["RealIP"]
           }
         ]
       },

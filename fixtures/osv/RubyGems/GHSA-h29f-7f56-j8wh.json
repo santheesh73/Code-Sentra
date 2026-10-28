@@ -3,9 +3,7 @@
   "id": "GHSA-h29f-7f56-j8wh",
   "published": "2018-02-20T19:23:20Z",
   "modified": "2023-11-08T04:00:22.311872Z",
-  "aliases": [
-    "CVE-2018-7212"
-  ],
+  "aliases": ["CVE-2018-7212"],
   "summary": "Sinatra Path Traversal vulnerability",
   "details": "An issue was discovered in `rack-protection/lib/rack/protection/path_traversal.rb` in Sinatra 2.x before 2.0.1 on Windows. Path traversal is possible via backslash characters.",
   "affected": [
@@ -62,9 +60,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-22"
-    ],
+    "cwe_ids": ["CWE-22"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T21:38:23Z",
     "nvd_published_at": null,

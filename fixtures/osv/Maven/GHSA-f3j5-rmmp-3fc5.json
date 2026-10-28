@@ -3,9 +3,7 @@
   "id": "GHSA-f3j5-rmmp-3fc5",
   "published": "2020-06-15T18:44:48Z",
   "modified": "2024-03-15T05:20:35.120151Z",
-  "aliases": [
-    "CVE-2019-17267"
-  ],
+  "aliases": ["CVE-2019-17267"],
   "summary": "Improper Input Validation in jackson-databind",
   "details": "A Polymorphic Typing issue was discovered in FasterXML jackson-databind before 2.9.10 and 2.8.11.5. It is related to net.sf.ehcache.hibernate.EhcacheJtaTransactionManagerLookup.",
   "affected": [
@@ -279,9 +277,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-11T21:47:17Z",
     "nvd_published_at": "2019-10-07T00:15:00Z",

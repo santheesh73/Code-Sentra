@@ -3,9 +3,7 @@
   "id": "GHSA-5p34-5m6p-p58g",
   "published": "2020-04-23T21:08:40Z",
   "modified": "2026-08-07T08:12:08.613510126Z",
-  "aliases": [
-    "CVE-2020-9546"
-  ],
+  "aliases": ["CVE-2020-9546"],
   "summary": "jackson-databind mishandles the interaction between serialization gadgets and typing",
   "details": "FasterXML jackson-databind 2.x before 2.9.10.4 mishandles the interaction between serialization gadgets and typing, related to org.apache.hadoop.shaded.com.zaxxer.hikari.HikariConfig (aka shaded hikari-config).",
   "affected": [
@@ -176,9 +174,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-04-23T19:26:40Z",
     "nvd_published_at": "2020-03-02T04:15:00Z",

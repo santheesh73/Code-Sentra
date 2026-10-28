@@ -3,9 +3,7 @@
   "id": "GHSA-r3gr-cxrf-hg25",
   "published": "2021-12-09T19:15:11Z",
   "modified": "2024-06-25T14:20:21.323050Z",
-  "aliases": [
-    "CVE-2020-35491"
-  ],
+  "aliases": ["CVE-2020-35491"],
   "summary": "Serialization gadgets exploit in jackson-databind",
   "details": "FasterXML jackson-databind 2.x before 2.9.10.8 mishandles the interaction between serialization gadgets and typing, related to org.apache.commons.dbcp2.datasources.SharedPoolDataSource.",
   "affected": [
@@ -222,10 +220,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502",
-      "CWE-913"
-    ],
+    "cwe_ids": ["CWE-502", "CWE-913"],
     "github_reviewed": true,
     "github_reviewed_at": "2021-04-08T21:05:38Z",
     "nvd_published_at": "2020-12-17T19:15:00Z",

@@ -3,9 +3,7 @@
   "id": "GHSA-x2w5-5m2g-7h5m",
   "published": "2019-01-04T19:09:46Z",
   "modified": "2026-08-07T08:12:08.238219080Z",
-  "aliases": [
-    "CVE-2018-14720"
-  ],
+  "aliases": ["CVE-2018-14720"],
   "summary": "XML External Entity Reference (XXE) in jackson-databind",
   "details": "FasterXML jackson-databind 2.x before 2.9.7 might allow attackers to conduct external XML entity (XXE) attacks by leveraging failure to block unspecified JDK classes from polymorphic deserialization.",
   "affected": [
@@ -267,10 +265,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502",
-      "CWE-611"
-    ],
+    "cwe_ids": ["CWE-502", "CWE-611"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T22:01:50Z",
     "nvd_published_at": null,

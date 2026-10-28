@@ -3,9 +3,7 @@
   "id": "GHSA-cggj-fvv3-cqwv",
   "published": "2018-10-16T17:45:18Z",
   "modified": "2024-03-15T01:18:46.938616Z",
-  "aliases": [
-    "CVE-2018-7489"
-  ],
+  "aliases": ["CVE-2018-7489"],
   "summary": "FasterXML jackson-databind allows unauthenticated remote code execution ",
   "details": "FasterXML jackson-databind before before 2.6.7.5, 2.7.x before 2.7.9.3, 2.8.x before 2.8.11.1, and 2.9.x before 2.9.5 allows unauthenticated remote code execution because of an incomplete fix for the CVE-2017-7525 deserialization flaw. This is exploitable by sending maliciously crafted JSON input to the readValue method of the ObjectMapper, bypassing a blacklist that is ineffective if the c3p0 libraries are available in the classpath.",
   "affected": [
@@ -347,10 +345,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-184",
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-184", "CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T21:31:30Z",
     "nvd_published_at": "2018-02-26T15:29:00Z",

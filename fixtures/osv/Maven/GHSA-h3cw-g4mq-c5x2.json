@@ -3,9 +3,7 @@
   "id": "GHSA-h3cw-g4mq-c5x2",
   "published": "2021-12-09T19:14:51Z",
   "modified": "2024-02-18T05:30:45.329621Z",
-  "aliases": [
-    "CVE-2020-24616"
-  ],
+  "aliases": ["CVE-2020-24616"],
   "summary": "Code Injection in jackson-databind",
   "details": "This project contains the general-purpose data-binding functionality and tree-model for Jackson Data Processor. FasterXML jackson-databind 2.x before 2.9.10.6 mishandles the interaction between serialization gadgets and typing, related to br.com.anteros.dbcp.AnterosDBCPDataSource (aka Anteros-DBCP).",
   "affected": [
@@ -220,10 +218,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502",
-      "CWE-94"
-    ],
+    "cwe_ids": ["CWE-502", "CWE-94"],
     "github_reviewed": true,
     "github_reviewed_at": "2021-04-27T17:38:11Z",
     "nvd_published_at": "2020-08-25T18:15:00Z",

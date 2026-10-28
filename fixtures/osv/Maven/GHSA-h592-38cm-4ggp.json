@@ -3,9 +3,7 @@
   "id": "GHSA-h592-38cm-4ggp",
   "published": "2018-10-18T17:42:34Z",
   "modified": "2024-03-15T01:16:50.905794Z",
-  "aliases": [
-    "CVE-2017-15095"
-  ],
+  "aliases": ["CVE-2017-15095"],
   "summary": "jackson-databind vulnerable to deserialization flaw leading to unauthenticated remote code execution",
   "details": "jackson-databind in versions prior to 2.8.11 and 2.9.4 contain a deserialization flaw which allows an unauthenticated user to perform code execution by sending maliciously crafted input to the readValue method of the ObjectMapper. This issue extends the previous flaw CVE-2017-7525, blacklisting additonal vulnerable classes.",
   "affected": [
@@ -366,10 +364,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-184",
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-184", "CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T21:38:56Z",
     "nvd_published_at": "2018-02-06T15:29:00Z",

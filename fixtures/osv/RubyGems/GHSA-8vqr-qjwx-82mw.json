@@ -3,9 +3,7 @@
   "id": "GHSA-8vqr-qjwx-82mw",
   "published": "2026-04-02T20:34:48Z",
   "modified": "2026-09-10T03:51:01.258301387Z",
-  "aliases": [
-    "CVE-2026-34829"
-  ],
+  "aliases": ["CVE-2026-34829"],
   "summary": "Rack's multipart parsing without Content-Length header allows unbounded chunked file uploads",
   "details": "## Summary\n\n`Rack::Multipart::Parser` only wraps the request body in a `BoundedIO` when `CONTENT_LENGTH` is present. When a `multipart/form-data` request is sent without a `Content-Length` header, such as with HTTP chunked transfer encoding, multipart parsing continues until end-of-stream with no total size limit.\n\nFor file parts, the uploaded body is written directly to a temporary file on disk rather than being constrained by the buffered in-memory upload limit. An unauthenticated attacker can therefore stream an arbitrarily large multipart file upload and consume unbounded disk space.\n\nThis results in a denial of service condition for Rack applications that accept multipart form data.\n\n## Details\n\n`Rack::Multipart::Parser.parse` applies `BoundedIO` only when `content_length` is not `nil`:\n\n```ruby\nio = BoundedIO.new(io, content_length) if content_length\n```\n\nWhen `CONTENT_LENGTH` is absent, the parser reads the multipart body until EOF without a global byte limit.\n\nAlthough Rack enforces `BUFFERED_UPLOAD_BYTESIZE_LIMIT` for retained non-file parts, file uploads are handled differently. When a multipart part includes a filename, the body is streamed to a `Tempfile`, and the retained-size accounting is not applied to that file content. As a result, file parts are not subject to the same upload size bound.\n\nAn attacker can exploit this by sending a chunked `multipart/form-data` request containing a file part and continuously streaming data without declaring a `Content-Length`. Rack will continue writing the uploaded data to disk until the client stops or the server exhausts available storage.\n\n## Impact\n\nAny Rack application that accepts `multipart/form-data` uploads may be affected if no upstream component enforces a request body size limit.\n\nAn unauthenticated attacker can send a large chunked file upload to consume disk space on the application host. This may cause request failures, application instability, or broader service disruption if the host runs out of available storage.\n\nThe practical impact depends on deployment architecture. Reverse proxies or application servers that enforce upload limits may reduce or eliminate exploitability, but Rack itself does not impose a total multipart upload limit in this code path when `CONTENT_LENGTH` is absent.\n\n## Mitigation\n\n* Update to a patched version of Rack that enforces a total multipart upload size limit even when `CONTENT_LENGTH` is absent.\n* Enforce request body size limits at the reverse proxy or application server.\n* Isolate temporary upload storage and monitor disk consumption for multipart endpoints.",
   "affected": [
@@ -247,14 +245,7 @@
           ]
         }
       ],
-      "versions": [
-        "3.2.0",
-        "3.2.1",
-        "3.2.2",
-        "3.2.3",
-        "3.2.4",
-        "3.2.5"
-      ],
+      "versions": ["3.2.0", "3.2.1", "3.2.2", "3.2.3", "3.2.4", "3.2.5"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/04/GHSA-8vqr-qjwx-82mw/GHSA-8vqr-qjwx-82mw.json"
       }
@@ -279,10 +270,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-400",
-      "CWE-770"
-    ],
+    "cwe_ids": ["CWE-400", "CWE-770"],
     "github_reviewed": true,
     "github_reviewed_at": "2026-04-02T20:34:48Z",
     "nvd_published_at": "2026-04-02T17:16:26Z",

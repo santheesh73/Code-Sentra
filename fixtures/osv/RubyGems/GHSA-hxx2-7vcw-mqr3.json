@@ -3,9 +3,7 @@
   "id": "GHSA-hxx2-7vcw-mqr3",
   "published": "2024-11-01T06:30:34Z",
   "modified": "2026-09-10T03:50:20.789353543Z",
-  "aliases": [
-    "CVE-2024-21510"
-  ],
+  "aliases": ["CVE-2024-21510"],
   "summary": "Sinatra vulnerable to Reliance on Untrusted Inputs in a Security Decision",
   "details": "Versions of the package sinatra from 0.0.0 are vulnerable to Reliance on Untrusted Inputs in a Security Decision via the X-Forwarded-Host (XFH) header. When making a request to a method with redirect applied, it is possible to trigger an Open Redirect Attack by inserting an arbitrary address into this header. If used for caching purposes, such as with servers like Nginx, or as a reverse proxy, without handling the X-Forwarded-Host header, attackers can potentially exploit Cache Poisoning or Routing-based SSRF.",
   "affected": [
@@ -178,9 +176,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-807"
-    ],
+    "cwe_ids": ["CWE-807"],
     "github_reviewed": true,
     "github_reviewed_at": "2024-11-01T21:37:42Z",
     "nvd_published_at": "2024-11-01T05:15:05Z",

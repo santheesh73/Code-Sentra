@@ -3,9 +3,7 @@
   "id": "GHSA-8w26-6f25-cm9x",
   "published": "2021-12-09T19:16:02Z",
   "modified": "2024-02-18T05:30:48.085017Z",
-  "aliases": [
-    "CVE-2020-36185"
-  ],
+  "aliases": ["CVE-2020-36185"],
   "summary": "Unsafe Deserialization in jackson-databind",
   "details": "FasterXML jackson-databind 2.x before 2.9.10.8 mishandles the interaction between serialization gadgets and typing, related to `org.apache.tomcat.dbcp.dbcp2.datasources.SharedPoolDataSource`.",
   "affected": [
@@ -221,9 +219,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2021-03-18T23:37:42Z",
     "nvd_published_at": "2021-01-06T23:15:00Z",

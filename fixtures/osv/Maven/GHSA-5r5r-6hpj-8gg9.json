@@ -3,9 +3,7 @@
   "id": "GHSA-5r5r-6hpj-8gg9",
   "published": "2021-12-09T19:15:24Z",
   "modified": "2024-02-18T05:42:28.539166Z",
-  "aliases": [
-    "CVE-2020-35728"
-  ],
+  "aliases": ["CVE-2020-35728"],
   "summary": "Serialization gadget exploit in jackson-databind",
   "details": "FasterXML jackson-databind 2.x before 2.9.10.8 mishandles the interaction between serialization gadgets and typing, related to com.oracle.wls.shaded.org.apache.xalan.lib.sql.JNDIConnectionPool (aka embedded Xalan in org.glassfish.web/javax.servlet.jsp.jstl).",
   "affected": [
@@ -222,9 +220,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2021-04-07T22:24:20Z",
     "nvd_published_at": "2020-12-27T05:15:00Z",

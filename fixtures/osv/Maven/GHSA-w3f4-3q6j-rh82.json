@@ -3,9 +3,7 @@
   "id": "GHSA-w3f4-3q6j-rh82",
   "published": "2020-06-30T20:40:50Z",
   "modified": "2024-03-11T05:18:22.727055Z",
-  "aliases": [
-    "CVE-2018-5968"
-  ],
+  "aliases": ["CVE-2018-5968"],
   "summary": "Deserialization of Untrusted Data in jackson-databind",
   "details": "FasterXML jackson-databind through 2.8.11 and 2.9.x through 2.9.3 allows unauthenticated remote code execution because of an incomplete fix for the CVE-2017-7525 and CVE-2017-17485 deserialization flaws. This is exploitable via two different gadgets that bypass a blacklist.",
   "affected": [
@@ -267,10 +265,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-184",
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-184", "CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-30T20:40:31Z",
     "nvd_published_at": "2018-01-22T04:29:00Z",

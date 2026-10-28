@@ -3,9 +3,7 @@
   "id": "GHSA-7wqh-767x-r66v",
   "published": "2025-03-10T22:19:30Z",
   "modified": "2026-09-10T03:49:48.459827132Z",
-  "aliases": [
-    "CVE-2025-27610"
-  ],
+  "aliases": ["CVE-2025-27610"],
   "summary": "Local File Inclusion in Rack::Static",
   "details": "## Summary\n\n`Rack::Static` can serve files under the specified `root:` even if `urls:` are provided, which may expose other files under the specified `root:` unexpectedly.\n\n## Details\n\nThe vulnerability occurs because `Rack::Static` does not properly sanitize user-supplied paths before serving files. Specifically, encoded path traversal sequences are not correctly validated, allowing attackers to access files outside the designated static file directory.\n\n## Impact\n\nBy exploiting this vulnerability, an attacker can gain access to all files under the specified `root:` directory, provided they are able to determine then path of the file.\n\n## Mitigation\n\n- Update to the latest version of Rack, or\n- Remove usage of `Rack::Static`, or\n- Ensure that `root:` points at a directory path which only contains files which should be accessed publicly.\n\nIt is likely that a CDN or similar static file server would also mitigate the issue.",
   "affected": [
@@ -255,9 +253,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-23"
-    ],
+    "cwe_ids": ["CWE-23"],
     "github_reviewed": true,
     "github_reviewed_at": "2025-03-10T22:19:30Z",
     "nvd_published_at": "2025-03-10T23:15:35Z",

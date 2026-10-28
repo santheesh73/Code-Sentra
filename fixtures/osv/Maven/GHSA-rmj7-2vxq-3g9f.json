@@ -3,9 +3,7 @@
   "id": "GHSA-rmj7-2vxq-3g9f",
   "published": "2026-06-23T21:22:15Z",
   "modified": "2026-09-11T15:45:08.499771763Z",
-  "aliases": [
-    "CVE-2026-54513"
-  ],
+  "aliases": ["CVE-2026-54513"],
   "summary": "jackson-databind has an array subtype allowlist bypass in BasicPolymorphicTypeValidator (allowIfSubTypeIsArray)",
   "details": "## Summary\n`BasicPolymorphicTypeValidator.Builder.allowIfSubTypeIsArray()` allowlists any array type based only on `clazz.isArray()`, without validating the array's component (element) type against the configured allowlist. A PTV built with `allowIfSubTypeIsArray()` plus an explicit concrete-type allowlist therefore still permits `EvilType[]` even though `EvilType` is not allowlisted. When Jackson deserializes the elements and no per-element type IDs are present, it instantiates the component type directly with no further PTV check, bypassing the allowlist.\n\n## Impact\nApplications using `BasicPolymorphicTypeValidator` with `allowIfSubTypeIsArray()` as a safeguard get no protection for concrete array component types; an attacker controlling JSON can instantiate non-allowlisted types via an array wrapper, re-opening the gadget-instantiation risk PTV is meant to prevent.\n\n## Affected / Patched (verified via `git tag --contains`)\n- 2.18 line: `>= 2.10.0, < 2.18.8` -> fixed in **2.18.8**\n- 2.19-2.21 line: `>= 2.19.0, < 2.21.4` -> fixed in **2.21.4**\n- 3.x line: `>= 3.0.0, < 3.1.4` -> fixed in **3.1.4**\n\n`PolymorphicTypeValidator` was added in 2.10.0 so vulnerability N/A for versions prior to that.\n\n## Severity / CWE\nMaintainer: significant. Reporter: HIGH. CWE-184 (Incomplete List of Disallowed Inputs); related CWE-502.\n\n## Upstream fix\nFasterXML/jackson-databind#5981; fix PR #5983 (`24529da`), 2.18 backport PR #5984 (`01d1692`). Released 2026-06-04 in 2.18.8 / 2.21.4 / 3.1.4.\n\n## Credits\nOmkhar Arasaratnam (@omkhar) - finder.",
   "affected": [
@@ -344,9 +342,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-184"
-    ],
+    "cwe_ids": ["CWE-184"],
     "github_reviewed": true,
     "github_reviewed_at": "2026-06-23T21:22:15Z",
     "nvd_published_at": "2026-06-23T21:17:02Z",

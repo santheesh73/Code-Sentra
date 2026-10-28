@@ -3,9 +3,7 @@
   "id": "GHSA-5f9h-9pjv-v6j7",
   "published": "2020-07-06T21:31:02Z",
   "modified": "2026-09-10T03:48:48.075561980Z",
-  "aliases": [
-    "CVE-2020-8161"
-  ],
+  "aliases": ["CVE-2020-8161"],
   "summary": "Directory traversal in Rack::Directory app bundled with Rack",
   "details": "A directory traversal vulnerability exists in rack < 2.2.0 that allows an attacker perform directory traversal vulnerability in the Rack::Directory app that is bundled with Rack which could result in information disclosure.",
   "affected": [
@@ -162,10 +160,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-22",
-      "CWE-548"
-    ],
+    "cwe_ids": ["CWE-22", "CWE-548"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-07-06T21:30:32Z",
     "nvd_published_at": "2020-07-02T19:15:00Z",

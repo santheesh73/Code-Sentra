@@ -3,9 +3,7 @@
   "id": "GHSA-645p-88qh-w398",
   "published": "2019-01-04T19:06:55Z",
   "modified": "2024-03-16T05:19:17.936174Z",
-  "aliases": [
-    "CVE-2018-14718"
-  ],
+  "aliases": ["CVE-2018-14718"],
   "summary": "Arbitrary Code Execution in jackson-databind",
   "details": "FasterXML jackson-databind 2.x before 2.9.7, 2.8.11.3, 2.7.9.5, and 2.6.7.3 might allow remote attackers to execute arbitrary code by leveraging failure to block the slf4j-ext class from polymorphic deserialization.",
   "affected": [
@@ -369,9 +367,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T21:17:52Z",
     "nvd_published_at": "2019-01-02T18:29:00Z",

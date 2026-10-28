@@ -3,9 +3,7 @@
   "id": "GHSA-cmfg-87vq-g5g4",
   "published": "2019-07-17T15:26:12Z",
   "modified": "2024-03-15T01:18:17.903231Z",
-  "aliases": [
-    "CVE-2019-12814"
-  ],
+  "aliases": ["CVE-2019-12814"],
   "summary": "Deserialization of untrusted data in FasterXML jackson-databind",
   "details": "A Polymorphic Typing issue was discovered in FasterXML jackson-databind 2.x through 2.9.9. When Default Typing is enabled (either globally or for a specific property) for an externally exposed JSON endpoint and the service has JDOM 1.x or 2.x jar in the classpath, an attacker can send a specifically crafted JSON message that allows them to read arbitrary local files on the server.",
   "affected": [
@@ -452,9 +450,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2019-07-17T14:51:50Z",
     "nvd_published_at": "2019-06-19T14:15:10Z",

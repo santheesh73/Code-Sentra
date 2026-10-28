@@ -3,9 +3,7 @@
   "id": "GHSA-mph4-vhrx-mv67",
   "published": "2019-07-05T21:07:27Z",
   "modified": "2024-03-15T01:16:21.467932Z",
-  "aliases": [
-    "CVE-2019-12384"
-  ],
+  "aliases": ["CVE-2019-12384"],
   "summary": "Deserialization of Untrusted Data in FasterXML jackson-databind",
   "details": "FasterXML jackson-databind 2.x before 2.9.9.1 might allow attackers to have a variety of impacts by leveraging failure to block the logback-core class from polymorphic deserialization. Depending on the classpath content, remote code execution may be possible.",
   "affected": [
@@ -416,9 +414,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2019-06-27T11:07:42Z",
     "nvd_published_at": "2019-06-24T16:15:15Z",

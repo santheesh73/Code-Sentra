@@ -3,12 +3,8 @@
   "id": "GHSA-vpfw-47h7-xj4g",
   "published": "2025-05-08T14:45:18Z",
   "modified": "2026-09-10T03:50:24.733775036Z",
-  "aliases": [
-    "CVE-2025-32441"
-  ],
-  "related": [
-    "CVE-2025-46336"
-  ],
+  "aliases": ["CVE-2025-32441"],
+  "related": ["CVE-2025-46336"],
   "summary": "Rack session gets restored after deletion",
   "details": "### Summary\n\nWhen using the `Rack::Session::Pool` middleware, simultaneous rack requests can restore a deleted rack session, which allows the unauthenticated user to occupy that session.\n\n### Details\n\n[Rack session middleware](https://github.com/rack/rack/blob/v2.2.13/lib/rack/session/abstract/id.rb#L263-L270) prepares the session at the beginning of request, then saves is back to the store with possible changes applied by host rack application. This way the session becomes to be a subject of race conditions in general sense over concurrent rack requests.\n\n### Impact\n\nWhen using the `Rack::Session::Pool` middleware, and provided the attacker can acquire a session cookie (already a major issue), the session may be restored if the attacker can trigger a long running request (within that same session) adjacent to the user logging out, in order to retain illicit access even after a user has attempted to logout.\n\n## Mitigation\n\n- Update to the latest version of `rack`, or\n- Ensure your application invalidates sessions atomically by marking them as logged out e.g., using a `logged_out` flag, instead of deleting them, and check this flag on every request to prevent reuse, or\n- Implement a custom session store that tracks session invalidation timestamps and refuses to accept session data if the session was invalidated after the request began.\n\n### Related\n\nAs this code was moved to `rack-session` in Rack 3+, see <https://github.com/rack/rack-session/security/advisories/GHSA-9j94-67jr-4cqj> for the equivalent advisory in `rack-session` (affecting Rack 3+ only).",
   "affected": [
@@ -184,11 +180,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-362",
-      "CWE-367",
-      "CWE-613"
-    ],
+    "cwe_ids": ["CWE-362", "CWE-367", "CWE-613"],
     "github_reviewed": true,
     "github_reviewed_at": "2025-05-08T14:45:18Z",
     "nvd_published_at": "2025-05-07T23:15:53Z",

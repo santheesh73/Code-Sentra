@@ -3,13 +3,8 @@
   "id": "GO-2025-3770",
   "published": "2025-07-21T15:05:07Z",
   "modified": "2026-08-15T05:19:10.246790670Z",
-  "aliases": [
-    "CVE-2025-71405",
-    "GHSA-vrw8-fxc6-2r93"
-  ],
-  "related": [
-    "CGA-pfh9-hhcg-hhh3"
-  ],
+  "aliases": ["CVE-2025-71405", "GHSA-vrw8-fxc6-2r93"],
+  "related": ["CGA-pfh9-hhcg-hhh3"],
   "summary": "Host header injection which leads to open redirect in RedirectSlashes in github.com/go-chi/chi",
   "details": "Host header injection which leads to open redirect in RedirectSlashes in github.com/go-chi/chi",
   "affected": [

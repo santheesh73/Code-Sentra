@@ -3,13 +3,8 @@
   "id": "GO-2026-4316",
   "published": "2026-01-23T02:28:11Z",
   "modified": "2026-08-07T08:11:52.690351852Z",
-  "aliases": [
-    "CVE-2025-69725",
-    "GHSA-mqqf-5wvp-8fh8"
-  ],
-  "related": [
-    "CGA-76m3-5fxv-q2q2"
-  ],
+  "aliases": ["CVE-2025-69725", "GHSA-mqqf-5wvp-8fh8"],
+  "related": ["CGA-76m3-5fxv-q2q2"],
   "summary": "Open redirect vulnerability in the RedirectSlashes middleware in github.com/go-chi/chi",
   "details": "Open redirect vulnerability in the RedirectSlashes middleware in github.com/go-chi/chi",
   "affected": [
@@ -120,9 +115,7 @@
         "imports": [
           {
             "path": "github.com/go-chi/chi/v5/middleware",
-            "symbols": [
-              "RedirectSlashes"
-            ]
+            "symbols": ["RedirectSlashes"]
           }
         ]
       },

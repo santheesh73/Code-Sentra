@@ -3,9 +3,7 @@
   "id": "GHSA-gww7-p5w4-wrfv",
   "published": "2020-03-04T20:52:11Z",
   "modified": "2024-03-15T01:05:18.790961Z",
-  "aliases": [
-    "CVE-2019-20330"
-  ],
+  "aliases": ["CVE-2019-20330"],
   "summary": "Deserialization of Untrusted Data in jackson-databind",
   "details": "FasterXML jackson-databind 2.x before 2.6.7.4, 2.7.x before 2.7.9.7, 2.8.x before 2.8.11.5, and 2.9.x before 2.9.10.2 lacks certain `net.sf.ehcache` blocking.",
   "affected": [
@@ -380,9 +378,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-02-25T02:46:33Z",
     "nvd_published_at": "2020-01-03T04:15:00Z",

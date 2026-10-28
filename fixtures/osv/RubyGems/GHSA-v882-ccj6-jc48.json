@@ -3,9 +3,7 @@
   "id": "GHSA-v882-ccj6-jc48",
   "published": "2022-05-05T02:48:31Z",
   "modified": "2024-12-07T05:33:20.045140Z",
-  "aliases": [
-    "CVE-2013-0184"
-  ],
+  "aliases": ["CVE-2013-0184"],
   "summary": "Rack vulnerable to Denial of Service",
   "details": "Unspecified vulnerability in `Rack::Auth::AbstractRequest` in Rack 1.1.x before 1.1.5, 1.2.x before 1.2.7, 1.3.x before 1.3.9, and 1.4.x before 1.4.4 allows remote attackers to cause a denial of service via unknown vectors related to \"symbolized arbitrary strings.\"",
   "affected": [
@@ -28,14 +26,7 @@
           ]
         }
       ],
-      "versions": [
-        "1.1.0",
-        "1.1.1",
-        "1.1.1.pre",
-        "1.1.2",
-        "1.1.3",
-        "1.1.4"
-      ],
+      "versions": ["1.1.0", "1.1.1", "1.1.1.pre", "1.1.2", "1.1.3", "1.1.4"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2022/05/GHSA-v882-ccj6-jc48/GHSA-v882-ccj6-jc48.json"
       }
@@ -59,15 +50,7 @@
           ]
         }
       ],
-      "versions": [
-        "1.2.0",
-        "1.2.1",
-        "1.2.2",
-        "1.2.3",
-        "1.2.4",
-        "1.2.5",
-        "1.2.6"
-      ],
+      "versions": ["1.2.0", "1.2.1", "1.2.2", "1.2.3", "1.2.4", "1.2.5", "1.2.6"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2022/05/GHSA-v882-ccj6-jc48/GHSA-v882-ccj6-jc48.json"
       }
@@ -91,17 +74,7 @@
           ]
         }
       ],
-      "versions": [
-        "1.3.0",
-        "1.3.1",
-        "1.3.2",
-        "1.3.3",
-        "1.3.4",
-        "1.3.5",
-        "1.3.6",
-        "1.3.7",
-        "1.3.8"
-      ],
+      "versions": ["1.3.0", "1.3.1", "1.3.2", "1.3.3", "1.3.4", "1.3.5", "1.3.6", "1.3.7", "1.3.8"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2022/05/GHSA-v882-ccj6-jc48/GHSA-v882-ccj6-jc48.json"
       }
@@ -125,12 +98,7 @@
           ]
         }
       ],
-      "versions": [
-        "1.4.0",
-        "1.4.1",
-        "1.4.2",
-        "1.4.3"
-      ],
+      "versions": ["1.4.0", "1.4.1", "1.4.2", "1.4.3"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2022/05/GHSA-v882-ccj6-jc48/GHSA-v882-ccj6-jc48.json"
       }

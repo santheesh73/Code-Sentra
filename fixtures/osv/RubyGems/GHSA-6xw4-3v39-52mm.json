@@ -3,9 +3,7 @@
   "id": "GHSA-6xw4-3v39-52mm",
   "published": "2025-10-10T17:33:35Z",
   "modified": "2026-09-10T03:50:29.392401482Z",
-  "aliases": [
-    "CVE-2025-61919"
-  ],
+  "aliases": ["CVE-2025-61919"],
   "summary": "Rack is vulnerable to a memory-exhaustion DoS through unbounded URL-encoded body parsing",
   "details": "## Summary\n\n`Rack::Request#POST` reads the entire request body into memory for `Content-Type: application/x-www-form-urlencoded`, calling `rack.input.read(nil)` without enforcing a length or cap. Large request bodies can therefore be buffered completely into process memory before parsing, leading to denial of service (DoS) through memory exhaustion.\n\n## Details\n\nWhen handling non-multipart form submissions, Rack’s request parser performs:\n\n```ruby\nform_vars = get_header(RACK_INPUT).read\n```\n\nSince `read` is called with no argument, the entire request body is loaded into a Ruby `String`. This occurs before query parameter parsing or enforcement of any `params_limit`. As a result, Rack applications without an upstream body-size limit can experience unbounded memory allocation proportional to request size.\n\n## Impact\n\nAttackers can send large `application/x-www-form-urlencoded` bodies to consume process memory, causing slowdowns or termination by the operating system (OOM). The effect scales linearly with request size and concurrency. Even with parsing limits configured, the issue occurs *before* those limits are enforced.\n\n## Mitigation\n\n* Update to a patched version of Rack that enforces form parameter limits using `query_parser.bytesize_limit`, preventing unbounded reads of `application/x-www-form-urlencoded` bodies.\n* Enforce strict maximum body size at the proxy or web server layer (e.g., Nginx `client_max_body_size`, Apache `LimitRequestBody`).",
   "affected": [
@@ -239,11 +237,7 @@
           ]
         }
       ],
-      "versions": [
-        "3.2.0",
-        "3.2.1",
-        "3.2.2"
-      ],
+      "versions": ["3.2.0", "3.2.1", "3.2.2"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2025/10/GHSA-6xw4-3v39-52mm/GHSA-6xw4-3v39-52mm.json"
       }
@@ -280,9 +274,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-400"
-    ],
+    "cwe_ids": ["CWE-400"],
     "github_reviewed": true,
     "github_reviewed_at": "2025-10-10T17:33:35Z",
     "nvd_published_at": "2025-10-10T20:15:37Z",

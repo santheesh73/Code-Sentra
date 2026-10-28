@@ -3,9 +3,7 @@
   "id": "GHSA-w9pc-fmgc-vxvw",
   "published": "2025-10-07T17:27:07Z",
   "modified": "2026-09-10T03:50:30.326446730Z",
-  "aliases": [
-    "CVE-2025-61771"
-  ],
+  "aliases": ["CVE-2025-61771"],
   "summary": "Rack: Multipart parser buffers large non‑file fields entirely in memory, enabling DoS (memory exhaustion)",
   "details": "## Summary\n\n`Rack::Multipart::Parser` stores non-file form fields (parts without a `filename`) entirely in memory as Ruby `String` objects. A single large text field in a multipart/form-data request (hundreds of megabytes or more) can consume equivalent process memory, potentially leading to out-of-memory (OOM) conditions and denial of service (DoS).\n\n## Details\n\nDuring multipart parsing, file parts are streamed to temporary files, but non-file parts are buffered into memory:\n\n```ruby\nbody = String.new  # non-file → in-RAM buffer\n@mime_parts[mime_index].body << content\n```\n\nThere is no size limit on these in-memory buffers. As a result, any large text field—while technically valid—will be loaded fully into process memory before being added to `params`.\n\n## Impact\n\nAttackers can send large non-file fields to trigger excessive memory usage. Impact scales with request size and concurrency, potentially leading to worker crashes or severe garbage-collection overhead. All Rack applications processing multipart form submissions are affected.\n\n## Mitigation\n\n* **Upgrade:** Use a patched version of Rack that enforces a reasonable size cap for non-file fields (e.g., 2 MiB).\n* **Workarounds:**\n  * Restrict maximum request body size at the web-server or proxy layer (e.g., Nginx `client_max_body_size`).\n  * Validate and reject unusually large form fields at the application level.",
   "affected": [
@@ -214,10 +212,7 @@
           ]
         }
       ],
-      "versions": [
-        "3.2.0",
-        "3.2.1"
-      ],
+      "versions": ["3.2.0", "3.2.1"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2025/10/GHSA-w9pc-fmgc-vxvw/GHSA-w9pc-fmgc-vxvw.json"
       }
@@ -254,9 +249,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-400"
-    ],
+    "cwe_ids": ["CWE-400"],
     "github_reviewed": true,
     "github_reviewed_at": "2025-10-07T17:27:07Z",
     "nvd_published_at": "2025-10-07T15:16:03Z",

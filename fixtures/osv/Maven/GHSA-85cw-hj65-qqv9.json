@@ -3,9 +3,7 @@
   "id": "GHSA-85cw-hj65-qqv9",
   "published": "2019-09-23T18:33:45Z",
   "modified": "2024-03-15T05:20:15.574552Z",
-  "aliases": [
-    "CVE-2019-16335"
-  ],
+  "aliases": ["CVE-2019-16335"],
   "summary": "Polymorphic Typing issue in FasterXML jackson-databind",
   "details": "A Polymorphic Typing issue was discovered in FasterXML jackson-databind before 2.9.10, 2.8.11.5, and 2.6.7.3. It is related to com.zaxxer.hikari.HikariDataSource. This is a different vulnerability than CVE-2019-14540.",
   "affected": [
@@ -346,9 +344,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2019-09-19T09:22:56Z",
     "nvd_published_at": "2019-09-15T22:15:00Z",

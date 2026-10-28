@@ -3,9 +3,7 @@
   "id": "GHSA-c265-37vj-cwcc",
   "published": "2020-06-18T14:44:48Z",
   "modified": "2026-08-07T08:12:24.680510172Z",
-  "aliases": [
-    "CVE-2020-14062"
-  ],
+  "aliases": ["CVE-2020-14062"],
   "summary": "Deserialization of untrusted data in Jackson Databind",
   "details": "FasterXML jackson-databind 2.x before 2.9.10.5 mishandles the interaction between serialization gadgets and typing, related to com.sun.org.apache.xalan.internal.lib.sql.JNDIConnectionPool (aka xalan2).",
   "affected": [
@@ -121,9 +119,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-18T13:06:04Z",
     "nvd_published_at": "2020-06-14T20:15:00Z",

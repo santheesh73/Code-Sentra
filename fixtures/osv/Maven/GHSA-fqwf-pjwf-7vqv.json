@@ -3,9 +3,7 @@
   "id": "GHSA-fqwf-pjwf-7vqv",
   "published": "2020-05-15T18:59:04Z",
   "modified": "2024-07-03T21:22:37.578162Z",
-  "aliases": [
-    "CVE-2020-10673"
-  ],
+  "aliases": ["CVE-2020-10673"],
   "summary": "jackson-databind mishandles the interaction between serialization gadgets and typing",
   "details": "FasterXML jackson-databind 2.x before 2.9.10.4 and 2.6.7.4 mishandles the interaction between serialization gadgets and typing, related to com.caucho.config.types.ResourceRef (aka caucho-quercus).",
   "affected": [
@@ -233,9 +231,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-04-22T20:59:03Z",
     "nvd_published_at": "2020-03-18T22:15:00Z",

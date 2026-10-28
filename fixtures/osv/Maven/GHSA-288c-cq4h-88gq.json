@@ -3,9 +3,7 @@
   "id": "GHSA-288c-cq4h-88gq",
   "published": "2021-02-18T20:51:54Z",
   "modified": "2026-08-07T08:12:29.488548796Z",
-  "aliases": [
-    "CVE-2020-25649"
-  ],
+  "aliases": ["CVE-2020-25649"],
   "summary": "XML External Entity (XXE) Injection in Jackson Databind",
   "details": "A flaw was found in FasterXML Jackson Databind, where it did not have entity expansion secured properly. This flaw allows vulnerability to XML external entity (XXE) attacks. The highest threat from this vulnerability is data integrity.",
   "affected": [
@@ -474,9 +472,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-611"
-    ],
+    "cwe_ids": ["CWE-611"],
     "github_reviewed": true,
     "github_reviewed_at": "2021-02-18T20:41:26Z",
     "nvd_published_at": "2020-12-03T17:15:00Z",

@@ -3,9 +3,7 @@
   "id": "GHSA-hg78-4f6x-99wq",
   "published": "2018-11-15T15:58:58Z",
   "modified": "2024-02-16T08:02:29.993945Z",
-  "aliases": [
-    "CVE-2018-16470"
-  ],
+  "aliases": ["CVE-2018-16470"],
   "summary": "Rack vulnerable to Denial of Service",
   "details": "There is a possible DoS vulnerability in the multipart parser in Rack before 2.0.6. Specially crafted requests can cause the multipart parser to enter a pathological state, causing the parser to use CPU resources disproportionate to the request size.",
   "affected": [
@@ -28,10 +26,7 @@
           ]
         }
       ],
-      "versions": [
-        "2.0.4",
-        "2.0.5"
-      ],
+      "versions": ["2.0.4", "2.0.5"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2018/11/GHSA-hg78-4f6x-99wq/GHSA-hg78-4f6x-99wq.json"
       }
@@ -64,9 +59,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-400"
-    ],
+    "cwe_ids": ["CWE-400"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T21:40:04Z",
     "nvd_published_at": "2018-11-13T23:29:00Z",

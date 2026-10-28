@@ -3,9 +3,7 @@
   "id": "GHSA-mc6h-4qgp-37qh",
   "published": "2020-06-18T14:44:43Z",
   "modified": "2026-08-07T08:12:25.680646289Z",
-  "aliases": [
-    "CVE-2020-14195"
-  ],
+  "aliases": ["CVE-2020-14195"],
   "summary": "Deserialization of untrusted data in Jackson Databind",
   "details": "FasterXML jackson-databind 2.x before 2.9.10.5 mishandles the interaction between serialization gadgets and typing, related to org.jsecurity.realm.jndi.JndiRealmFactory (aka org.jsecurity).",
   "affected": [
@@ -109,9 +107,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-18T13:05:45Z",
     "nvd_published_at": "2020-06-16T16:15:00Z",

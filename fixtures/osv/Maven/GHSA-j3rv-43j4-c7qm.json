@@ -3,12 +3,8 @@
   "id": "GHSA-j3rv-43j4-c7qm",
   "published": "2026-06-23T21:21:38Z",
   "modified": "2026-10-28T10:56:49.472327085Z",
-  "aliases": [
-    "CVE-2026-54512"
-  ],
-  "related": [
-    "CVE-2026-110879"
-  ],
+  "aliases": ["CVE-2026-54512"],
+  "related": ["CVE-2026-110879"],
   "summary": "jackson-databind has a PolymorphicTypeValidator bypass via generic type parameters that allows arbitrary class instantiation",
   "details": "`jackson-databind`'s `PolymorphicTypeValidator` (PTV) is the primary safety mechanism guarding polymorphic deserialization. When polymorphic typing is enabled and a type identifier contains generic parameters (i.e. the type ID string contains `<`), `DatabindContext._resolveAndValidateGeneric()` validates **only the raw container class name** (the substring before `<`) against the configured PTV.\n\nIf the container type is approved, the method parses the full canonical type string via `TypeFactory.constructFromCanonical()` and returns the fully parameterized type **without ever validating the nested type arguments** against the PTV. The nested type arguments are then resolved, instantiated, and populated as beans during deserialization.\n\nAn attacker who controls the type ID can therefore place a denied class as a generic type parameter of an allowed container — for example `java.util.ArrayList<com.evil.Gadget>` when only `java.util.ArrayList` is allow-listed. The container passes the PTV check; `com.evil.Gadget` is loaded via `Class.forName(name, true, loader)`, instantiated, and its properties are set from attacker-controlled JSON. This completely bypasses an explicitly configured PTV allow-list.\n\nThis is the same vulnerability class responsible for the historical sequence of jackson-databind deserialization CVEs; here it manifests as a validator bypass rather than a missing deny-list entry.\n\n\n## Impact\n\n- **Bypass of the PTV allow-list**, including the recommended `BasicPolymorphicTypeValidator` configured with name-prefix allow rules.\n- **Arbitrary class instantiation** of any type assignable to the container's element/parameter position, with attacker-controlled property values (setter/field injection).\n- **Potential unauthenticated remote code execution** when a class with exploitable side effects (JNDI lookup, JDBC/connection-pool gadgets,`TemplatesImpl`-style loaders, etc.) is present on the classpath.\n\nApplications that accept untrusted JSON and rely on a configured PTV — the documented, security-conscious configuration — are affected.\n\n\n## Proof of Concept\n\nConfiguration restricting polymorphic deserialization to a single safe container:\n\n```java\nBasicPolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()\n        .allowIfSubType(\"java.util.ArrayList\")\n        .build();\n\nObjectMapper mapper = JsonMapper.builder()\n        .polymorphicTypeValidator(ptv)\n        .build();\n```\n\nMalicious payload (`Wrapper.value` is `Object` with `@JsonTypeInfo(use = Id.CLASS, include = As.WRAPPER_ARRAY)`):\n\n```json\n{\"value\":[\"java.util.ArrayList<com.evil.EvilGadget>\",[{\"cmd\":\"calc.exe\"}]]}\n```\n\nOn vulnerable versions, `com.evil.EvilGadget` is instantiated and its `cmd` property is set, despite only `java.util.ArrayList` being allow-listed. On `2.18.8` / `2.21.4` / `3.1.4` the deserialization throws `InvalidTypeIdException` before instantiation.\n\n**Variant payloads** (all bypass an `ArrayList`/`HashMap` allow-list):\n\n| Type ID | Smuggled type position |\n|---|---|\n| `java.util.ArrayList<Evil>` | list element |\n| `java.util.HashMap<Evil,String>` | map key |\n| `java.util.HashMap<String,Evil>` | map value |\n| `java.util.ArrayList<java.util.ArrayList<Evil>>` | nested element |\n| `java.util.ArrayList<Evil[]>` | array element |\n\n---\n\n## Patches\n\nFixed in **2.18.8**, **2.21.4** and **3.1.4** via the changes for [FasterXML/jackson-databind#5988](https://github.com/FasterXML/jackson-databind/issues/5988), commit `434d6c511`. The fix adds recursive validation of each non-trivial type parameter (and array element types appearing as parameters) through the full PTV chain, with documented exemptions for `Object` (wildcard resolution) and `Enum` types.\n\n`PolymorphicTypeValidator` was added in 2.10.0 so vulnerability N/A for versions prior to that.",
   "affected": [
@@ -235,10 +231,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-184",
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-184", "CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2026-06-23T21:21:38Z",
     "nvd_published_at": "2026-06-23T21:17:02Z",

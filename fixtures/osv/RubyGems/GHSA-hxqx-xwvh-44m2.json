@@ -3,9 +3,7 @@
   "id": "GHSA-hxqx-xwvh-44m2",
   "published": "2022-05-27T16:36:52Z",
   "modified": "2024-02-18T05:27:39.361222Z",
-  "aliases": [
-    "CVE-2022-30122"
-  ],
+  "aliases": ["CVE-2022-30122"],
   "summary": "Denial of Service Vulnerability in Rack Multipart Parsing",
   "details": "There is a possible denial of service vulnerability in the multipart parsing component of Rack.  This vulnerability has been assigned the CVE identifier CVE-2022-30122.\n\nVersions Affected:  >= 1.2\nNot affected:       < 1.2\nFixed Versions:     2.0.9.1, 2.1.4.1, 2.2.3.1\n\n## Impact\nCarefully crafted multipart POST requests can cause Rack's multipart parser to take much longer than expected, leading to a possible denial of service vulnerability.\n\nImpacted code will use Rack's multipart parser to parse multipart posts.  This includes directly using the multipart parser like this:\n\n```\nparams = Rack::Multipart.parse_multipart(env)\n```\n\nBut it also includes reading POST data from a Rack request object like this:\n\n```\np request.POST # read POST data\np request.params # reads both query params and POST data\n```\n\nAll users running an affected release should either upgrade or use one of the workarounds immediately.\n\n## Workarounds\nThere are no feasible workarounds for this issue.\n",
   "affected": [
@@ -119,13 +117,7 @@
           ]
         }
       ],
-      "versions": [
-        "2.1.0",
-        "2.1.1",
-        "2.1.2",
-        "2.1.3",
-        "2.1.4"
-      ],
+      "versions": ["2.1.0", "2.1.1", "2.1.2", "2.1.3", "2.1.4"],
       "database_specific": {
         "last_known_affected_version_range": "<= 2.1.4.0",
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2022/05/GHSA-hxqx-xwvh-44m2/GHSA-hxqx-xwvh-44m2.json"
@@ -150,12 +142,7 @@
           ]
         }
       ],
-      "versions": [
-        "2.2.0",
-        "2.2.1",
-        "2.2.2",
-        "2.2.3"
-      ],
+      "versions": ["2.2.0", "2.2.1", "2.2.2", "2.2.3"],
       "database_specific": {
         "last_known_affected_version_range": "<= 2.2.3.0",
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2022/05/GHSA-hxqx-xwvh-44m2/GHSA-hxqx-xwvh-44m2.json"
@@ -197,10 +184,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-1333",
-      "CWE-400"
-    ],
+    "cwe_ids": ["CWE-1333", "CWE-400"],
     "github_reviewed": true,
     "github_reviewed_at": "2022-05-27T16:36:52Z",
     "nvd_published_at": "2022-12-05T22:15:00Z",

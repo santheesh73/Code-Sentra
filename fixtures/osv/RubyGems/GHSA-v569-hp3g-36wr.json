@@ -3,9 +3,7 @@
   "id": "GHSA-v569-hp3g-36wr",
   "published": "2026-04-02T20:32:19Z",
   "modified": "2026-09-10T03:51:03.178734762Z",
-  "aliases": [
-    "CVE-2026-34230"
-  ],
+  "aliases": ["CVE-2026-34230"],
   "summary": "Rack has quadratic complexity in Rack::Utils.select_best_encoding via wildcard Accept-Encoding header",
   "details": "## Summary\n\n`Rack::Utils.select_best_encoding` processes `Accept-Encoding` values with quadratic time complexity when the header contains many wildcard (`*`) entries. Because this method is used by `Rack::Deflater` to choose a response encoding, an unauthenticated attacker can send a single request with a crafted `Accept-Encoding` header and cause disproportionate CPU consumption on the compression middleware path.\n\nThis results in a denial of service condition for applications using `Rack::Deflater`.\n\n## Details\n\n`Rack::Utils.select_best_encoding` expands parsed `Accept-Encoding` values into a list of candidate encodings. When an entry is `*`, the method computes the set of concrete encodings by subtracting the encodings already present in the request:\n\n```ruby\nif m == \"*\"\n  (available_encodings - accept_encoding.map(&:first)).each do |m2|\n    expanded_accept_encoding << [m2, q, preference]\n  end\nelse\n  expanded_accept_encoding << [m, q, preference]\nend\n```\n\nBecause `accept_encoding.map(&:first)` is evaluated inside the loop, it is recomputed for each wildcard entry. If the request contains `N` wildcard entries, this produces repeated scans over the full parsed header and causes quadratic behavior.\n\nAfter expansion, the method also performs additional work over `expanded_accept_encoding`, including per-entry deletion, which further increases the cost for large inputs.\n\n`Rack::Deflater` invokes this method for each request when the middleware is enabled:\n\n```ruby\nUtils.select_best_encoding(ENCODINGS, Utils.parse_encodings(accept_encoding))\n```\n\nAs a result, a client can trigger this expensive code path simply by sending a large `Accept-Encoding` header containing many repeated wildcard values.\n\nFor example, a request with an approximately 8 KB `Accept-Encoding` header containing about 1,000 `*;q=0.5` entries can cause roughly 170 ms of CPU time in a single request on the `Rack::Deflater` path, compared to a negligible baseline for a normal header.\n\nThis issue is distinct from CVE-2024-26146. That issue concerned regular expression denial of service during `Accept` header parsing, whereas this issue arises later during encoding selection after the header has already been parsed.\n\n## Impact\n\nAny Rack application using `Rack::Deflater` may be affected.\n\nAn unauthenticated attacker can send requests with crafted `Accept-Encoding` headers to trigger excessive CPU usage in the encoding selection logic. Repeated requests can consume worker time disproportionately and reduce application availability.\n\nThe attack does not require invalid HTTP syntax or large payload bodies. A single header-sized request is sufficient to reach the vulnerable code path.\n\n## Mitigation\n\n* Update to a patched version of Rack in which encoding selection does not repeatedly rescan the parsed header for wildcard entries.\n* Avoid enabling `Rack::Deflater` on untrusted traffic.\n* Apply request filtering or header size / format restrictions at the reverse proxy or application boundary to limit abusive `Accept-Encoding` values.",
   "affected": [
@@ -247,14 +245,7 @@
           ]
         }
       ],
-      "versions": [
-        "3.2.0",
-        "3.2.1",
-        "3.2.2",
-        "3.2.3",
-        "3.2.4",
-        "3.2.5"
-      ],
+      "versions": ["3.2.0", "3.2.1", "3.2.2", "3.2.3", "3.2.4", "3.2.5"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/04/GHSA-v569-hp3g-36wr/GHSA-v569-hp3g-36wr.json"
       }
@@ -279,10 +270,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-400",
-      "CWE-407"
-    ],
+    "cwe_ids": ["CWE-400", "CWE-407"],
     "github_reviewed": true,
     "github_reviewed_at": "2026-04-02T20:32:19Z",
     "nvd_published_at": "2026-04-02T17:16:23Z",

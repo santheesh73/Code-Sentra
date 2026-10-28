@@ -3,9 +3,7 @@
   "id": "GHSA-qp49-3pvw-x4m5",
   "published": "2022-05-03T00:00:43Z",
   "modified": "2025-11-04T19:59:48.796726Z",
-  "aliases": [
-    "CVE-2022-29970"
-  ],
+  "aliases": ["CVE-2022-29970"],
   "summary": "sinatra does not validate expanded path matches",
   "details": "Sinatra before 2.2.0 does not validate that the expanded path matches public_dir when serving static files.",
   "affected": [
@@ -158,10 +156,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-22",
-      "CWE-426"
-    ],
+    "cwe_ids": ["CWE-22", "CWE-426"],
     "github_reviewed": true,
     "github_reviewed_at": "2022-05-03T20:59:50Z",
     "nvd_published_at": "2022-05-02T05:15:00Z",

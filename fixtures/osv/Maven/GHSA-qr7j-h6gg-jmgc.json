@@ -3,9 +3,7 @@
   "id": "GHSA-qr7j-h6gg-jmgc",
   "published": "2019-07-16T17:42:21Z",
   "modified": "2024-03-11T05:21:14.313980Z",
-  "aliases": [
-    "CVE-2018-11307"
-  ],
+  "aliases": ["CVE-2018-11307"],
   "summary": "Deserialization of Untrusted Data in jackson-databind",
   "details": "An issue was discovered in FasterXML jackson-databind 2.0.0 through 2.9.5. Use of Jackson default typing along with a gadget class from iBatis allows exfiltration of content. Fixed in 2.7.9.4, 2.8.11.2, and 2.9.6.",
   "affected": [
@@ -299,9 +297,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2019-07-16T00:41:07Z",
     "nvd_published_at": "2019-07-09T16:15:00Z",

@@ -3,9 +3,7 @@
   "id": "GHSA-c8hm-7hpq-7jhg",
   "published": "2019-01-04T19:07:03Z",
   "modified": "2024-03-15T01:17:19.251183Z",
-  "aliases": [
-    "CVE-2018-19362"
-  ],
+  "aliases": ["CVE-2018-19362"],
   "summary": "com.fasterxml.jackson.core:jackson-databind vulnerable to Deserialization of Untrusted Data",
   "details": "FasterXML jackson-databind 2.x before 2.9.8 might allow attackers to have unspecified impact by leveraging failure to block the jboss-common-core class from polymorphic deserialization.",
   "affected": [
@@ -386,9 +384,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T21:30:35Z",
     "nvd_published_at": null,

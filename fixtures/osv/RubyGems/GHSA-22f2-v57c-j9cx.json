@@ -3,9 +3,7 @@
   "id": "GHSA-22f2-v57c-j9cx",
   "published": "2024-02-28T22:57:26Z",
   "modified": "2026-09-10T03:50:05.157621648Z",
-  "aliases": [
-    "CVE-2024-25126"
-  ],
+  "aliases": ["CVE-2024-25126"],
   "summary": "Rack vulnerable to ReDoS in content type parsing (2nd degree polynomial)",
   "details": "### Summary\n\n```ruby\nmodule Rack\n  class MediaType\n    SPLIT_PATTERN = %r{\\s*[;,]\\s*}\n```\nThe above regexp is subject to ReDos. 50K blank characters as a prefix to the header will take over 10s to split.\n\n### PoC\n\nA simple HTTP request with lots of blank characters in the content-type header:\n\n```ruby\nrequest[\"Content-Type\"] = (\" \" * 50_000) + \"a,\"\n```\n\n### Impact\n\nIt's a very easy to craft ReDoS. Like all ReDoS the impact is debatable.",
   "affected": [
@@ -217,9 +215,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-1333"
-    ],
+    "cwe_ids": ["CWE-1333"],
     "github_reviewed": true,
     "github_reviewed_at": "2024-02-28T22:57:26Z",
     "nvd_published_at": "2024-02-29T00:15:51Z",

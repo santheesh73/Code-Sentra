@@ -3,9 +3,7 @@
   "id": "GHSA-q2ww-5357-x388",
   "published": "2026-04-02T20:36:10Z",
   "modified": "2026-09-10T03:51:02.719242615Z",
-  "aliases": [
-    "CVE-2026-34831"
-  ],
+  "aliases": ["CVE-2026-34831"],
   "summary": "Rack has Content-Length mismatch in Rack::Files error responses",
   "details": "## Summary\n\n`Rack::Files#fail` sets the `Content-Length` response header using `String#size` instead of `String#bytesize`. When the response body contains multibyte UTF-8 characters, the declared `Content-Length` is smaller than the number of bytes actually sent on the wire.\n\nBecause `Rack::Files` reflects the requested path in 404 responses, an attacker can trigger this mismatch by requesting a non-existent path containing percent-encoded UTF-8 characters.\n\nThis results in incorrect HTTP response framing and may cause response desynchronization in deployments that rely on the incorrect `Content-Length` value.\n\n## Details\n\n`Rack::Files#fail` constructs error responses using logic equivalent to:\n\n```ruby\ndef fail(status, body, headers = {})\n  body += \"\\n\"\n  [\n    status,\n    {\n      \"content-type\" => \"text/plain\",\n      \"content-length\" => body.size.to_s,\n      \"x-cascade\" => \"pass\"\n    }.merge!(headers),\n    [body]\n  ]\nend\n```\n\nHere, `body.size` returns the number of characters, not the number of bytes. For multibyte UTF-8 strings, this produces an incorrect `Content-Length` value.\n\n`Rack::Files` includes the decoded request path in 404 responses. A request containing percent-encoded UTF-8 path components therefore causes the response body to contain multibyte characters, while the `Content-Length` header still reflects character count rather than byte count.\n\nAs a result, the server can send more bytes than declared in the response headers.\n\nThis violates HTTP message framing requirements, which define `Content-Length` as the number of octets in the message body.\n\n## Impact\n\nApplications using `Rack::Files` may emit incorrectly framed error responses when handling requests for non-existent paths containing multibyte characters.\n\nIn some deployment topologies, particularly with keep-alive connections and intermediaries that rely on `Content-Length`, this mismatch may lead to response parsing inconsistencies or response desynchronization. The practical exploitability depends on the behavior of downstream proxies, clients, and connection reuse.\n\nEven where no secondary exploitation is possible, the response is malformed and may trigger protocol errors in strict components.\n\n## Mitigation\n\n* Update to a patched version of Rack that computes `Content-Length` using `String#bytesize`.\n* Avoid exposing `Rack::Files` directly to untrusted traffic until a fix is available, if operationally feasible.\n* Where possible, place Rack behind a proxy or server that normalizes or rejects malformed backend responses.\n* Prefer closing backend connections on error paths if response framing anomalies are a concern.",
   "affected": [
@@ -247,14 +245,7 @@
           ]
         }
       ],
-      "versions": [
-        "3.2.0",
-        "3.2.1",
-        "3.2.2",
-        "3.2.3",
-        "3.2.4",
-        "3.2.5"
-      ],
+      "versions": ["3.2.0", "3.2.1", "3.2.2", "3.2.3", "3.2.4", "3.2.5"],
       "database_specific": {
         "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/04/GHSA-q2ww-5357-x388/GHSA-q2ww-5357-x388.json"
       }
@@ -279,10 +270,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-130",
-      "CWE-135"
-    ],
+    "cwe_ids": ["CWE-130", "CWE-135"],
     "github_reviewed": true,
     "github_reviewed_at": "2026-04-02T20:36:10Z",
     "nvd_published_at": "2026-04-02T17:16:26Z",

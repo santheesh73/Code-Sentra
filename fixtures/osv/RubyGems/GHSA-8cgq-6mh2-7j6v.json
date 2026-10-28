@@ -3,9 +3,7 @@
   "id": "GHSA-8cgq-6mh2-7j6v",
   "published": "2025-03-04T15:27:06Z",
   "modified": "2026-09-10T03:50:22.988112884Z",
-  "aliases": [
-    "CVE-2025-27111"
-  ],
+  "aliases": ["CVE-2025-27111"],
   "summary": "Escape Sequence Injection vulnerability in Rack lead to Possible Log Injection",
   "details": "## Summary\n\n`Rack::Sendfile` can be exploited by crafting input that includes newline characters to manipulate log entries.\n\n## Details\n\nThe `Rack::Sendfile` middleware logs unsanitized header values from the `X-Sendfile-Type` header. An attacker can exploit this by injecting escape sequences (such as newline characters) into the header, resulting in log injection.\n\n## Impact\n\nThis vulnerability can distort log files, obscure attack traces, and complicate security auditing.\n\n## Mitigation\n\n- Update to the latest version of Rack, or\n- Remove usage of `Rack::Sendfile`.",
   "affected": [
@@ -260,10 +258,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-117",
-      "CWE-93"
-    ],
+    "cwe_ids": ["CWE-117", "CWE-93"],
     "github_reviewed": true,
     "github_reviewed_at": "2025-03-04T15:27:06Z",
     "nvd_published_at": "2025-03-04T16:15:40Z",

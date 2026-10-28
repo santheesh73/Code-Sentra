@@ -3,9 +3,7 @@
   "id": "GHSA-cjjf-94ff-43w7",
   "published": "2019-03-25T18:03:09Z",
   "modified": "2024-03-11T05:19:23.395848Z",
-  "aliases": [
-    "CVE-2018-12022"
-  ],
+  "aliases": ["CVE-2018-12022"],
   "summary": "jackson-databind Deserialization of Untrusted Data vulnerability",
   "details": "An issue was discovered in FasterXML jackson-databind prior to 2.7.9.4, 2.8.11.2, and 2.9.6. When Default Typing is enabled (either globally or for a specific property), the service has the Jodd-db jar (for database access for the Jodd framework) in the classpath, and an attacker can provide an LDAP service to access, it is possible to make the service execute a malicious payload.",
   "affected": [
@@ -362,9 +360,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2020-06-16T20:42:00Z",
     "nvd_published_at": "2019-03-21T16:00:12Z",

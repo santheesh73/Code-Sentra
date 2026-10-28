@@ -3,9 +3,7 @@
   "id": "GHSA-rpr3-cw39-3pxh",
   "published": "2022-07-15T19:41:47Z",
   "modified": "2026-07-08T06:00:01.572650992Z",
-  "aliases": [
-    "CVE-2020-10650"
-  ],
+  "aliases": ["CVE-2020-10650"],
   "summary": "jackson-databind vulnerable to unsafe deserialization",
   "details": "The com.fasterxml.jackson.core:jackson-databind library before version 2.9.10.4 is vulnerable to an Unsafe Deserialization vulnerability when handling interactions related to the class `ignite-jta`.",
   "affected": [
@@ -213,9 +211,7 @@
     }
   ],
   "database_specific": {
-    "cwe_ids": [
-      "CWE-502"
-    ],
+    "cwe_ids": ["CWE-502"],
     "github_reviewed": true,
     "github_reviewed_at": "2022-07-15T19:41:47Z",
     "nvd_published_at": "2022-12-26T20:15:00Z",

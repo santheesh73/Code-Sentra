@@ -155,6 +155,8 @@ export async function startFakeGithubApp(): Promise<FakeGithubApp> {
   let nextId = 1000;
   const gitRoot = mkdtempSync(join(tmpdir(), "cs-fake-gh-git-"));
   const workdirs = new Map<string, string>();
+  /** The default branch's head per repository (the last gitCommit). */
+  const heads = new Map<string, string>();
   let commitClock = Date.parse("2026-01-01T00:00:00Z");
   const runGit = (cwd: string, args: string[], date?: string) =>
     execFileSync("git", ["-c", "user.name=dev", "-c", "user.email=dev@example.com", ...args], {
@@ -234,6 +236,19 @@ export async function startFakeGithubApp(): Promise<FakeGithubApp> {
     if (req.method === "GET" && m) {
       res.writeHead(302, { location: `/__codeload/${m[1]}/${m[2]}` });
       return res.end();
+    }
+    m = /^\/repos\/([^/]+\/[^/]+)\/commits\/([^/]+)$/.exec(url.pathname);
+    if (req.method === "GET" && m) {
+      // A branch name (or HEAD) is the latest gitCommit(); a SHA is itself if known.
+      const ref = decodeURIComponent(m[2] as string);
+      const known = commits.get(m[1] as string);
+      const sha = /^[0-9a-f]{40}$/.test(ref)
+        ? known?.has(ref)
+          ? ref
+          : null
+        : (heads.get(m[1] as string) ?? null);
+      if (!sha) return json(404, { message: "No commit found for SHA" });
+      return json(200, { sha });
     }
     m = /^\/repos\/([^/]+\/[^/]+)\/compare\/([0-9a-f]{40})\.\.\.([0-9a-f]{40})$/.exec(url.pathname);
     if (req.method === "GET" && m) {
@@ -327,6 +342,7 @@ export async function startFakeGithubApp(): Promise<FakeGithubApp> {
       const m = commits.get(repo) ?? new Map();
       m.set(sha, files);
       commits.set(repo, m);
+      heads.set(repo, sha);
       return sha;
     },
     async deliver(target, event, payload, opts = {}) {

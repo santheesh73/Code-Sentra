@@ -53,7 +53,7 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | GET | `/v1/projects/{id}/runs` | Recent runs for a project | 200, 401, 404 |
 | POST | `/v1/projects/{id}/scan` | Start Sentra Scan | 202, 400, 401, 404, 501 |
 | GET | `/v1/projects/{id}/schedules` | List schedules | 200, 401, 404 |
-| POST | `/v1/projects/{id}/schedules` | Create a recurring Pulse | 201, 400, 401, 404 |
+| POST | `/v1/projects/{id}/schedules` | Create a recurring Pulse or full check | 201, 400, 401, 404 |
 | DELETE | `/v1/projects/{id}/schedules` | Delete a schedule | 204, 401, 404 |
 | POST | `/v1/projects/{id}/snapshots` | Upload a zip or register a git ref | 201, 400, 401, 404, 413, 501 |
 | POST | `/v1/pulse` | Quick Pulse: check any public URL, no project needed | 202, 400, 401, 404, 429 |

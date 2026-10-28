@@ -97,34 +97,42 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
           const [owner, repo] = (snapshot.sourceUrl ?? "").split("/");
           if (!owner || !repo || !snapshot.ref || !snapshot.githubInstallationId)
             throw new Error("github snapshot is missing its repository, commit or installation");
+          // Scheduled checks and re-checks name a branch (or HEAD); the scan pins its commit.
+          const commit = /^[0-9a-f]{40}$/.test(snapshot.ref)
+            ? snapshot.ref
+            : await deps.github.commitSha(snapshot.githubInstallationId, owner, repo, snapshot.ref);
           try {
             const { commitSha } = await cloneRepo(deps.github.gitUrl(owner, repo), root, {
               policy: deps.gitPolicy,
               maxCommits: deps.maxCommits,
               allowHttp: deps.allowHttpGit,
-              commit: snapshot.ref,
+              commit,
               authorization: await deps.github.gitAuthorization(snapshot.githubInstallationId),
             });
             snapshot.commitSha = commitSha;
             hasHistory = true;
           } catch (e) {
-            historyGap = `git clone failed (${e instanceof GitError ? e.code : (e as Error).message}); scanned the zipball, which has no history`;
+            historyGap = `git clone failed (${e instanceof GitError ? `${e.code}: ${e.stderr.split("\n").filter(Boolean).at(-1) ?? e.message}` : (e as Error).message}); scanned the zipball, which has no history`;
             await rm(root, { recursive: true, force: true });
             await mkdir(root, { recursive: true });
             const zipPath = join(scratch.path, "zipball.zip");
-            const archive = await deps.github.zipball(
-              snapshot.githubInstallationId,
-              owner,
-              repo,
-              snapshot.ref,
-              deps.maxArchiveBytes ?? DEFAULT_ZIP_LIMITS.maxBytes,
-            );
+            const archive = await deps.github
+              .zipball(
+                snapshot.githubInstallationId,
+                owner,
+                repo,
+                commit,
+                deps.maxArchiveBytes ?? DEFAULT_ZIP_LIMITS.maxBytes,
+              )
+              .catch((z: Error) => {
+                throw new Error(`${historyGap}; the zipball also failed: ${z.message}`);
+              });
             await writeFile(zipPath, archive);
             await extractZip(zipPath, root, DEFAULT_ZIP_LIMITS);
             // GitHub wraps the tree in one `owner-repo-sha/` directory.
             const top = await readdir(root, { withFileTypes: true });
             if (top.length === 1 && top[0]?.isDirectory()) root = join(root, top[0].name);
-            snapshot.commitSha = snapshot.ref;
+            snapshot.commitSha = commit;
           }
         } else {
           if (!snapshot.sourceUrl) throw new Error("git snapshot has no URL");

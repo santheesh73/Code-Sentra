@@ -1,5 +1,6 @@
 import { ScanStage } from "@codesentra/core";
 import { createSnapshot, getReport, schema as s, updateSnapshot } from "@codesentra/db";
+import { createSourceSnapshot, installationFor } from "@codesentra/queue";
 import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -57,6 +58,27 @@ export async function createGitSnapshot(
       ref: input.ref,
     }),
   );
+}
+
+/**
+ * The snapshot a full check or re-check scans (ADR 0024): the project's GitHub repository
+ * at its default branch (with history) when an installation covers it, else a clone of
+ * its public `repo_url`; null when it has neither.
+ */
+export async function projectSourceSnapshot(
+  ctx: AppContext,
+  testAllow: ReadonlySet<string>,
+  project: typeof s.projects.$inferSelect,
+): Promise<{ id: string } | null> {
+  if (await installationFor(ctx.db, project, ctx.config.ENCRYPTION_KEY))
+    return createSourceSnapshot(ctx.db, project, ctx.config.ENCRYPTION_KEY);
+  if (!project.repoUrl) return null;
+  return createGitSnapshot(ctx, testAllow, {
+    orgId: project.orgId,
+    projectId: project.id,
+    url: project.repoUrl,
+    ref: project.defaultBranch,
+  });
 }
 
 export function scanRoutes(ctx: AppContext): FastifyPluginAsyncZod {

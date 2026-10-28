@@ -122,11 +122,12 @@ function SchedulesCard({ project }: { project: Project }) {
   });
   const [env, setEnv] = useState(project.environments[0]?.id ?? "");
   const [cron, setCron] = useState(PRESETS[1]?.cron ?? "0 * * * *");
+  const [runType, setRunType] = useState<"pulse" | "check">("pulse");
   const create = useMutation({
     mutationFn: () =>
       api<Schedule>(`/v1/projects/${project.id}/schedules`, {
         method: "POST",
-        body: { environment_id: env, cron },
+        body: { environment_id: env, cron, run_type: runType },
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
   });
@@ -140,8 +141,8 @@ function SchedulesCard({ project }: { project: Project }) {
     <Card className="flex flex-col gap-3">
       <CardTitle>Schedules</CardTitle>
       <p className="text-sm text-muted-foreground">
-        A recurring Pulse (then Link) of one environment. Times are UTC; the shortest interval is 5
-        minutes.
+        A recurring Pulse of one environment, or a full check (Scan of the project's source, then
+        Pulse and Link). Times are UTC; the shortest interval is 5 minutes.
       </p>
       {q.isPending ? (
         <Spinner />
@@ -154,7 +155,8 @@ function SchedulesCard({ project }: { project: Project }) {
           {q.data.map((s) => (
             <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <span className="min-w-0">
-                <code>{s.cron}</code> · {envName(s.environment_id)}
+                <code>{s.cron}</code> · {s.run_type === "check" ? "Full check" : "Pulse"} ·{" "}
+                {envName(s.environment_id)}
                 <span className="block text-xs text-muted-foreground">
                   Next {formatTime(s.next_run_at)}
                   {s.last_run_id && (
@@ -183,7 +185,7 @@ function SchedulesCard({ project }: { project: Project }) {
             e.preventDefault();
             create.mutate();
           }}
-          className="grid gap-3 sm:grid-cols-[10rem_1fr_auto] sm:items-end"
+          className="grid gap-3 sm:grid-cols-[10rem_9rem_1fr_auto] sm:items-end"
         >
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="sched-env">Environment</Label>
@@ -193,6 +195,17 @@ function SchedulesCard({ project }: { project: Project }) {
                   {e.name}
                 </option>
               ))}
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="sched-type">Runs</Label>
+            <Select
+              id="sched-type"
+              value={runType}
+              onChange={(e) => setRunType(e.target.value as "pulse" | "check")}
+            >
+              <option value="pulse">Pulse</option>
+              <option value="check">Full check</option>
             </Select>
           </div>
           <div className="flex flex-col gap-1.5">

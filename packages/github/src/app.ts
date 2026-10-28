@@ -201,6 +201,26 @@ export class GithubApp {
     return data.installations.some((i) => i.id === installationId);
   }
 
+  /** The commit SHA a branch, tag or `HEAD` (the default branch) points at. */
+  async commitSha(
+    installationId: number,
+    owner: string,
+    repo: string,
+    ref: string,
+  ): Promise<string> {
+    if (!REF.test(ref)) throw new GithubError(400, "bad ref");
+    const res = await this.call(
+      `${this.repoPath(owner, repo)}/commits/${encodeURIComponent(ref)}`,
+      {
+        auth: await this.asInstallation(installationId),
+      },
+    );
+    const body = await this.json<{ sha?: string }>(res, "commit");
+    if (!body.sha || !/^[0-9a-f]{40}$/.test(body.sha))
+      throw new GithubError(502, "GitHub returned no commit SHA");
+    return body.sha;
+  }
+
   /** Files changed between two commits (a PR's base and head). */
   async changedFiles(
     installationId: number,

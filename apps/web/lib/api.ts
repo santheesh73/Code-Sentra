@@ -350,7 +350,7 @@ export interface Schedule {
   project_id: string;
   environment_id: string;
   cron: string;
-  run_type: "pulse";
+  run_type: "pulse" | "check";
   enabled: boolean;
   next_run_at: string;
   last_run_id: string | null;

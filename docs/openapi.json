@@ -2256,7 +2256,11 @@
           },
           "run_type": {
             "type": "string",
-            "const": "pulse"
+            "enum": [
+              "pulse",
+              "check"
+            ],
+            "description": "pulse: Pulse of the environment; check: Scan of the project's source + Pulse"
           },
           "enabled": {
             "type": "boolean"
@@ -4707,7 +4711,11 @@
           },
           "run_type": {
             "type": "string",
-            "const": "pulse"
+            "enum": [
+              "pulse",
+              "check"
+            ],
+            "description": "pulse: Pulse of the environment; check: Scan of the project's source + Pulse"
           },
           "enabled": {
             "type": "boolean"
@@ -6980,7 +6988,7 @@
         "tags": [
           "link"
         ],
-        "description": "Scans the given snapshot (else the project's repo_url, else its latest uploaded snapshot) and runs Pulse on every environment (or the one given), in parallel. When both finish, a Link run traces each issue to code, writes its prompt and re-checks earlier issues. Returns the Link run. A module that cannot run (no snapshot, no environment, no object storage) is a gap of the Link run.",
+        "description": "Scans the given snapshot (else the project's GitHub repository at its default branch when the GitHub App covers it, else its repo_url, else its latest uploaded snapshot) and runs Pulse on every environment (or the one given), in parallel. When both finish, a Link run traces each issue to code, writes its prompt and re-checks earlier issues. Returns the Link run. A module that cannot run (no snapshot, no environment, no object storage) is a gap of the Link run.",
         "requestBody": {
           "required": true,
           "content": {
@@ -7065,7 +7073,7 @@
         "tags": [
           "issues"
         ],
-        "description": "Re-runs just the check group the issue's re-check names (Pulse: that group, after reachability and platform; Scan: a new Scan of the project's repo_url), then Link re-evaluates the issue. Returns the Link run.",
+        "description": "Re-runs just the check group the issue's re-check names (Pulse: that group, after reachability and platform; Scan: a new Scan of the project's GitHub repository or repo_url), then Link re-evaluates the issue. Returns the Link run.",
         "parameters": [
           {
             "schema": {
@@ -7901,7 +7909,7 @@
     },
     "/v1/projects/{id}/schedules": {
       "post": {
-        "summary": "Create a recurring Pulse",
+        "summary": "Create a recurring Pulse or full check",
         "tags": [
           "schedules"
         ],
@@ -7922,6 +7930,14 @@
                     "type": "string",
                     "minLength": 9,
                     "maxLength": 100
+                  },
+                  "run_type": {
+                    "default": "pulse",
+                    "type": "string",
+                    "enum": [
+                      "pulse",
+                      "check"
+                    ]
                   },
                   "enabled": {
                     "default": true,

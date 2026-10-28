@@ -18,7 +18,9 @@ export const ScheduleDto = z
     project_id: z.uuid(),
     environment_id: z.uuid(),
     cron: z.string().describe("Five fields, UTC"),
-    run_type: z.literal("pulse"),
+    run_type: z
+      .enum(["pulse", "check"])
+      .describe("pulse: Pulse of the environment; check: Scan of the project's source + Pulse"),
     enabled: z.boolean(),
     next_run_at: z.iso.datetime(),
     last_run_id: z.uuid().nullable().describe("The Link run the last firing started"),
@@ -34,7 +36,7 @@ const dto = (r: Row): z.infer<typeof ScheduleDto> => ({
   project_id: r.projectId,
   environment_id: r.environmentId,
   cron: r.cron,
-  run_type: "pulse",
+  run_type: r.runType as "pulse" | "check",
   enabled: r.enabled,
   next_run_at: r.nextRunAt.toISOString(),
   last_run_id: r.lastRunId,
@@ -52,12 +54,13 @@ export function scheduleRoutes(ctx: AppContext): FastifyPluginAsyncZod {
       {
         schema: {
           tags: ["schedules"],
-          summary: "Create a recurring Pulse",
+          summary: "Create a recurring Pulse or full check",
           description: `Runs Pulse (then Link) on the environment whenever the five-field UTC cron matches, at most every ${MIN_SCHEDULE_INTERVAL_MINUTES} minutes. worker-link fires due schedules; a missed window is not replayed.`,
           params: z.object({ id: z.uuid() }),
           body: z.object({
             environment_id: z.uuid(),
             cron: z.string().trim().min(9).max(100),
+            run_type: z.enum(["pulse", "check"]).default("pulse"),
             enabled: z.boolean().default(true),
           }),
           response: { 201: ScheduleDto, 400: Problem, 401: Problem, 404: Problem },
@@ -102,6 +105,7 @@ export function scheduleRoutes(ctx: AppContext): FastifyPluginAsyncZod {
               projectId: req.params.id,
               environmentId: env.id,
               cron: req.body.cron.replace(/\s+/g, " "),
+              runType: req.body.run_type,
               enabled: req.body.enabled,
               nextRunAt: next,
               createdBy: access.user.id,
@@ -112,7 +116,7 @@ export function scheduleRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             actorId: access.user.id,
             action: "schedule.created",
             target: `schedule:${row?.id}`,
-            metadata: { cron: row?.cron, environment_id: env.id },
+            metadata: { cron: row?.cron, run_type: row?.runType, environment_id: env.id },
           });
           return row as Row;
         });

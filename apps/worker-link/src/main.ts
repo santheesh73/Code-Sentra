@@ -1,5 +1,6 @@
 import { PULSE_GROUPS } from "@codesentra/checks";
 import { loadConfig } from "@codesentra/config";
+import { ScanStage } from "@codesentra/core";
 import { createDatabase } from "@codesentra/db";
 import { GithubApp } from "@codesentra/github";
 import { linkHandler } from "@codesentra/link/job";
@@ -77,7 +78,13 @@ const tick = async () => {
   if (ticking) return;
   ticking = true;
   try {
-    const r = await runDueSchedules({ db, queue, pulseSteps: PULSE_GROUPS });
+    const r = await runDueSchedules({
+      db,
+      queue,
+      pulseSteps: PULSE_GROUPS,
+      scanSteps: ScanStage.options,
+      encryptionKey: config.ENCRYPTION_KEY,
+    });
     if (r.started.length || r.failed.length) log.info(r, "schedules fired");
   } catch (e) {
     log.error({ err: (e as Error).message }, "schedule tick failed");

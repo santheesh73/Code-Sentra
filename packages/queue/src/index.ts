@@ -15,7 +15,9 @@ export {
 export { JOB_SPECS, type JobSpec, RunJobPayload, timeoutFor } from "./jobs.js";
 export {
   type ChildRun,
+  createSourceSnapshot,
   type DueSchedulesResult,
+  installationFor,
   runDueSchedules,
   type StartLinkedInput,
   startLinked,

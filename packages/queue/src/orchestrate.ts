@@ -1,7 +1,9 @@
 import { type JobType, LinkStep, nextCronRun, type RunTrigger } from "@codesentra/core";
+import { openSecret } from "@codesentra/core/crypto";
 import {
   type CreateRunInput,
   createRun,
+  createSnapshot,
   type Database,
   failRun,
   schema,
@@ -100,15 +102,23 @@ export interface DueSchedulesResult {
  * its Link run. A missed window is not replayed: the next run is the next match after now.
  */
 export async function runDueSchedules(
-  deps: { db: Database; queue: QueueClient; pulseSteps: readonly string[] },
+  deps: {
+    db: Database;
+    queue: QueueClient;
+    pulseSteps: readonly string[];
+    /** For `check` schedules: Scan steps and the key that opens installation data. */
+    scanSteps?: readonly string[];
+    encryptionKey?: string;
+  },
   now: Date = new Date(),
   limit = 25,
 ): Promise<DueSchedulesResult> {
   const claimed = await deps.db.system.transaction(async (tx) => {
     const due = await tx
-      .select({ schedule: schema.schedules, env: schema.environments })
+      .select({ schedule: schema.schedules, env: schema.environments, project: schema.projects })
       .from(schema.schedules)
       .innerJoin(schema.environments, eq(schema.environments.id, schema.schedules.environmentId))
+      .innerJoin(schema.projects, eq(schema.projects.id, schema.schedules.projectId))
       .where(and(eq(schema.schedules.enabled, true), lte(schema.schedules.nextRunAt, now)))
       .orderBy(asc(schema.schedules.nextRunAt))
       .limit(limit)
@@ -133,24 +143,35 @@ export async function runDueSchedules(
   });
 
   const result: DueSchedulesResult = { started: [], failed: [] };
-  for (const { schedule, env } of claimed) {
+  for (const { schedule, env, project } of claimed) {
     try {
+      const children: ChildRun[] = [
+        {
+          job: "pulse.run",
+          run: {
+            type: "pulse",
+            environmentId: env.id,
+            targetUrl: env.url,
+            steps: [...deps.pulseSteps],
+          },
+        },
+      ];
+      // A scheduled full check also scans the project's source (GitHub or repo_url). With
+      // no source, the Scan is missing and Link records that gap.
+      if (schedule.runType === "check" && deps.scanSteps && deps.encryptionKey) {
+        const snap = await createSourceSnapshot(deps.db, project, deps.encryptionKey);
+        if (snap)
+          children.unshift({
+            job: "scan.run",
+            run: { type: "scan", snapshotId: snap.id, steps: [...deps.scanSteps] },
+          });
+      }
       const { linkRunId } = await startLinked(deps, {
         orgId: schedule.orgId,
         projectId: schedule.projectId,
         userId: null,
         trigger: "schedule",
-        children: [
-          {
-            job: "pulse.run",
-            run: {
-              type: "pulse",
-              environmentId: env.id,
-              targetUrl: env.url,
-              steps: [...deps.pulseSteps],
-            },
-          },
-        ],
+        children,
         linkOutcome: { mode: "sync", schedule_id: schedule.id },
       });
       await deps.db.withOrg(schedule.orgId, (tx) =>
@@ -174,4 +195,87 @@ export async function runDueSchedules(
     }
   }
   return result;
+}
+
+type ProjectRow = typeof schema.projects.$inferSelect;
+
+/**
+ * The GitHub installation of the project's org that covers its `github_repo` (installation
+ * data is sealed, so the key is needed), or null. An installation whose repository list is
+ * not known yet is used only when no installation lists the repository.
+ */
+export async function installationFor(
+  db: Database,
+  project: Pick<ProjectRow, "orgId" | "githubRepo">,
+  encryptionKey: string,
+): Promise<number | null> {
+  if (!project.githubRepo) return null;
+  const rows = await db.system
+    .select()
+    .from(schema.githubInstallations)
+    .where(
+      and(
+        eq(schema.githubInstallations.orgId, project.orgId),
+        eq(schema.githubInstallations.suspended, false),
+      ),
+    );
+  const repo = project.githubRepo.toLowerCase();
+  let unknown: number | null = null;
+  for (const r of rows) {
+    let repos: string[] = [];
+    try {
+      repos =
+        (
+          JSON.parse(openSecret(r.sealed, encryptionKey, "github-installation")) as {
+            repositories?: string[];
+          }
+        ).repositories ?? [];
+    } catch {
+      continue;
+    }
+    if (repos.some((x) => x.toLowerCase() === repo)) return r.installationId;
+    if (repos.length === 0) unknown ??= r.installationId;
+  }
+  return unknown;
+}
+
+/**
+ * Where a project's Scan reads the code from, for a full check, a re-check or a
+ * scheduled check (ADR 0024): its GitHub repository at the default branch's head (with
+ * history) when an installation covers it, else its public `repo_url`. Creates the
+ * snapshot; null when the project has neither.
+ */
+export async function createSourceSnapshot(
+  db: Database,
+  project: ProjectRow,
+  encryptionKey: string,
+): Promise<{ id: string; kind: "github" | "git" } | null> {
+  const installationId = await installationFor(db, project, encryptionKey);
+  if (installationId !== null && project.githubRepo) {
+    const snap = await db.withOrg(project.orgId, (tx) =>
+      createSnapshot(tx, {
+        orgId: project.orgId,
+        projectId: project.id,
+        kind: "github",
+        sourceUrl: project.githubRepo,
+        // worker-scan resolves the branch to its head commit when it scans.
+        ref: project.defaultBranch ?? "HEAD",
+        githubInstallationId: installationId,
+      }),
+    );
+    return { id: snap.id, kind: "github" };
+  }
+  if (project.repoUrl) {
+    const snap = await db.withOrg(project.orgId, (tx) =>
+      createSnapshot(tx, {
+        orgId: project.orgId,
+        projectId: project.id,
+        kind: "git",
+        sourceUrl: project.repoUrl,
+        ref: project.defaultBranch,
+      }),
+    );
+    return { id: snap.id, kind: "git" };
+  }
+  return null;
 }

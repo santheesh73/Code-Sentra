@@ -405,12 +405,13 @@ export function githubRoutes(ctx: AppContext): FastifyPluginAsyncZod {
         .where(eq(s.githubInstallations.installationId, id));
       return { status: "processed", detail: "installation removed and unlinked" };
     }
+    // Only some actions (e.g. created) list the repositories; keep what we know otherwise.
+    const repositories = e.repositories
+      ? e.repositories.map((r) => r.full_name)
+      : ((await installationData(id))?.repositories ?? []);
     await upsertInstallation(
       id,
-      {
-        account: e.installation.account.login,
-        repositories: (e.repositories ?? []).map((r) => r.full_name),
-      },
+      { account: e.installation.account.login, repositories },
       { suspended: e.action === "suspend" },
     );
     return { status: "processed", detail: `installation.${e.action}` };

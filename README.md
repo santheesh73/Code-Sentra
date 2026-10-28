@@ -7,7 +7,7 @@ an exact, verifiable fix:
 - **Sentra Link:** where in the code does each problem come from, how do we fix it, and how
   do we prove the fix?
 
-**Status:** Phase 4 (Sentra Link).
+**Status:** Phase 5 (GitHub, schedules and hardening).
 - **Pulse:** paste a URL, or check a project environment, and get `live`, `degraded`,
   `down` or `unverified`, with evidence-backed issues and a fix prompt for each.
 - **Scan:** upload a zip or point at a public repository. You get:
@@ -21,9 +21,16 @@ an exact, verifiable fix:
   line by exact matches only. You get a `code_fix` prompt with the env vars and blast
   radius involved, and the issue closes on its own once the fix is deployed (and reopens
   if it comes back).
-- **Where:** in the dashboard, and from the CLI (`codesentra pulse`, `codesentra scan`).
+- **GitHub:** pull requests get a "CodeSentra" check run with each new issue and its prompt;
+  preview deployments are checked by Pulse into the same check run.
+- **Schedules and alerts:** recurring Pulse per environment; email and Slack alerts carry
+  every new or regressed issue's prompt.
+- **Where:** in the dashboard, and from the CLI (`codesentra pulse`, `scan`, `login`,
+  `check --project <id> --wait`).
 
-The GitHub App, schedules and notifications come next (Phase 5); see
+Deploying needs accounts and secrets only you can provide: see
+[`docs/runbook.md`](docs/runbook.md). Section 17 is mapped to code and tests in
+[`docs/security.md`](docs/security.md); status and known gaps are in
 [`docs/progress.md`](docs/progress.md).
 
 ```sh

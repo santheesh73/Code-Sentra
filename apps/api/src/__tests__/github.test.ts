@@ -226,6 +226,21 @@ describe("GitHub App (Phase 5)", () => {
     expect(list.json().installations).toEqual([
       { installation_id: INSTALLATION, account: "acme", repositories: [REPO], suspended: false },
     ]);
+    // A later event without a repository list (suspend/unsuspend) keeps the list.
+    for (const action of ["suspend", "unsuspend"])
+      await deliver("installation", {
+        action,
+        installation: { id: INSTALLATION, account: { login: "acme" } },
+      });
+    const after = await api.app.inject({
+      method: "GET",
+      url: `/v1/orgs/${orgId}/github/installations`,
+      headers: { cookie },
+    });
+    expect(after.json().installations[0]).toMatchObject({
+      repositories: [REPO],
+      suspended: false,
+    });
     // Installation data is sealed at rest.
     const [row] = await api.t.db.system.select().from(s.githubInstallations);
     expect(row?.sealed).toMatch(/^v1\./);

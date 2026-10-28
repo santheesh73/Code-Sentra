@@ -5421,7 +5421,7 @@
         "tags": [
           "orgs"
         ],
-        "description": "Creates the user if they have never signed in; they join on their first sign-in with that address.",
+        "description": "Creates the user if they have never signed in; they join on their first sign-in with that address. Sends them an invitation email when email is configured.",
         "requestBody": {
           "required": true,
           "content": {
@@ -5470,7 +5470,40 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Member"
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "owner",
+                        "admin",
+                        "member"
+                      ]
+                    },
+                    "joined_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "invitation": {
+                      "type": "string",
+                      "enum": [
+                        "sent",
+                        "not_sent"
+                      ],
+                      "description": "Whether an invitation email went out (email may not be configured)"
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "role",
+                    "joined_at",
+                    "invitation"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -5646,6 +5679,91 @@
             },
             "in": "path",
             "name": "userId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/orgs/{orgId}": {
+      "delete": {
+        "summary": "Delete an organization (owner)",
+        "tags": [
+          "orgs"
+        ],
+        "description": "Deletes the organization and everything in it: projects, runs, evidence, issues, schedules, channels, tokens and the audit log, plus its stored snapshots and screenshots. Send the organization's slug as `confirm`. Linked GitHub installations are unlinked. Your only organization cannot be deleted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirm": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "confirm"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "orgId",
             "required": true
           }
         ],
@@ -6539,7 +6657,7 @@
         "tags": [
           "runs"
         ],
-        "description": "Emits `run` events whose data is a full Run snapshot: one immediately, then one after every step or status change. The stream ends after the run reaches a terminal status. A `: ping` comment is sent every 15 s.",
+        "description": "Emits `run` events whose data is a full Run snapshot: one immediately, then one after every step or status change of the run or (for a Link run) of its child runs. The stream ends after the run reaches a terminal status. A `: ping` comment is sent every 15 s.",
         "parameters": [
           {
             "schema": {

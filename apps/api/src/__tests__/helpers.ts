@@ -151,6 +151,15 @@ export function memoryStore(): ObjectStore & { objects: Map<string, Uint8Array> 
       const v = objects.get(key);
       return v ? { size: v.byteLength } : null;
     },
+    async deletePrefix(prefix) {
+      let n = 0;
+      for (const k of [...objects.keys()])
+        if (k.startsWith(prefix)) {
+          objects.delete(k);
+          n++;
+        }
+      return n;
+    },
     async getRange(key, start, end) {
       const v = objects.get(key);
       if (!v) throw new Error(`no such key: ${key}`);

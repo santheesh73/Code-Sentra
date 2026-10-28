@@ -42,7 +42,7 @@ export function runRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           tags: ["runs"],
           summary: "Live run progress (Server-Sent Events)",
           description:
-            "Emits `run` events whose data is a full Run snapshot: one immediately, then one after every step or status change. The stream ends after the run reaches a terminal status. A `: ping` comment is sent every 15 s.",
+            "Emits `run` events whose data is a full Run snapshot: one immediately, then one after every step or status change of the run or (for a Link run) of its child runs. The stream ends after the run reaches a terminal status. A `: ping` comment is sent every 15 s.",
           params: RunParams,
           response: { 200: z.string().describe("text/event-stream"), 401: Problem, 404: Problem },
         },
@@ -61,7 +61,8 @@ export function runRoutes(ctx: AppContext): FastifyPluginAsyncZod {
 
         let closed = false;
         let chain = Promise.resolve();
-        let off: (() => void) | null = null;
+        const offs: (() => void)[] = [];
+        const watched = new Set<string>();
         const heartbeat = setInterval(() => {
           if (!closed) res.write(": ping\n\n");
         }, HEARTBEAT_MS);
@@ -69,7 +70,7 @@ export function runRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           if (closed) return;
           closed = true;
           clearInterval(heartbeat);
-          off?.();
+          for (const off of offs) off();
           res.end();
         };
         req.raw.on("close", close);
@@ -83,6 +84,13 @@ export function runRoutes(ctx: AppContext): FastifyPluginAsyncZod {
             close();
             return;
           }
+          // A Link run's snapshot carries its Scan and Pulse runs: their changes are its
+          // progress too, so the stream follows them as well.
+          for (const child of r.children)
+            if (!watched.has(child.id)) {
+              watched.add(child.id);
+              offs.push(ctx.events.subscribe(child.id, enqueue));
+            }
           res.write(`event: run\ndata: ${JSON.stringify(runDto(r.run, r.children))}\n\n`);
           if (isTerminalRunStatus(r.run.run.status)) close();
         };
@@ -93,7 +101,8 @@ export function runRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           });
         };
         // Subscribe before the first read so no change between the two is missed.
-        off = ctx.events.subscribe(runId, enqueue);
+        watched.add(runId);
+        offs.push(ctx.events.subscribe(runId, enqueue));
         enqueue();
         await chain;
       },

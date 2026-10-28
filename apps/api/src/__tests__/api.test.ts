@@ -302,6 +302,67 @@ describe("diagnostic runs", () => {
   });
 });
 
+describe("Link run progress", () => {
+  it("the Link run's stream follows its child runs", async () => {
+    const p = await createProject();
+    await api.app.listen({ port: 0, host: "127.0.0.1" }).catch(() => {});
+    const base = `http://127.0.0.1:${(api.app.server.address() as AddressInfo).port}`;
+    await api.worker.stop();
+    const { startLinked, startWorker, diagnosticHandler, DIAGNOSTIC_STEPS } = await import(
+      "@codesentra/queue"
+    );
+    const started = await startLinked(
+      { db: api.t.db, queue: api.queue },
+      {
+        orgId,
+        projectId: p.id,
+        userId: null,
+        children: [
+          { job: "system.diagnostic", run: { type: "diagnostic", steps: [...DIAGNOSTIC_STEPS] } },
+        ],
+      },
+    );
+    const abort = new AbortController();
+    const res = await fetch(`${base}/v1/runs/${started.linkRunId}/stream`, {
+      headers: { cookie: owner },
+      signal: abort.signal,
+    });
+    api.worker = await startWorker({
+      db: api.t.db,
+      queue: api.queue,
+      handlers: { "system.diagnostic": diagnosticHandler({ store: null }) },
+    });
+    // No Link handler runs here, so the Link run stays queued: every snapshot after the
+    // first exists only because the child changed.
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const childStatuses: string[] = [];
+    try {
+      for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+        buffer += decoder.decode(chunk, { stream: true });
+        let idx = buffer.indexOf("\n\n");
+        while (idx >= 0) {
+          const frame = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          const data = /^data: (.*)$/m.exec(frame)?.[1];
+          if (/^event: run$/m.test(frame) && data) {
+            const snap = JSON.parse(data) as { status: string; children: { status: string }[] };
+            expect(snap.status).toBe("queued");
+            childStatuses.push(snap.children[0]?.status ?? "");
+          }
+          idx = buffer.indexOf("\n\n");
+        }
+        if (["succeeded", "partial", "failed"].includes(childStatuses.at(-1) ?? "")) break;
+      }
+    } finally {
+      abort.abort();
+    }
+    expect(childStatuses[0]).toBe("queued");
+    expect(childStatuses).toContain("running");
+    expect(childStatuses.at(-1)).toBe("partial");
+  });
+});
+
 describe("not yet available", () => {
   it("every unbuilt endpoint answers 501 problem+json, never canned data", async () => {
     const p = await createProject();

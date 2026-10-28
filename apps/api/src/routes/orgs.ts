@@ -122,10 +122,20 @@ export function orgRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           tags: ["orgs"],
           summary: "Add a member by email (admin or owner)",
           description:
-            "Creates the user if they have never signed in; they join on their first sign-in with that address.",
+            "Creates the user if they have never signed in; they join on their first sign-in with that address. Sends them an invitation email when email is configured.",
           params: OrgParams,
           body: z.object({ email: z.email().max(320), role: MembershipRole.default("member") }),
-          response: { 201: MemberDto, 401: Problem, 403: Problem, 404: Problem, 409: Problem },
+          response: {
+            201: MemberDto.extend({
+              invitation: z
+                .enum(["sent", "not_sent"])
+                .describe("Whether an invitation email went out (email may not be configured)"),
+            }),
+            401: Problem,
+            403: Problem,
+            404: Problem,
+            409: Problem,
+          },
         },
       },
       async (req, reply) => {
@@ -154,10 +164,33 @@ export function orgRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           if (!m) throw new Error("membership insert returned no row");
           return { u, m };
         });
+        // An invitation email, when email is configured. A failed send does not undo the
+        // membership; the response says whether it went out.
+        let invitation: "sent" | "not_sent" = "not_sent";
+        if (ctx.email) {
+          const [org] = await ctx.db.system
+            .select({ name: s.organizations.name })
+            .from(s.organizations)
+            .where(eq(s.organizations.id, access.orgId));
+          const link = `${ctx.config.PUBLIC_APP_URL}/signin`;
+          const orgName = org?.name ?? "an organization";
+          try {
+            await ctx.email.send({
+              to: email,
+              subject: `You were added to ${orgName} on CodeSentra`,
+              text: `${access.user.email} added you to ${orgName} on CodeSentra as ${req.body.role}.\n\nSign in with this address: ${link}\n`,
+              html: `<p>${escapeHtml(access.user.email)} added you to <strong>${escapeHtml(orgName)}</strong> on CodeSentra as ${req.body.role}.</p><p><a href="${link}">Sign in with this address</a></p>`,
+            });
+            invitation = "sent";
+          } catch (e) {
+            req.log.warn({ err: (e as Error).message }, "invitation email failed");
+          }
+        }
         return reply.code(201).send({
           user: userDto(member.u),
           role: member.m.role,
           joined_at: member.m.createdAt.toISOString(),
+          invitation,
         });
       },
     );
@@ -253,6 +286,57 @@ export function orgRoutes(ctx: AppContext): FastifyPluginAsyncZod {
         return reply.code(204).send(null);
       },
     );
+
+    app.delete(
+      "/v1/orgs/:orgId",
+      {
+        schema: {
+          tags: ["orgs"],
+          summary: "Delete an organization (owner)",
+          description:
+            "Deletes the organization and everything in it: projects, runs, evidence, issues, schedules, channels, tokens and the audit log, plus its stored snapshots and screenshots. Send the organization's slug as `confirm`. Linked GitHub installations are unlinked. Your only organization cannot be deleted.",
+          params: OrgParams,
+          body: z.object({ confirm: z.string().max(200) }),
+          response: { 204: z.null(), 400: Problem, 401: Problem, 403: Problem, 404: Problem },
+        },
+      },
+      async (req, reply) => {
+        const user = requireSessionUser(req);
+        const access = await ctx.authz.requireOrg(req, req.params.orgId, "owner");
+        const [org] = await ctx.db.system
+          .select()
+          .from(s.organizations)
+          .where(eq(s.organizations.id, access.orgId));
+        if (!org) throw notFound("Organization");
+        if (req.body.confirm !== org.slug)
+          throw badRequest(`To delete it, send the organization's slug (${org.slug}) as confirm`);
+        const [{ n }] = (await ctx.db.system
+          .select({ n: count() })
+          .from(s.memberships)
+          .where(eq(s.memberships.userId, user.id))) as [{ n: number }];
+        if (n <= 1) throw badRequest("This is your only organization; create another first");
+        // Every tenant row cascades from the organization (composite FKs, ADR 0009).
+        await ctx.db.system.delete(s.organizations).where(eq(s.organizations.id, org.id));
+        const removed: Record<string, number> = {};
+        if (ctx.store)
+          for (const prefix of ["snapshots", "screenshots", "diagnostics"])
+            removed[prefix] = await ctx.store
+              .deletePrefix(`${prefix}/${org.id}/`)
+              .catch((e: Error) => {
+                req.log.error(
+                  { err: e.message, org: org.id, prefix },
+                  "org data not removed from storage",
+                );
+                return -1;
+              });
+        // The org's own audit log is gone with it: this structured log line is the record.
+        req.log.info(
+          { audit: "org.deleted", org: org.id, slug: org.slug, actor: user.id, storage: removed },
+          "organization deleted",
+        );
+        return reply.code(204).send(null);
+      },
+    );
   };
 }
 
@@ -265,3 +349,6 @@ async function assertAnotherOwner(tx: Tx, orgId: string): Promise<void> {
     .where(and(eq(s.memberships.orgId, orgId), eq(s.memberships.role, "owner")));
   if (n <= 1) throw badRequest("An organization must keep at least one owner");
 }
+
+const escapeHtml = (v: string) =>
+  v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

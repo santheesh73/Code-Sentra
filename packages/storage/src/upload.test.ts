@@ -53,4 +53,15 @@ describe("presigned uploads", () => {
     expect((await post("snapshots/o/t.zip", Buffer.from("x"), "text/html")).status).toBe(403);
     expect(await store.stat("snapshots/o/t.zip")).toBeNull();
   });
+
+  it("deletes everything under an org's prefix, and nothing else", async () => {
+    const org = "11111111-2222-4333-8444-555555555555";
+    for (const k of [`snapshots/${org}/a.zip`, `snapshots/${org}/b.zip`, "snapshots/other/c.zip"])
+      await store.put(k, "x");
+    expect(await store.deletePrefix(`snapshots/${org}/`)).toBe(2);
+    expect(await store.stat(`snapshots/${org}/a.zip`)).toBeNull();
+    expect(await store.stat("snapshots/other/c.zip")).toEqual({ size: 1 });
+    await expect(store.deletePrefix("")).rejects.toThrow(/refusing/);
+    await expect(store.deletePrefix("snapshots/")).rejects.toThrow(/refusing/);
+  });
 });

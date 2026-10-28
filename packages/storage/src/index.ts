@@ -1,8 +1,10 @@
 import {
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -49,6 +51,8 @@ export interface ObjectStore {
   stat(key: string): Promise<{ size: number } | null>;
   /** Bytes [start, end] (inclusive) of an object. */
   getRange(key: string, start: number, end: number): Promise<Uint8Array>;
+  /** Deletes every object under a prefix (an org's data on org deletion). Returns the count. */
+  deletePrefix(prefix: string): Promise<number>;
 }
 
 const SAFE_KEY = /^(?!\/)(?!.*\.\.)[A-Za-z0-9!_.*'()/-]{1,1024}$/;
@@ -138,6 +142,35 @@ export function createObjectStore(cfg: ObjectStoreConfig, timeoutMs = 15_000): O
         if (status === 404 || (e as Error).name === "NotFound") return null;
         throw e;
       }
+    },
+    async deletePrefix(prefix) {
+      // A prefix is always a whole path segment ("snapshots/<org>/"): never the bucket root.
+      if (!/^[a-z]+\/[0-9a-f-]{36}\/$/.test(prefix))
+        throw new TypeError(`refusing to delete prefix ${JSON.stringify(prefix)}`);
+      let deleted = 0;
+      let token: string | undefined;
+      do {
+        const page = await client.send(
+          new ListObjectsV2Command({
+            Bucket: cfg.bucket,
+            Prefix: prefix,
+            ContinuationToken: token,
+          }),
+          { abortSignal: signal() },
+        );
+        const keys = (page.Contents ?? []).flatMap((o) => (o.Key ? [{ Key: o.Key }] : []));
+        if (keys.length)
+          await client.send(
+            new DeleteObjectsCommand({
+              Bucket: cfg.bucket,
+              Delete: { Objects: keys, Quiet: true },
+            }),
+            { abortSignal: signal() },
+          );
+        deleted += keys.length;
+        token = page.IsTruncated ? page.NextContinuationToken : undefined;
+      } while (token);
+      return deleted;
     },
     async getRange(key, start, end) {
       assertKey(key);

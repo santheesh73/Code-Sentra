@@ -63,7 +63,30 @@ account (ADR 0024).
 
 ### Gate result
 
-Running; this section is replaced with the recorded output once the gate finishes.
+Run on this machine on 2026-10-28, after the last code change (sandbox runtime `runc`;
+the GitHub flow runs against the local fake). CI has not yet run these commits.
+
+```
+pnpm lint          Checked 518 files. No fixes applied.
+pnpm typecheck     exit 0
+pnpm build         Tasks: 30 successful, 30 total
+pnpm test          20 packages, 563 tests, 0 failed
+  @codesentra/api      64 passed  (uploads, org lifecycle, Link child progress, GitHub
+                                   clone with history, cross-org on every route)
+  @codesentra/scan     66 passed  @codesentra/link     21 passed (env-var merge)
+  @codesentra/core     67 passed  (key rotation)       @codesentra/db 28 passed (reseal)
+  @codesentra/storage   6 passed  (presigned policy against real MinIO)
+  (and ssrf 71, fixture-harness 46, checks 36, claims 36, cli 26, parsers 26, config 19,
+   graph 10, prompts 10, sandbox 10, github 9, queue 6, notify 3, telemetry 3)
+pnpm e2e           13 passed (2.8m)  (Phase 1–4 gates, a browser uploads straight to
+                                      MinIO, and the Phase 5 settings spec)
+```
+
+Also checked by hand here:
+- the compose stack (`pnpm stack:up`): health through the web proxy, the sign-in email
+  in the outbox, and the workers' `ready` lines (worker-scan was not built; see above);
+- the packed CLI tarball installed outside the repository: a scan extracts env vars, and
+  Pulse renders a page in Chromium.
 
 ## Phase 5 — GitHub, schedules and hardening (2026-10-28)
 

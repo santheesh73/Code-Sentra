@@ -4,7 +4,7 @@ The kickoff document (Sections 1–20) is the source of truth. This file records
 exists in the repository now and how the pieces fit together. Decisions are in
 [`decisions/`](decisions/), and the HTTP API is in [`api.md`](api.md) and [`openapi.json`](openapi.json).
 
-## Current state: Phase 5 (GitHub, schedules and hardening)
+## Current state: Phase 6 (closing the Phase 1–5 gaps, ADR 0024)
 
 ```
 Browser, CLI ─► apps/web (Next.js) ──/api/* proxy──► apps/api (Fastify) ──► Postgres 16
@@ -35,7 +35,8 @@ GitHub webhooks ─────────────────────�
                                                │   child Scan/Pulse run of a check finished
                                                ├── GitHub check runs (one per commit, ADR 0021)
                                                ├── alerts: email (Resend) + Slack webhooks
-                                               └── scheduler: fires due schedules (ADR 0022)
+                                               └── scheduler: fires due Pulse and full-check
+                                                   schedules (ADR 0022, 0024)
 
 Every handler, job and worker step is an OpenTelemetry span; the job payload carries
 the W3C traceparent (ADR 0023). Sentry receives final job failures and API 5xx.
@@ -43,6 +44,7 @@ the W3C traceparent (ADR 0023). Sentry receives final job failures and API 5xx.
 codesentra pulse <url> ── runPulse in-process (no account, no database)
 codesentra scan [path|git-url] ── runScan in-process (same sandbox and model rules)
 codesentra login / check --project <id> [--wait] ── the API with an API token
+(apps/cli/dist/npm/codesentra.mjs: the same CLI as one file for npm, ADR 0024)
 ```
 
 ```
@@ -59,14 +61,15 @@ apps/
   worker-pulse/   `system.diagnostic` and `pulse.run`
   worker-scan/    `scan.run`, `scan.incremental` (GitHub commits)
   worker-link/    `link.run` (Pulse also serves `issue.recheck`), alerts, the scheduler
-  cli/            `codesentra pulse`, `scan`, `login`, `check` (Section 15 exit codes)
+  cli/            `codesentra pulse`, `scan`, `login`, `check` (Section 15 exit codes);
+                  `bundle/` builds the single-file npm package
 packages/
   core/           finding codes, schemas, fingerprints, Pulse status rule, issue grouping,
                   re-check specs and lifecycle, deriveRunStatus
   config/         per-service env validation; integrations optional outside production
   db/             Drizzle schema + migrations, RLS, withOrg(), runs, evidence, findings, issues
   queue/          pg-boss client, job specs, worker runtime, progress events, diagnostic job
-  storage/        S3 client (MinIO-compatible)
+  storage/        S3 client (MinIO-compatible), presigned upload policies
   ssrf/           safeFetch: global-unicast only, DNS pinning, manual redirects, limits
   checks/         Pulse groups (reachability, platform, render, routes, hygiene), platform
                   adapters, issue drafts; `./job` is the pulse.run handler
@@ -85,7 +88,9 @@ packages/
                   zipballs, OAuth proof of access), webhook schemas and signature check
   notify/         alert rendering (email, Slack), email transports, Slack delivery
   telemetry/      spans and error reporting; `./init` starts OTLP export and Sentry
+infra/docker-compose.yml  infrastructure; profile `app` runs the whole app (`pnpm stack:up`)
 infra/node/       production image for the API and worker-link
+infra/web/        web image (`next start`) for the compose stack
 infra/scan/       worker-scan image (git, checksum-pinned Docker CLI)
 infra/deploy/     worker-scan on a VM with Docker + gVisor
 infra/pulse/      worker-pulse image on Playwright 1.64.1 (pinned Chromium)
@@ -118,7 +123,8 @@ Render (`render.yaml`); worker-scan on a VM with Docker and gVisor
 ## A full check (Link)
 
 1. `POST /v1/projects/{id}/check` creates a Link run with these children:
-   - a Scan of the given snapshot (else a clone of `repo_url`, else the latest upload);
+   - a Scan of the given snapshot, else of the linked GitHub repository at the default
+     branch's head (cloned with history), else a clone of `repo_url`;
    - a Pulse run per environment.
      Children carry `parent_run_id` = the Link run. Project Pulse (`/pulse`), Scan (`/scan`)
      and re-checks (`/issues/{id}/recheck`) create a Link run the same way, with a single
@@ -135,14 +141,17 @@ Render (`render.yaml`); worker-scan on a VM with Docker and gVisor
    - Scan locators directly (ADR 0020).
      **widen:** importers up to 2 hops, plus the top 5 co-change partners.
 4. **prompt:** `code_fix` when traced, with the file, line, symbol, env vars and the
-   blast radius; else the Phase 2 types. **verify:** `syncIssues` per child opens,
+   blast radius; else the Phase 2 types. A Scan `ENV_VAR_UNDOCUMENTED` finding at a trace
+   site for the same env var joins the Pulse issue instead of opening its own. **verify:** `syncIssues` per child opens,
    re-sees, resolves (only when the check group ran) and regresses issues, and stores
    traces and the blast radius.
 
 ## A Scan run
 
-1. `POST /v1/projects/{id}/snapshots` stores a zip (raw `application/zip` body) or registers
-   a public https git ref (ADR 0018). `POST /v1/projects/{id}/scan` creates a run with one
+1. Zips go straight to storage: `POST /v1/projects/{id}/uploads` returns a presigned POST
+   (key, type and size pinned), and `.../uploads/{snapshotId}/complete` checks the object
+   before the snapshot can be scanned (ADR 0024). `POST /v1/projects/{id}/snapshots` still
+   takes a raw `application/zip` body, or registers a public https git ref (ADR 0018). `POST /v1/projects/{id}/scan` creates a run with one
    step per stage and enqueues `scan.run`. Without `snapshot_id`, it scans the project's
    `repo_url`.
 2. **Ingest:** extract the zip under limits, or clone through the SSRF pin (ADR 0016). Then
@@ -209,6 +218,10 @@ docker build -t codesentra/sandbox:latest infra/sandbox   # Scan probes run in i
 pnpm start:api & pnpm start:worker-pulse & pnpm start:worker-scan & pnpm start:worker-link & pnpm start:web
 # sign in at http://localhost:3000/signin; the link is written to .outbox/*.json
 ```
+
+Or run everything in containers: `pnpm stack:up` (needs `.env` with POSTGRES_PASSWORD,
+S3_*, SESSION_SECRET, ENCRYPTION_KEY and, for Scan's sandboxes, `DOCKER_GID`; the sign-in
+email lands in the `outbox` volume). `pnpm stack:down` stops it.
 
 ## Tests
 

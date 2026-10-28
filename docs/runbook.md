@@ -178,3 +178,18 @@ The real run:
        the key that sealed those values in `ENCRYPTION_KEY_PREVIOUS`. Running it again is
        harmless.
     3. Remove `ENCRYPTION_KEY_PREVIOUS` and deploy. Retire the old key.
+
+## 9. Publishing the CLI to npm
+
+Nothing publishes automatically. To publish:
+1. Choose a license for the repository. `apps/cli/bundle/build.mjs` writes
+   `"license": "UNLICENSED"` into the published manifest until you change it.
+2. Set the version in `apps/cli/package.json`.
+3. Run `pnpm --filter @codesentra/cli build`. This writes `apps/cli/dist/npm/`, which holds
+   `codesentra.mjs` (the whole CLI, grammars included) and its `package.json` (one
+   dependency: `playwright-core`).
+4. Run `cd apps/cli/dist/npm && npm publish --access public` with an npm account that
+   owns the `@codesentra` scope.
+
+After `npm i -g @codesentra/cli`, users run `codesentra …`. Pulse's render check needs
+Chromium: `npx playwright-core install chromium`, or set `CHROMIUM_EXECUTABLE`.

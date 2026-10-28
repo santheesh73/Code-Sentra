@@ -1,5 +1,70 @@
 # Progress
 
+## Phase 6 — Closing the Phase 1–5 gaps (2026-10-28)
+
+Section 18 stops at Phase 5. Phase 6 is the gaps from earlier entries that need no outside
+account (ADR 0024).
+
+### Built
+
+- **One issue per env var.** A Scan `ENV_VAR_UNDOCUMENTED` finding at a Pulse issue's
+  trace site, for the same env var, joins that issue as a corroborating code instead of
+  opening a second issue (`mergeEnvFindings`, `packages/link`).
+- **Scheduled full checks.** Schedules run `pulse` or `check` (migration `0013`). A check
+  schedule, `/check` and Scan re-checks scan the linked GitHub repository at the default
+  branch's head, else `repo_url`; with neither, the gap is recorded.
+- **GitHub snapshots with history.** worker-scan clones the commit with the installation
+  token (passed in `GIT_CONFIG_*`, never argv) through the SSRF pin. If the clone fails,
+  it falls back to the zipball and records the history gap with git's reason. The fake
+  GitHub now serves real repositories over git smart HTTP.
+- **Direct uploads.** Browsers upload zips straight to storage under a presigned POST
+  (key, type and size pinned). The API checks the object before it can be scanned, so
+  Vercel's 4.5 MB proxy limit no longer applies to uploads. The proxy upload remains as
+  the fallback.
+- **`ENCRYPTION_KEY` rotation.** Sealed values carry a key id, `ENCRYPTION_KEY_PREVIOUS`
+  keeps old keys readable, and `reseal-cli` moves every sealed column to the current key
+  (runbook §8).
+- **Link progress.** A full check's live stream includes its child Scan and Pulse runs.
+- **Org lifecycle.** Adding a member sends an invitation email. Owners can delete an org
+  (confirmed by its slug). Deletion removes every tenant row and the org's stored objects,
+  and is logged.
+- **The whole app in docker-compose.** `pnpm stack:up` runs migrate, the API, the three
+  workers and the web app. CI brings the stack up and checks health, sign-in email and
+  every worker.
+- **Single-file CLI.** `apps/cli/dist/npm/` holds the CLI as one file (grammars embedded)
+  plus a manifest whose only dependency is `playwright-core`. CI installs the packed
+  tarball and runs a scan with it.
+
+### Decisions
+
+- ADR 0024: what Phase 6 covers, and how each gap is closed.
+
+### Still open (needs the user)
+
+- **The real-GitHub gate** (runbook §7): needs a GitHub App, a test repository and
+  hosting.
+- **Deployment:** nothing is deployed. Render, Vercel and the worker-scan VM need your
+  accounts, and no deploy happens without your go-ahead.
+- **A real report-model run:** needs `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL`. The
+  inventory and report prose are tested against a scripted model only.
+- **gVisor:** sandboxes run on runc here and in CI; `runsc` needs the VM in
+  `infra/deploy/`.
+- **npm publish** (runbook §9): needs an npm account and a license choice. The manifest
+  says `UNLICENSED`.
+- **The worker-scan image** still cannot be built in this session, because the Debian
+  mirrors are blocked here. CI's `images` and `compose` jobs build it.
+
+### Deferred or partial
+
+- `scan.incremental` still scans the whole head tree (cached by tree hash).
+- A missed schedule window is not replayed.
+- Only the env-var pair is merged across Pulse and Scan. Other pairs need an equally
+  exact rule.
+
+### Gate result
+
+Running; this section is replaced with the recorded output once the gate finishes.
+
 ## Phase 5 — GitHub, schedules and hardening (2026-10-28)
 
 ### Built

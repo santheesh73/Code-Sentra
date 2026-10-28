@@ -237,7 +237,7 @@ export function recordSecrets(rec: ScanRecorder, secrets: SecretMatch[]): CheckO
       "SECRET_EXPOSED",
       key,
       `${s.file}:${s.line}`,
-      `A ${s.type} secret pattern is committed in ${s.file}:${s.line} (value redacted).`,
+      `A secret matching the ${s.type} pattern is committed in ${s.file}:${s.line} (value redacted).`,
       s.type,
     );
   }

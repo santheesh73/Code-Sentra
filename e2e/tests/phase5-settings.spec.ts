@@ -50,7 +50,7 @@ test("tokens, schedules, notifications and the audit log", async ({ page }) => {
   await page.getByRole("main").getByRole("link", { name: "Settings" }).click();
   await expect(page.getByRole("heading", { name: "Project settings" })).toBeVisible();
   await page.getByLabel("Repository (owner/name)").fill("acme/settings-e2e");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Saved.")).toBeVisible();
 
   await page.getByLabel("Cron (minute hour day month weekday)").fill("* * * * *");

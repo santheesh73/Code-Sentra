@@ -7,10 +7,11 @@ an exact, verifiable fix:
 - **Sentra Link:** where in the code does each problem come from, how do we fix it, and how
   do we prove the fix?
 
-**Status:** Phase 7 (hardening; ADR 0025). The Phase 1–5 gaps were closed in Phase 6 (ADR 0024).
+**Status:** Phase 8 (Go, Ruby and Java; ADR 0026).
 - **Pulse:** paste a URL, or check a project environment, and get `live`, `degraded`,
   `down` or `unverified`, with evidence-backed issues and a fix prompt for each.
-- **Scan:** upload a zip or point at a public repository. You get:
+- **Scan:** upload a zip or point at a public repository (TypeScript, JavaScript, Python,
+  Go, Ruby or Java). You get:
   - a code map;
   - install, build and tests run in a sandbox;
   - dependency advisories and committed secrets;

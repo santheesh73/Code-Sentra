@@ -56,3 +56,17 @@ test runs on every push and pull request (`.github/workflows/ci.yml`).
 - **Org deletion.** Owner and session only, with the slug as confirmation. It removes
   every tenant row and the org's storage prefixes. `org-lifecycle.test.ts` checks that
   every tenant table is empty for that org; `cross-org.test.ts` attacks the route.
+
+## Added in Phase 8 (ADR 0026)
+
+- **The Go dependency download** runs `go mod download`, which executes no code. It
+  fetches from `GOPROXY=https://proxy.golang.org` only, with no `direct` fallback, so a
+  `go.mod` cannot send the fetch to a VCS host. Every module is checked against
+  `sum.golang.org`, and `GOTOOLCHAIN=local` stops a toolchain download. The remaining steps
+  run with `GOPROXY=off` and no network. Tested in `probe.test.ts` ("Go: module-proxy-only
+  download …").
+- **Ruby and JVM projects are not built.** Bundler evaluates the Gemfile, and Maven and
+  Gradle run plugins or build scripts to resolve dependencies. Their probes are gaps rather
+  than a download that runs code.
+- **Manifests are read as text.** `Gemfile`, `build.gradle` and `pom.xml` are parsed with
+  patterns and never evaluated.

@@ -4,7 +4,7 @@ The kickoff document (Sections 1–20) is the source of truth. This file records
 exists in the repository now and how the pieces fit together. Decisions are in
 [`decisions/`](decisions/), and the HTTP API is in [`api.md`](api.md) and [`openapi.json`](openapi.json).
 
-## Current state: Phase 7 (hardening, ADR 0025; Phase 6 gaps closed, ADR 0024)
+## Current state: Phase 8 (Go, Ruby and Java, ADR 0026)
 
 ```
 Browser, CLI ─► apps/web (Next.js) ──/api/* proxy──► apps/api (Fastify) ──► Postgres 16
@@ -75,8 +75,8 @@ packages/
                   adapters, issue drafts; `./job` is the pulse.run handler
   prompts/        versioned fix-prompt templates (code_fix for findings with a file and
                   line; Pulse code_fix waits for Phase 4 traces)
-  parsers/        tree-sitter (TS, TSX, JS, Python): imports, symbols, routes, env reads,
-                  markers, stubs, tests
+  parsers/        tree-sitter (TS, TSX, JS, Python, Go, Ruby, Java): imports, symbols,
+                  routes, env reads, URL templates, messages, markers, stubs, tests
   graph/          code graph, module resolution, git history (churn, co-change, hotspots)
   sandbox/        Docker sandbox (runsc or runc), limits, the dependency fetch step
   claims/         claim verifier: evidence, tokens, numbers, statuses, check assertions
@@ -94,7 +94,7 @@ infra/web/        web image (`next start`) for the compose stack
 infra/scan/       worker-scan image (git, checksum-pinned Docker CLI)
 infra/deploy/     worker-scan on a VM with Docker + gVisor
 infra/pulse/      worker-pulse image on Playwright 1.64.1 (pinned Chromium)
-infra/sandbox/    the probe image (Python 3.12.15 + Node 22.23.4, uid 10001)
+infra/sandbox/    the probe image (Python 3.12.15, Node 22.23.4, Go 1.27.2; uid 10001)
 e2e/              Playwright gates: real Postgres + MinIO + API + worker + web + fixture harness
 fixtures/         Phase 0 fixture apps, harness and repos
 ```
@@ -160,7 +160,8 @@ Render (`render.yaml`); worker-scan on a VM with Docker and gVisor
 3. **Map:** manifests, docs, the code graph, routes, env vars, markers and tests.
    **History** (git only): churn, co-change and hotspots.
 4. **Probe:** copy to scratch; fetch dependencies once, without running project code; then
-   install, build, typecheck, lint and tests with no network. Audit lockfiles against OSV.
+   install, build, typecheck, lint and tests with no network. Node, Python and Go run;
+   Ruby and Maven/Gradle are gaps, because their downloads would run code (ADR 0026). Audit lockfiles against OSV.
    Run gitleaks. Anything that cannot run is a gap.
 5. **Inventory:** the model proposes features with evidence. Statuses come from rules:
    - `planned`: docs only;

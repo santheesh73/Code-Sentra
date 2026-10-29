@@ -173,6 +173,34 @@ export function parseTestOutput(output: string): TestSummary | null {
       failing: [...s.matchAll(/^\S+#(test_\w+) \[/gm)].map((m) => m[1] as string),
     };
   }
+  // Maven Surefire: each module's "Results:" summary is a "Tests run:" line without a class
+  // ("-- in x.Y"); failing tests as "[ERROR]   OrderControllerTest.appliesDiscount:18 …".
+  const sf = [
+    ...s.matchAll(
+      /^\[(?:INFO|WARNING|ERROR)\] Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)\s*$/gm,
+    ),
+  ];
+  if (sf.length) {
+    let [run, fail, skip] = [0, 0, 0];
+    for (const m of sf) {
+      run += Number(m[1]);
+      fail += Number(m[2]) + Number(m[3]);
+      skip += Number(m[4]);
+    }
+    return {
+      runner: "surefire",
+      pass: run - fail - skip,
+      fail,
+      skip,
+      failing: [
+        ...new Set(
+          [...s.matchAll(/^\[ERROR\]\s+[\w$]+\.(\w+)(?::\d+)?(?: [»\w].*)?$/gm)].map(
+            (m) => m[1] as string,
+          ),
+        ),
+      ],
+    };
+  }
   // mocha: "2 passing", "1 failing", "1 pending".
   if (/^\s*\d+ passing/m.test(s)) {
     return {
@@ -205,7 +233,9 @@ export function parseErrorLines(output: string, max = 20): ErrorLine[] {
       f.startsWith("/") ||
       f.includes("node_modules/") ||
       f.includes(".cs-venv/") ||
-      f.startsWith(".cs-gomod/")
+      f.startsWith(".cs-gomod/") ||
+      f.startsWith(".cs-m2/") ||
+      f.startsWith(".cs-bundle/")
     )
       return;
     if (
@@ -219,6 +249,9 @@ export function parseErrorLines(output: string, max = 20): ErrorLine[] {
   for (const m of s.matchAll(/^(\S+?\.[a-z]{1,5}):(\d+):\d+ - (error .+)$/gm))
     push(m[1] as string, m[2] as string, m[3] as string);
   for (const m of s.matchAll(/^(\S+?\.py):(\d+):(?:\d+:)? (.+)$/gm))
+    push(m[1] as string, m[2] as string, m[3] as string);
+  // javac through Maven: "[ERROR] /work/src/main/java/a/B.java:[12,5] cannot find symbol".
+  for (const m of s.matchAll(/^\[ERROR\] (\S+?\.java):\[(\d+),\d+\] (.+)$/gm))
     push(m[1] as string, m[2] as string, m[3] as string);
   // Go compiler and vet: "./cart.go:12:5: undefined: x" (vet may prefix "vet: ").
   for (const m of s.matchAll(/^(?:vet: )?(\S+?\.go):(\d+):(?:\d+:)? (.+)$/gm))

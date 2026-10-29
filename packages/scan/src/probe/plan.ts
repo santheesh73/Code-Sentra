@@ -585,6 +585,114 @@ function rubyPlan(view: ProjectView): ProbePlan {
   return plan;
 }
 
+/** The JDK and Maven in the sandbox image (ADR 0027; a test keeps them equal). */
+export const SANDBOX_JAVA_VERSION = "21";
+export const SANDBOX_MAVEN_VERSION = "3.9.12";
+/** Maven's own dependency plugin, pinned: the only plugin the download step runs. */
+const DEPENDENCY_PLUGIN = "org.apache.maven.plugins:maven-dependency-plugin:3.11.0";
+const MAVEN_CENTRAL = "https://repo.maven.apache.org/maven2";
+
+/**
+ * The Maven download script (ours). Every repository resolves through one mirror, Maven
+ * Central; `-C` fails on a checksum mismatch. It runs only the pinned dependency plugin:
+ * `go-offline` downloads the project's dependencies and plugins without executing them,
+ * then the test providers Surefire/Failsafe and the JUnit launcher, which Maven resolves
+ * only when tests run. The proxy and CA blocks apply only where the worker's egress needs
+ * them.
+ */
+const MAVEN_FETCH_SH = `set -eu
+M2=/work/.cs-m2
+proxy=""
+if [ -n "\${HTTPS_PROXY:-}" ]; then
+  hp=\${HTTPS_PROXY#*://}; hp=\${hp%%/*}; host=\${hp%:*}; port=\${hp##*:}
+  proxy="<proxies><proxy><id>egress</id><active>true</active><protocol>https</protocol><host>$host</host><port>$port</port></proxy></proxies>"
+fi
+cat > $M2/settings.xml <<XML
+<settings><localRepository>$M2/repository</localRepository>$proxy<mirrors><mirror><id>central-only</id><mirrorOf>*</mirrorOf><url>${MAVEN_CENTRAL}</url></mirror></mirrors></settings>
+XML
+if [ -f /etc/codesentra-ca.pem ]; then
+  cp "$JAVA_HOME/lib/security/cacerts" $M2/cacerts && chmod u+w $M2/cacerts
+  keytool -importcert -noprompt -alias egress -file /etc/codesentra-ca.pem -keystore $M2/cacerts -storepass changeit >/dev/null
+  export MAVEN_OPTS="-Djavax.net.ssl.trustStore=$M2/cacerts -Djavax.net.ssl.trustStorePassword=changeit"
+fi
+mvn() { command mvn -B -q -s $M2/settings.xml -C "$@"; }
+mvn ${DEPENDENCY_PLUGIN}:go-offline
+for plugin in maven-surefire-plugin maven-failsafe-plugin; do
+  for dir in $M2/repository/org/apache/maven/plugins/$plugin/*/; do
+    [ -d "$dir" ] || continue
+    for provider in surefire-junit-platform surefire-junit4 surefire-junit47 surefire-testng; do
+      mvn ${DEPENDENCY_PLUGIN}:get -Dtransitive=true -Dartifact=org.apache.maven.surefire:$provider:$(basename "$dir") || true
+    done
+  done
+done
+for dir in $M2/repository/org/junit/platform/junit-platform-commons/*/; do
+  [ -d "$dir" ] || continue
+  mvn ${DEPENDENCY_PLUGIN}:get -Dtransitive=true -Dartifact=org.junit.platform:junit-platform-launcher:$(basename "$dir") || true
+done
+`;
+
+/**
+ * Maven (ADR 0027). The download runs no project code: `.mvn/` (JVM options, Maven
+ * arguments, extensions) is set aside and POMs declaring build extensions are refused, since
+ * Maven loads those at startup. Everything after runs offline from the downloaded repository.
+ */
+function mavenPlan(view: ProjectView): ProbePlan {
+  const plan: ProbePlan = {
+    ecosystem: "maven",
+    packageManager: "maven",
+    fetch: null,
+    prepare: [],
+    steps: [],
+    refused: null,
+  };
+  const poms = [...view.files].filter((f) => /(^|\/)pom\.xml$/.test(f));
+  const withExtensions = poms.find((f) =>
+    /<extensions>\s*true\s*<\/extensions>|<extensions>\s*<extension>/.test(
+      (view.read(f) ?? "").replace(/<!--[\s\S]*?-->/g, ""),
+    ),
+  );
+  if (view.files.has(".mvn/extensions.xml"))
+    plan.refused =
+      "not downloaded: .mvn/extensions.xml declares Maven core extensions, which run when Maven starts";
+  else if (withExtensions)
+    plan.refused = `not downloaded: ${withExtensions} declares build extensions, which Maven loads and runs when it starts`;
+  // .mvn/jvm.config and .mvn/maven.config would add JVM and Maven options to every run.
+  for (const f of [...view.files].filter((x) => x.startsWith(".mvn/")))
+    plan.prepare.push({ rename: [f, `${f}.codesentra-disabled`] });
+  plan.prepare.push({ write: [".cs-m2/fetch.sh", MAVEN_FETCH_SH] });
+  plan.fetch = {
+    command: ["sh", ".cs-m2/fetch.sh"],
+    reason: `the project's dependencies and plugins from Maven Central only (every repository mirrored to it, checksums enforced), with Maven's pinned dependency plugin; no project code runs`,
+  };
+  const mvn = (args: string) => sh(`mvn -B -o -s .cs-m2/settings.xml ${args}`);
+  const sandboxLimits = [
+    {
+      pattern: /has not been downloaded from it before|Cannot access \S+ \(\S+\) in offline mode/,
+      reason:
+        "Maven needed an artifact at build time that the offline download did not fetch (resolved dynamically by a plugin)",
+    },
+    {
+      pattern:
+        /release version \d+ not supported|invalid target release|UnsupportedClassVersionError/,
+      reason: `the project targets a newer Java than the sandbox's ${SANDBOX_JAVA_VERSION}`,
+    },
+  ];
+  plan.steps.push({
+    ...step("install", mvn(`-q ${DEPENDENCY_PLUGIN}:resolve`), 5 * MIN),
+    gapWhen: sandboxLimits,
+  });
+  plan.steps.push({
+    ...step("build", mvn("-DskipTests package"), 10 * MIN),
+    gapWhen: sandboxLimits,
+  });
+  plan.steps.push(skip("typecheck", "not_applicable", "javac type-checks during the build"));
+  plan.steps.push(
+    skip("lint", "gap", "no linter (Checkstyle, SpotBugs) is run for Maven projects"),
+  );
+  plan.steps.push({ ...step("tests", mvn("test"), 10 * MIN), gapWhen: sandboxLimits });
+  return plan;
+}
+
 /** Projects whose dependency download would run code: every step is a gap with that reason. */
 function refusedEcosystem(reason: string): ProbePlan {
   return {
@@ -610,13 +718,10 @@ export function planProbes(view: ProjectView): ProbePlan {
     return pythonPlan(view);
   if (view.files.has("go.mod")) return goPlan(view);
   if (view.files.has("Gemfile")) return rubyPlan(view);
-  if (
-    view.files.has("pom.xml") ||
-    view.files.has("build.gradle") ||
-    view.files.has("build.gradle.kts")
-  )
+  if (view.files.has("pom.xml")) return mavenPlan(view);
+  if (view.files.has("build.gradle") || view.files.has("build.gradle.kts"))
     return refusedEcosystem(
-      "not run: Maven and Gradle run build plugins or build scripts to resolve dependencies, so the dependency download would run code",
+      "not run: Gradle evaluates the build script (code) to resolve dependencies, so the dependency download would run project code",
     );
   return refusedEcosystem(
     "no supported manifest (package.json, requirements.txt, pyproject.toml, go.mod) at the project root",

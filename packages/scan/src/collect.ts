@@ -19,9 +19,16 @@ function matchTest(
   map: MapResult,
   failing: string,
 ): { file: string; line: number; name: string } | null {
-  // pytest: path::name or path::Class::name; vitest: "file > suite > name".
+  // pytest: path::name or path::Class::name; vitest: "file > suite > name"; RSpec: file:line.
   let file: string | null = null;
   let name = failing;
+  // RSpec names the failing example by its own file and line.
+  const at = /^(\S+?):(\d+)$/.exec(failing);
+  if (at) {
+    const f = map.facts.find((x) => x.path === at[1]);
+    const t = f?.tests.find((x) => x.line === Number(at[2]));
+    if (f && t) return { file: f.path, line: t.line, name: t.name };
+  }
   if (failing.includes("::")) {
     const parts = failing.split("::");
     file = parts[0] as string;

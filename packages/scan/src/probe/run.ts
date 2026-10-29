@@ -175,22 +175,27 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
       limits: { timeoutMs: Math.min(s.timeoutMs, left) },
     });
     const out = `${r.stdout}\n${r.stderr}`;
-    const status: ProbeStatus = r.timedOut ? "timeout" : r.exitCode === 0 ? "pass" : "fail";
+    let status: ProbeStatus = r.timedOut ? "timeout" : r.exitCode === 0 ? "pass" : "fail";
+    // A failure the sandbox causes (no compiler, another runtime pinned) is a gap.
+    const limit = status === "fail" ? s.gapWhen?.find((g) => g.pattern.test(out)) : undefined;
+    if (limit) status = "skipped";
     results.push({
       name: s.name,
       status,
       command: (s.command as string[]).join(" "),
       exitCode: r.exitCode,
       durationMs: r.durationMs,
-      reason: r.timedOut
-        ? `timed out after ${Math.round(Math.min(s.timeoutMs, left) / 1000)} s`
-        : null,
+      reason: limit
+        ? limit.reason
+        : r.timedOut
+          ? `timed out after ${Math.round(Math.min(s.timeoutMs, left) / 1000)} s`
+          : null,
       excerpt: tail(r),
       errors: status === "pass" ? [] : parseErrorLines(out),
       tests: s.name === "tests" ? parseTestOutput(out) : null,
       truncated: r.truncated,
     });
-    if (s.name === "install" && status !== "pass") blocked = "install failed";
+    if (s.name === "install" && status !== "pass") blocked = limit?.reason ?? "install failed";
   }
   results.sort((a, b) => PROBES.indexOf(a.name) - PROBES.indexOf(b.name));
   return { runtime: sandbox.runtime, results, fetch };

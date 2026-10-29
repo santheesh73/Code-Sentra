@@ -4,7 +4,17 @@ const stripAnsi = (s: string) => s.replace(ANSI, "");
 
 /** Parsed test run: counts and failing test names (as the runner printed them). */
 export interface TestSummary {
-  runner: "node:test" | "pytest" | "vitest" | "jest" | "mocha" | "go" | "unknown";
+  runner:
+    | "node:test"
+    | "pytest"
+    | "vitest"
+    | "jest"
+    | "mocha"
+    | "go"
+    | "rspec"
+    | "minitest"
+    | "surefire"
+    | "unknown";
   pass: number;
   fail: number;
   skip: number;
@@ -129,6 +139,38 @@ export function parseTestOutput(output: string): TestSummary | null {
       failing: [...s.matchAll(/^\s*● (.+?)\s*$/gm)].map(
         (m) => (m[1] as string).split(" › ").slice(-1)[0] as string,
       ),
+    };
+  }
+  // RSpec: "3 examples, 1 failure, 1 pending"; failing examples as "rspec ./spec/x_spec.rb:21 # …"
+  // (reported as `file:line`, which points at the example itself).
+  const rs = /^(\d+) examples?, (\d+) failures?(?:, (\d+) pending)?/m.exec(s);
+  if (rs) {
+    const total = Number(rs[1]);
+    const fail = Number(rs[2]);
+    const skip = Number(rs[3] ?? 0);
+    return {
+      runner: "rspec",
+      pass: total - fail - skip,
+      fail,
+      skip,
+      failing: [...s.matchAll(/^rspec \.\/(\S+:\d+) #/gm)].map((m) => m[1] as string),
+    };
+  }
+  // Minitest: "5 runs, 7 assertions, 1 failures, 0 errors, 1 skips"; "Class#test_x [file:line]".
+  const mt = /^(\d+) runs, \d+ assertions, (\d+) failures, (\d+) errors, (\d+) skips/m.exec(s);
+  if (mt) {
+    const [runs, f, e, sk] = [mt[1], mt[2], mt[3], mt[4]].map(Number) as [
+      number,
+      number,
+      number,
+      number,
+    ];
+    return {
+      runner: "minitest",
+      pass: runs - f - e - sk,
+      fail: f + e,
+      skip: sk,
+      failing: [...s.matchAll(/^\S+#(test_\w+) \[/gm)].map((m) => m[1] as string),
     };
   }
   // mocha: "2 passing", "1 failing", "1 pending".

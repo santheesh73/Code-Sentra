@@ -10,9 +10,11 @@ import { scanSecrets } from "../secrets.js";
 import { parseErrorLines, parseTestOutput } from "./parse.js";
 import {
   checkNpmLockUrls,
+  lockedGems,
   type ProjectView,
   planProbes,
   SANDBOX_GO_VERSION,
+  SANDBOX_RUBY_VERSION,
   sanitizeRequirements,
 } from "./plan.js";
 import { runProbes } from "./run.js";
@@ -95,6 +97,18 @@ describe("test output parsing", () => {
       skip: 1,
       failing: ["TestTotal"],
     });
+  });
+  it("RSpec (failing examples by file:line) and Minitest", () => {
+    expect(
+      parseTestOutput(
+        "4 examples, 1 failure, 1 pending\n\nFailed examples:\n\nrspec ./spec/store_spec.rb:20 # Store searches note bodies\n",
+      ),
+    ).toEqual({ runner: "rspec", pass: 2, fail: 1, skip: 1, failing: ["spec/store_spec.rb:20"] });
+    expect(
+      parseTestOutput(
+        "  1) Failure:\nStoreTest#test_search [test/store_test.rb:9]:\nExpected 1\n\n5 runs, 7 assertions, 1 failures, 0 errors, 1 skips\n",
+      ),
+    ).toEqual({ runner: "minitest", pass: 3, fail: 1, skip: 1, failing: ["test_search"] });
   });
   it("returns null when there is no summary (unknown, never passing)", () => {
     expect(parseTestOutput("Segmentation fault")).toBeNull();
@@ -241,12 +255,82 @@ describe("probe planning for Go, Ruby and JVM projects", () => {
     expect(noDeps.fetch).toBeNull();
     expect(noDeps.steps[0]?.skip?.kind).toBe("not_applicable");
   });
-  it("Ruby and JVM: every step is a gap naming why the download would run code", () => {
-    const rb = planProbes(memView({ Gemfile: 'gem "sinatra"', "Gemfile.lock": "" }));
-    expect(rb.fetch).toBeNull();
+  const lock = (extra = "") =>
+    [
+      "GEM",
+      "  remote: https://rubygems.org/",
+      "  specs:",
+      "    rack (2.2.3)",
+      "    nokogiri (1.16.0-x86_64-linux)",
+      "      racc (~> 1.4)",
+      "    rspec-core (3.13.6)",
+      "",
+      extra,
+      "CHECKSUMS",
+      `  rack (2.2.3) sha256=${"a".repeat(64)}`,
+      "  nokogiri (1.16.0-x86_64-linux)",
+      "",
+    ].join("\n");
+
+  it("Ruby: the lockfile's exact gems from rubygems.org, checksums where it has them", () => {
+    expect(lockedGems(lock())).toEqual({
+      gems: [
+        { name: "rack", version: "2.2.3", sha256: "a".repeat(64) },
+        { name: "nokogiri", version: "1.16.0-x86_64-linux", sha256: null },
+        { name: "rspec-core", version: "3.13.6", sha256: null },
+      ],
+    });
+    const p = planProbes(
+      memView({ Gemfile: 'gem "rack"', "Gemfile.lock": lock(), ".bundle/config": "" }),
+    );
+    expect(p.ecosystem).toBe("ruby");
+    // Our script, run isolated; the Gemfile is never read by the download.
+    expect(p.fetch?.command).toEqual(["python", "-I", ".cs-gems/fetch.py"]);
+    expect(p.fetch?.reason).toMatch(/1 checked against the lockfile's sha256/);
+    const list = p.prepare.find((x) => x.write?.[0] === ".cs-gems/list.txt")?.write?.[1];
+    expect(list).toBe(
+      `rack 2.2.3 ${"a".repeat(64)}\nnokogiri 1.16.0-x86_64-linux -\nrspec-core 3.13.6 -\n`,
+    );
+    expect(p.prepare).toContainEqual({
+      rename: [".bundle/config", ".bundle/config.codesentra-disabled"],
+    });
     expect(
-      rb.steps.every((s) => s.skip?.kind === "gap" && /Gemfile \(Ruby code\)/.test(s.skip.reason)),
-    ).toBe(true);
+      p.steps.map(
+        (s) => `${s.name}:${s.command ? s.command.join(" ").split(" bundle ")[1] : s.skip?.kind}`,
+      ),
+    ).toEqual([
+      "install:install --local",
+      "build:not_applicable",
+      "typecheck:gap",
+      "lint:gap",
+      "tests:exec rspec",
+    ]);
+    expect(p.steps[0]?.command?.join(" ")).toContain(
+      "BUNDLE_CACHE_PATH=.cs-gems BUNDLE_FROZEN=true",
+    );
+  });
+  it("Ruby: refuses git sources, other gem servers and odd names; gaps without a lockfile", () => {
+    expect(
+      lockedGems(lock("GIT\n  remote: https://github.com/x/y.git\n  specs:\n    y (0.1.0)\n")),
+    ).toEqual({ refused: "y comes from a git repository (https://github.com/x/y.git)" });
+    expect(lockedGems(lock().replace("https://rubygems.org/", "https://gems.internal/"))).toEqual({
+      refused: "rack comes from https://gems.internal/, not rubygems.org",
+    });
+    expect(lockedGems(lock().replace("rack (2.2.3)", "../x (1)"))).toMatchObject({
+      refused: expect.stringContaining("not a plain gem name"),
+    });
+    const refused = planProbes(
+      memView({
+        Gemfile: "",
+        "Gemfile.lock": lock().replace("https://rubygems.org/", "http://10.0.0.1/"),
+      }),
+    );
+    expect(refused.refused).toMatch(/10\.0\.0\.1/);
+    const noLock = planProbes(memView({ Gemfile: 'gem "rack"' }));
+    expect(noLock.fetch).toBeNull();
+    expect(noLock.steps[0]?.skip?.reason).toMatch(/no Gemfile\.lock/);
+  });
+  it("JVM: every step is a gap naming why the download would run code", () => {
     for (const f of ["pom.xml", "build.gradle", "build.gradle.kts"]) {
       const j = planProbes(memView({ [f]: "" }));
       expect(
@@ -261,6 +345,7 @@ describe("probe planning for Go, Ruby and JVM projects", () => {
       "utf8",
     );
     expect(dockerfile).toContain(`FROM golang:${SANDBOX_GO_VERSION}-bookworm AS go`);
+    expect(dockerfile).toContain(`FROM ruby:${SANDBOX_RUBY_VERSION}-slim-bookworm AS ruby`);
   });
 });
 

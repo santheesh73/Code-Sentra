@@ -12,7 +12,7 @@
       "!docs/openapi.json",
       "!docs/api.md",
       "!fixtures/repos",
-      "!packages/scan/test-fixtures",
+      "!**/test-fixtures",
       "!**/out",
       "!**/.next",
       "!**/dist",

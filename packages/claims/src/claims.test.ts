@@ -246,17 +246,17 @@ describe("adversarial suite: every fabricated claim is dropped", () => {
       "status_contradiction",
     ],
     // Asserting checks that failed or were skipped.
-    ["failed tests asserted", "All tests pass.", [E.tests], "skipped_check_asserted"],
-    ["counted tests asserted", "All 4 tests pass.", [E.tests], "skipped_check_asserted"],
-    ["specs asserted", "All 3 specs pass.", [E.tests], "skipped_check_asserted"],
-    ["skipped lint asserted", "The code lints cleanly.", [E.manifest], "skipped_check_asserted"],
+    ["failed tests asserted", "All tests pass.", [E.tests], "outcome_unverified"],
+    ["counted tests asserted", "All 4 tests pass.", [E.tests], "outcome_unverified"],
+    ["specs asserted", "All 3 specs pass.", [E.tests], "outcome_unverified"],
+    ["skipped lint asserted", "The code lints cleanly.", [E.manifest], "outcome_unverified"],
     [
       "failed audit asserted",
       "Dependencies have no known vulnerabilities.",
       [E.advisory],
-      "skipped_check_asserted",
+      "outcome_unverified",
     ],
-    ["failed secrets asserted", "No secrets were found.", [E.secret], "skipped_check_asserted"],
+    ["failed secrets asserted", "No secrets were found.", [E.secret], "outcome_unverified"],
   ];
   it.each(cases)("%s: %s", (_name, text, cite, reason) => {
     const v = claim(text, ...cite);
@@ -274,6 +274,6 @@ describe("adversarial suite: every fabricated claim is dropped", () => {
       { text: "The build succeeds.", evidence_ids: [E.manifest.id] },
       { ...ctx, checks: {} },
     );
-    expect(v).toMatchObject({ verified: false, reason: "skipped_check_asserted" });
+    expect(v).toMatchObject({ verified: false, reason: "outcome_unverified" });
   });
 });

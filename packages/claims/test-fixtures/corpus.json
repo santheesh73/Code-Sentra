@@ -1,0 +1,1692 @@
+{
+ "false": [
+  {
+   "text": "All tests pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "All tests are passing.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Every test passes.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Every test succeeds.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The tests all pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The test suite passes.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The test suite is green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Tests are passing.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The tests are all green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "All specs pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Every spec is passing.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The suite is green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "CI is green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "CI is passing.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "There are no failing tests.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "No broken tests remain.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The project is fully tested.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "It is thoroughly tested.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "It is well tested.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Test coverage is 100%.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Code coverage is complete.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The code is fully covered by tests.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "All of the unit tests pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Every integration test passes.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The whole test suite succeeds.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Tests pass cleanly.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The tests run green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "All tests continue to pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The build succeeds.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The build is green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "It builds cleanly.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The build passes.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "It compiles without errors.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Compiles fine.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The project builds successfully.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The build works.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "It compiles cleanly.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Compilation succeeds.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The build is clean.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Type checking succeeds.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Typecheck passes.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "It type-checks cleanly.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "There are no type errors.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The code is type-safe.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "TypeScript reports no errors.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Types check out.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "tsc passes.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Lint passes.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Linting is clean.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "It lints cleanly.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "There are no lint errors.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The code passes linting.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "No lint warnings remain.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Lint is green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Dependencies have no known vulnerabilities.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "There are no known vulnerabilities.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The dependencies are secure.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "No vulnerable dependencies remain.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Dependencies are safe.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "It is free of known vulnerabilities.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "No advisories affect the dependencies.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "No CVEs apply.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "No secrets were found.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "No secrets are committed.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The repository contains no hard-coded credentials.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "There are no exposed secrets.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "No credentials were detected.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "It is free of secrets.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "No API keys are committed.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Dependencies install cleanly.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "It installs without errors.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Installation succeeds.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Dependencies install successfully.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "It is production-ready.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "The project is production ready.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is enterprise-grade.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "This is battle-tested.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "The code is bug-free.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It has zero bugs.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "There are no bugs.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It never crashes.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It never fails.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "The system is rock-solid.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is fully functional.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is feature-complete.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is completely secure.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is secure against SQL injection.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is hardened against XSS.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is immune to CSRF.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "Correctness is guaranteed.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is 100% reliable.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is fully stable.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "The app is production-grade and secure.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is completely safe.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "The service is bulletproof.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is impervious to attack.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It uses Redis under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses PostgreSQL under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses MongoDB under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses Kafka under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses RabbitMQ under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses GraphQL under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses Django under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses Flask under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses Rails under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses Spring under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses Kubernetes under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses Terraform under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses React under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses Vue under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses gRPC under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It uses Elasticsearch under the hood.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "It handles 9999 requests per second.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "It handles 42 requests per second.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "It handles 7 requests per second.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "It handles 512 requests per second.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "It handles 100000 requests per second.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "It handles 2024 requests per second.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "It handles 3 requests per second.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "It handles 88 requests per second.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "It is well architected.",
+   "cite": "none",
+   "expect_drop": true,
+   "group": "no_evidence"
+  },
+  {
+   "text": "The code is elegant.",
+   "cite": "none",
+   "expect_drop": true,
+   "group": "no_evidence"
+  },
+  {
+   "text": "Users love it.",
+   "cite": "none",
+   "expect_drop": true,
+   "group": "no_evidence"
+  },
+  {
+   "text": "It scales infinitely.",
+   "cite": "none",
+   "expect_drop": true,
+   "group": "no_evidence"
+  },
+  {
+   "text": "It appears all tests pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "It should be production-ready.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "Seemingly, the build passes.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "Presumably the tests all pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "By all accounts it is bug-free.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "Reportedly, lint is clean.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "The tests pass, as expected.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "As you would hope, the build is green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "Naturally, it is fully tested.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "Built with Express, and all tests pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "It exposes a GET /health route and the build is green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "The project is named ts-taskboard and it is production-ready.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "It depends on Express, and there are no known vulnerabilities.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "It is a small HTTP API with 100% test coverage.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "Routing uses Express and the code is bug-free.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "The health endpoint works and the test suite is green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "It uses lodash and never crashes.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "The app is built on Express and is completely secure.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "It has a health route and typecheck passes.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "Test coverage is 99%.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "It has 95% coverage.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "Coverage sits at 100%.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "It is 100% tested.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "100% of tests pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "All 12 tests pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "Every one of the 40 specs passes.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "extra"
+  },
+  {
+   "text": "It is highly secure.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "The code is maintainable and bug-free.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is robust and reliable.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "The service is fault-tolerant and never fails.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is thoroughly hardened.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is secure by design.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "The implementation is flawless.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is production-hardened.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is ready to ship to production.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is safe for production use.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "The code is defect-free.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "It is guaranteed correct.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "quality"
+  },
+  {
+   "text": "The backend runs on Memcached.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Cassandra.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on DynamoDB.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Nginx.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Envoy.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Consul.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Vault.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Prometheus.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Grafana.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Snowflake.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on BigQuery.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Hadoop.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Spark.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Celery.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Sidekiq.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Nest.js.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Svelte.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Angular.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on jQuery.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Webpack.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Rollup.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Babel.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Deno.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The backend runs on Bun.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "token"
+  },
+  {
+   "text": "The service sustains 5 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 10 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 50 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 250 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 1000 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 5000 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 25000 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 500000 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 2025 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 16 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 64 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 128 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 256 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 999 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The service sustains 8080 concurrent users.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "number"
+  },
+  {
+   "text": "The unit tests all pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The e2e tests pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Integration tests are green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The smoke tests pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Regression tests all pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The acceptance suite is green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Snapshot tests pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "All checks pass.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "Every check is green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  },
+  {
+   "text": "The pipeline is green.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "outcome"
+  }
+ ],
+ "true": [
+  {
+   "text": "All tests pass.",
+   "cite": "manifest"
+  },
+  {
+   "text": "All tests are passing.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Every test passes.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Every test succeeds.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The tests all pass.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The test suite passes.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The test suite is green.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Tests are passing.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The tests are all green.",
+   "cite": "manifest"
+  },
+  {
+   "text": "All specs pass.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Every spec is passing.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The suite is green.",
+   "cite": "manifest"
+  },
+  {
+   "text": "CI is green.",
+   "cite": "manifest"
+  },
+  {
+   "text": "CI is passing.",
+   "cite": "manifest"
+  },
+  {
+   "text": "There are no failing tests.",
+   "cite": "manifest"
+  },
+  {
+   "text": "No broken tests remain.",
+   "cite": "manifest"
+  },
+  {
+   "text": "All of the unit tests pass.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Every integration test passes.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The whole test suite succeeds.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Tests pass cleanly.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The tests run green.",
+   "cite": "manifest"
+  },
+  {
+   "text": "All tests continue to pass.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The build succeeds.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The build is green.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It builds cleanly.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The build passes.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It compiles without errors.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Compiles fine.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The project builds successfully.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The build works.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It compiles cleanly.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Compilation succeeds.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The build is clean.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Type checking succeeds.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Typecheck passes.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It type-checks cleanly.",
+   "cite": "manifest"
+  },
+  {
+   "text": "There are no type errors.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The code is type-safe.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Types check out.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Lint passes.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Linting is clean.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It lints cleanly.",
+   "cite": "manifest"
+  },
+  {
+   "text": "There are no lint errors.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The code passes linting.",
+   "cite": "manifest"
+  },
+  {
+   "text": "No lint warnings remain.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Lint is green.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Dependencies have no known vulnerabilities.",
+   "cite": "manifest"
+  },
+  {
+   "text": "There are no known vulnerabilities.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The dependencies are secure.",
+   "cite": "manifest"
+  },
+  {
+   "text": "No vulnerable dependencies remain.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Dependencies are safe.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It is free of known vulnerabilities.",
+   "cite": "manifest"
+  },
+  {
+   "text": "No advisories affect the dependencies.",
+   "cite": "manifest"
+  },
+  {
+   "text": "No CVEs apply.",
+   "cite": "manifest"
+  },
+  {
+   "text": "No secrets were found.",
+   "cite": "manifest"
+  },
+  {
+   "text": "No secrets are committed.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The repository contains no hard-coded credentials.",
+   "cite": "manifest"
+  },
+  {
+   "text": "There are no exposed secrets.",
+   "cite": "manifest"
+  },
+  {
+   "text": "No credentials were detected.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It is free of secrets.",
+   "cite": "manifest"
+  },
+  {
+   "text": "No API keys are committed.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Dependencies install cleanly.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It installs without errors.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Installation succeeds.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Dependencies install successfully.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Built with Express.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The project is built on Express.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It is an Express application.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The project is named ts-taskboard.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It exposes a GET /health route.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The service provides a health endpoint.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It is a small HTTP API.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Routing is handled by Express.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The app defines a health check.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It depends on Express and lodash.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The HTTP layer uses Express.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The API is written with Express.",
+   "cite": "manifest"
+  },
+  {
+   "text": "ts-taskboard is an HTTP service.",
+   "cite": "manifest"
+  },
+  {
+   "text": "A health check is exposed at /health.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The project uses the Express framework.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It is a task-list API.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Express powers the routing.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The codebase includes a health route.",
+   "cite": "manifest"
+  },
+  {
+   "text": "lodash is a dependency.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The service answers GET /health.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The HTTP API is small and focused.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It provides task management over HTTP.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The build completes without errors.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Every unit test passes.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The lint step is clean.",
+   "cite": "manifest"
+  },
+  {
+   "text": "No vulnerabilities are known in the dependencies.",
+   "cite": "manifest"
+  },
+  {
+   "text": "No credentials are committed to the repository.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The type checker passes.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Installation completes successfully.",
+   "cite": "manifest"
+  },
+  {
+   "text": "All specs are green.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The suite passes.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The project compiles cleanly.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Tests succeed.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The dependency audit is clean.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The service exposes an HTTP interface.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It ships a health endpoint.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The project is a web service.",
+   "cite": "manifest"
+  },
+  {
+   "text": "Express handles incoming requests.",
+   "cite": "manifest"
+  },
+  {
+   "text": "The app is organised around routes.",
+   "cite": "manifest"
+  },
+  {
+   "text": "It is a lightweight API.",
+   "cite": "manifest"
+  }
+ ]
+}

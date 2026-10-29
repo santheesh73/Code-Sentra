@@ -1,4 +1,5 @@
 import type { ClaimDraft, ClaimDropReason, FeatureStatus, JsonValue } from "@codesentra/core";
+import { checkOutcomeClaims } from "./outcome.js";
 
 export interface VerifierEvidence {
   id: string;
@@ -153,6 +154,51 @@ const TECH = [
   "PHPUnit",
   "Pest",
   "Composer",
+  // Infrastructure, data stores and tooling CodeSentra should recognise when a report names
+  // one the evidence does not support (WS-2, F-02): a named technology is a concrete claim.
+  "Memcached",
+  "CockroachDB",
+  "Neo4j",
+  "InfluxDB",
+  "ClickHouse",
+  "Snowflake",
+  "BigQuery",
+  "Redshift",
+  "Hadoop",
+  "Spark",
+  "Flink",
+  "Airflow",
+  "Sidekiq",
+  "Nginx",
+  "Apache",
+  "HAProxy",
+  "Envoy",
+  "Consul",
+  "Vault",
+  "Prometheus",
+  "Grafana",
+  "Datadog",
+  "Sentry",
+  "Elasticache",
+  "Memorystore",
+  "Pulsar",
+  "NATS",
+  "ZeroMQ",
+  "Rollup",
+  "Parcel",
+  "Turbopack",
+  "SWC",
+  "jQuery",
+  "Ember",
+  "Backbone",
+  "Solid",
+  "Qwik",
+  "Preact",
+  "Phoenix",
+  "Elixir",
+  "Scala",
+  "Clojure",
+  "Haskell",
 ];
 const TECH_RE = new RegExp(
   `(?<![\\w.-])(${TECH.map((t) => t.replace(/[.]/g, "\\.")).join("|")})(?![\\w-])`,
@@ -345,32 +391,6 @@ function featuresIn(claim: ClaimDraft, ctx: VerifierContext) {
   });
 }
 
-const CHECK_PATTERNS: [CheckName, RegExp][] = [
-  // "All tests pass" / "Tests pass" / "every test passes" (or specs); not "2 of 4 tests pass".
-  [
-    "tests",
-    /(\b(all|every)\s+(\w+\s+)?(tests?|specs?)\s+(pass|passes|passing|succeed|are green)\b|(^|[.!?]\s+)(the\s+)?(tests|specs)\s+(all\s+)?pass(es|ing)?\b|\b(test|spec) suite (passes|is green)\b|\bno (failing|broken) (tests|specs)\b)/i,
-  ],
-  [
-    "build",
-    /\b(builds? (successfully|cleanly|without errors)|(the )?build (passes|succeeds|works)|compiles? (cleanly|without errors))\b/i,
-  ],
-  ["install", /\b(installs? (cleanly|successfully|without errors))\b/i],
-  [
-    "typecheck",
-    /\b(type[- ]?checks? (cleanly|pass(es)?)|no type errors|type[- ]?safe without errors)\b/i,
-  ],
-  ["lint", /\b(lints? cleanly|no lint (errors|warnings)|passes lint(ing)?)\b/i],
-  [
-    "dependency_audit",
-    /\b(no (known )?(vulnerabilities|vulnerable dependencies|advisories)|dependencies (are|have no known) (secure|safe|vulnerabilit(y|ies))|up[- ]to[- ]date and secure)\b/i,
-  ],
-  [
-    "secrets",
-    /\b(no (secrets|credentials|leaked keys|exposed secrets)( were)?( (found|detected|committed))?|free of secrets)\b/i,
-  ],
-];
-
 /**
  * Verifies one draft claim against the run's evidence (Section 11). All rules must pass:
  * 1. it cites evidence, and every id exists and belongs to this run;
@@ -400,16 +420,16 @@ export function verifyClaim(claim: ClaimDraft, ctx: VerifierContext): Verdict {
     cited.push(e);
   }
 
-  for (const [check, re] of CHECK_PATTERNS) {
-    if (!re.test(claim.text)) continue;
-    const outcome = ctx.checks[check];
-    if (outcome !== "pass")
-      return {
-        verified: false,
-        reason: "skipped_check_asserted",
-        detail: `asserts ${check} passed, but it ${outcome === undefined ? "was not checked" : outcome === "fail" ? "failed" : `was ${outcome}`}`,
-      };
-  }
+  // Outcome and quality language is default-deny (WS-2, F-02): a sentence that asserts a
+  // check succeeded needs that check to have passed, by any wording, and an unfalsifiable
+  // quality boast is always dropped. This does not trust the model's phrasing.
+  const outcome = checkOutcomeClaims(claim.text, ctx.checks);
+  if (!outcome.ok)
+    return {
+      verified: false,
+      reason: /quality claim/.test(outcome.reason) ? "unverifiable_quality" : "outcome_unverified",
+      detail: outcome.reason,
+    };
 
   const strings: string[] = [];
   const numbers = new Set<number>();

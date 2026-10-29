@@ -65,8 +65,24 @@ test runs on every push and pull request (`.github/workflows/ci.yml`).
   `sum.golang.org`, and `GOTOOLCHAIN=local` stops a toolchain download. The remaining steps
   run with `GOPROXY=off` and no network. Tested in `probe.test.ts` ("Go: module-proxy-only
   download …").
-- **Ruby and JVM projects are not built.** Bundler evaluates the Gemfile, and Maven and
-  Gradle run plugins or build scripts to resolve dependencies. Their probes are gaps rather
-  than a download that runs code.
+- **Ruby and JVM projects** were not built in Phase 8. Phase 9 builds Ruby and Maven
+  projects without running code during the download. Gradle is still a gap.
 - **Manifests are read as text.** `Gemfile`, `build.gradle` and `pom.xml` are parsed with
   patterns and never evaluated.
+
+## Added in Phase 9 (ADR 0027)
+
+- **Ruby downloads read the lockfile, never the Gemfile.**
+  - The download step is CodeSentra's own script, run with `python -I`.
+  - It fetches only the exact `.gem` files `Gemfile.lock` pins, from rubygems.org over
+    HTTPS, and follows redirects only to `*.rubygems.org`.
+  - Each file is checked against the lockfile's sha256 where it has one.
+  - Git sources, other gem servers and odd names are refused.
+  - Tested in `probe.test.ts` ("Ruby: …").
+- **Maven downloads run only Maven's pinned dependency plugin.**
+  - Every repository is mirrored to Maven Central, and checksums are enforced.
+  - `.mvn/` is set aside, and POMs or `.mvn/extensions.xml` declaring extensions are
+    refused.
+  - Residual risk: a parent POM fetched from Central could still declare extensions
+    (ADR 0027).
+  - Tested in `probe.test.ts` ("Maven: …").

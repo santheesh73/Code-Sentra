@@ -1,0 +1,16 @@
+__metadata:
+  version: 10
+  cacheKey: 10c0
+
+"h@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "h@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"is-number@npm:7.0.0":
+  version: 7.0.0
+  resolution: "is-number@file:./vendor/is-number.tgz"
+  checksum: 10c0/b4686d0d3053146095ccd45346461bc8e53b80aeb7671cc52a4de02dbbf7dc0d1d2a986e2fe4ae206984b4d34ef37e8b795ebc4f4295c978373e6575e295d811
+  languageName: node
+  linkType: hard

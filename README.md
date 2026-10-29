@@ -7,7 +7,7 @@ an exact, verifiable fix:
 - **Sentra Link:** where in the code does each problem come from, how do we fix it, and how
   do we prove the fix?
 
-**Status:** Phase 10 (Rust and PHP; ADR 0028).
+**Status:** Phase 11 (closing the build gaps; ADR 0029).
 - **Pulse:** paste a URL, or check a project environment, and get `live`, `degraded`,
   `down` or `unverified`, with evidence-backed issues and a fix prompt for each.
 - **Scan:** upload a zip or point at a public repository (TypeScript, JavaScript, Python,

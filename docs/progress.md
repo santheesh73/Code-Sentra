@@ -1,5 +1,55 @@
 # Progress
 
+## Phase 11 — Closing the build gaps (2026-10-29)
+
+The user chose to close the build gaps left by Phases 9 and 10 (ADR 0029).
+
+### Built
+
+- **Maven parent POMs are checked before Maven starts.**
+  - Our script walks each external parent's chain on Maven Central (sha1-checked) and
+    refuses when the build would load a build extension.
+  - Extensions are now judged as Maven loads them, so a parent that merely manages one, as
+    Spring Boot's does for `native-maven-plugin`, is not a reason. `java-shop-api` checks
+    2 parent POMs, then builds and tests as before.
+- **Download scripts can refuse at run time.** The probe reports "not downloaded" with
+  the reason, not a failed download.
+- **Native gems build offline.**
+  - The sandbox image adds make, Ruby's headers and the `libruby.so` link name.
+  - `rb-notes-api` now locks bcrypt 3.1.22 (a C extension), which compiles in the
+    sandbox. Its tests are unchanged: 2 pass, 1 fail, 1 pending.
+- **PHP packages from GitLab.com** are downloaded the same way as GitHub ones, as a zip
+  pinned to the locked commit. Other hosts get a reason that names the host and what is
+  accepted.
+- **Phase 10 follow-up:** PR #11's CI ran the PHP download and PHPUnit, and passed. This
+  session's egress policy had blocked both.
+
+### Defects found and fixed
+
+- **Over-broad Maven refusal.** The Phase 9 check refused any POM containing
+  `<extensions>true</extensions>`, even in `pluginManagement` or an inactive profile, where
+  Maven loads nothing. It now follows Maven's rules.
+- **Native extensions could not link.** The image had `libruby.so.3.4` but not
+  `libruby.so`, so linking failed (`cannot find -lruby`) even with a compiler present.
+- **Rate limiting at Central.** Central answers bursts with 429; the parent check backs
+  off and retries.
+
+### Still open (needs the user)
+
+Unchanged: the real-GitHub gate, deployment, a real report-model run, gVisor, and npm
+publish (plus a license choice).
+
+### Deferred or partial
+
+- **Gradle** still does not build (ADR 0027).
+- **Private PHP repositories** and hosts other than GitHub and GitLab.com are refused.
+- **cgo** stays off for Go.
+- **Maven profile activation** is not evaluated: any `<activation>` counts as active.
+
+### Gate result
+
+Running; replaced with the recorded output once the gate finishes.
+
 ## Phase 10 — Rust and PHP (2026-10-29)
 
 The user chose Rust and PHP (ADR 0028).

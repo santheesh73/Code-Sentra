@@ -185,6 +185,20 @@ services:
     volumes: ["/tmp/codesentra-scratch:/tmp/codesentra-scratch"]
     restart: "no"
 
+  # The dependency-download egress allowlist (ADR 0030). In production the Scan worker
+  # attaches each fetch container to an internal network whose only way out is this proxy,
+  # which forwards HTTPS CONNECT to the package registries alone. Start it with the "egress"
+  # profile and point the worker at it with SANDBOX_FETCH_NETWORK / SANDBOX_FETCH_PROXY; see
+  # infra/egress-proxy/README.md. (Local dev keeps the no-proxy bridge under runc.)
+  egress-proxy:
+    profiles: ["egress"]
+    image: ubuntu/squid:latest
+    volumes:
+      - ./egress-proxy/squid.conf:/etc/squid/squid.conf:ro
+      - ./egress-proxy/allowed-hosts.txt:/etc/squid/allowed-hosts.txt:ro
+    networks: [egress, default]
+    restart: unless-stopped
+
   web:
     profiles: ["app"]
     build: { context: .., dockerfile: infra/web/Dockerfile }
@@ -200,3 +214,9 @@ volumes:
   postgres-data:
   minio-data:
   outbox:
+
+networks:
+  # No route to the internet or the other services: a fetch container joined here reaches
+  # the outside only through egress-proxy (ADR 0030).
+  egress:
+    internal: true

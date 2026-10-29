@@ -1,0 +1,524 @@
+[
+  {
+    "ecosystem": "npm",
+    "case": "clean",
+    "file": "npm/clean/package-lock.json",
+    "refused": null
+  },
+  {
+    "ecosystem": "npm",
+    "case": "private-ip",
+    "file": "npm/private-ip/package-lock.json",
+    "refused": "IP address"
+  },
+  {
+    "ecosystem": "npm",
+    "case": "metadata-ip",
+    "file": "npm/metadata-ip/package-lock.json",
+    "refused": "http:"
+  },
+  {
+    "ecosystem": "npm",
+    "case": "localhost",
+    "file": "npm/localhost/package-lock.json",
+    "refused": "localhost"
+  },
+  {
+    "ecosystem": "npm",
+    "case": "plain-http",
+    "file": "npm/plain-http/package-lock.json",
+    "refused": "http:"
+  },
+  {
+    "ecosystem": "npm",
+    "case": "foreign-host",
+    "file": "npm/foreign-host/package-lock.json",
+    "refused": "evil.example"
+  },
+  {
+    "ecosystem": "npm",
+    "case": "odd-port",
+    "file": "npm/odd-port/package-lock.json",
+    "refused": "port 8443"
+  },
+  {
+    "ecosystem": "npm",
+    "case": "credentials",
+    "file": "npm/credentials/package-lock.json",
+    "refused": "credentials"
+  },
+  {
+    "ecosystem": "npm",
+    "case": "git",
+    "file": "npm/git/package-lock.json",
+    "refused": "git"
+  },
+  {
+    "ecosystem": "npm",
+    "case": "file-tarball",
+    "file": "npm/file-tarball/package-lock.json",
+    "refused": "file:"
+  },
+  {
+    "ecosystem": "npm",
+    "case": "v1-github-version",
+    "file": "npm/v1-github-version/package-lock.json",
+    "refused": "github:"
+  },
+  {
+    "ecosystem": "npm",
+    "case": "workspace-link",
+    "file": "npm/workspace-link/package-lock.json",
+    "refused": null
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "clean",
+    "file": "pnpm-v9/clean/pnpm-lock.yaml",
+    "refused": null
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "private-ip",
+    "file": "pnpm-v9/private-ip/pnpm-lock.yaml",
+    "refused": "IP address"
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "metadata-ip",
+    "file": "pnpm-v9/metadata-ip/pnpm-lock.yaml",
+    "refused": "http:"
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "localhost",
+    "file": "pnpm-v9/localhost/pnpm-lock.yaml",
+    "refused": "localhost"
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "plain-http",
+    "file": "pnpm-v9/plain-http/pnpm-lock.yaml",
+    "refused": "http:"
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "foreign-host",
+    "file": "pnpm-v9/foreign-host/pnpm-lock.yaml",
+    "refused": "evil.example"
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "odd-port",
+    "file": "pnpm-v9/odd-port/pnpm-lock.yaml",
+    "refused": "port 8443"
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "credentials",
+    "file": "pnpm-v9/credentials/pnpm-lock.yaml",
+    "refused": "credentials"
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "git",
+    "file": "pnpm-v9/git/pnpm-lock.yaml",
+    "refused": "git"
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "directory",
+    "file": "pnpm-v9/directory/pnpm-lock.yaml",
+    "refused": "local directory"
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "unknown-shape",
+    "file": "pnpm-v9/unknown-shape/pnpm-lock.yaml",
+    "refused": "does not recognise"
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "link-outside",
+    "file": "pnpm-v9/link-outside/pnpm-lock.yaml",
+    "refused": "outside the workspace"
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "file-importer",
+    "file": "pnpm-v9/file-importer/pnpm-lock.yaml",
+    "refused": "local file"
+  },
+  {
+    "ecosystem": "pnpm-v9",
+    "case": "workspace-links",
+    "file": "pnpm-v9/workspace-links/pnpm-lock.yaml",
+    "refused": null
+  },
+  {
+    "ecosystem": "pnpm-v6",
+    "case": "clean",
+    "file": "pnpm-v6/clean/pnpm-lock.yaml",
+    "refused": null
+  },
+  {
+    "ecosystem": "pnpm-v6",
+    "case": "private-ip",
+    "file": "pnpm-v6/private-ip/pnpm-lock.yaml",
+    "refused": "IP address"
+  },
+  {
+    "ecosystem": "pnpm-v6",
+    "case": "metadata-ip",
+    "file": "pnpm-v6/metadata-ip/pnpm-lock.yaml",
+    "refused": "http:"
+  },
+  {
+    "ecosystem": "pnpm-v6",
+    "case": "localhost",
+    "file": "pnpm-v6/localhost/pnpm-lock.yaml",
+    "refused": "localhost"
+  },
+  {
+    "ecosystem": "pnpm-v6",
+    "case": "plain-http",
+    "file": "pnpm-v6/plain-http/pnpm-lock.yaml",
+    "refused": "http:"
+  },
+  {
+    "ecosystem": "pnpm-v6",
+    "case": "foreign-host",
+    "file": "pnpm-v6/foreign-host/pnpm-lock.yaml",
+    "refused": "evil.example"
+  },
+  {
+    "ecosystem": "pnpm-v6",
+    "case": "odd-port",
+    "file": "pnpm-v6/odd-port/pnpm-lock.yaml",
+    "refused": "port 8443"
+  },
+  {
+    "ecosystem": "pnpm-v6",
+    "case": "credentials",
+    "file": "pnpm-v6/credentials/pnpm-lock.yaml",
+    "refused": "credentials"
+  },
+  {
+    "ecosystem": "pnpm-v6",
+    "case": "git",
+    "file": "pnpm-v6/git/pnpm-lock.yaml",
+    "refused": "git"
+  },
+  {
+    "ecosystem": "pnpm-v6",
+    "case": "file-dependency",
+    "file": "pnpm-v6/file-dependency/pnpm-lock.yaml",
+    "refused": "local file"
+  },
+  {
+    "ecosystem": "yarn-classic",
+    "case": "clean",
+    "file": "yarn-classic/clean/yarn.lock",
+    "refused": null
+  },
+  {
+    "ecosystem": "yarn-classic",
+    "case": "private-ip",
+    "file": "yarn-classic/private-ip/yarn.lock",
+    "refused": "IP address"
+  },
+  {
+    "ecosystem": "yarn-classic",
+    "case": "metadata-ip",
+    "file": "yarn-classic/metadata-ip/yarn.lock",
+    "refused": "http:"
+  },
+  {
+    "ecosystem": "yarn-classic",
+    "case": "localhost",
+    "file": "yarn-classic/localhost/yarn.lock",
+    "refused": "localhost"
+  },
+  {
+    "ecosystem": "yarn-classic",
+    "case": "plain-http",
+    "file": "yarn-classic/plain-http/yarn.lock",
+    "refused": "http:"
+  },
+  {
+    "ecosystem": "yarn-classic",
+    "case": "foreign-host",
+    "file": "yarn-classic/foreign-host/yarn.lock",
+    "refused": "evil.example"
+  },
+  {
+    "ecosystem": "yarn-classic",
+    "case": "odd-port",
+    "file": "yarn-classic/odd-port/yarn.lock",
+    "refused": "port 8443"
+  },
+  {
+    "ecosystem": "yarn-classic",
+    "case": "credentials",
+    "file": "yarn-classic/credentials/yarn.lock",
+    "refused": "credentials"
+  },
+  {
+    "ecosystem": "yarn-classic",
+    "case": "git",
+    "file": "yarn-classic/git/yarn.lock",
+    "refused": "git"
+  },
+  {
+    "ecosystem": "yarn-classic",
+    "case": "file-entry",
+    "file": "yarn-classic/file-entry/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-classic",
+    "case": "no-source",
+    "file": "yarn-classic/no-source/yarn.lock",
+    "refused": "names no download source"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "clean",
+    "file": "yarn-berry/clean/yarn.lock",
+    "refused": null
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "builtin-patch",
+    "file": "yarn-berry/builtin-patch/yarn.lock",
+    "refused": null
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "private-ip",
+    "file": "yarn-berry/private-ip/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "metadata-ip",
+    "file": "yarn-berry/metadata-ip/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "localhost",
+    "file": "yarn-berry/localhost/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "plain-http",
+    "file": "yarn-berry/plain-http/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "foreign-host",
+    "file": "yarn-berry/foreign-host/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "odd-port",
+    "file": "yarn-berry/odd-port/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "credentials",
+    "file": "yarn-berry/credentials/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "git",
+    "file": "yarn-berry/git/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "file",
+    "file": "yarn-berry/file/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "link",
+    "file": "yarn-berry/link/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "portal",
+    "file": "yarn-berry/portal/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "exec",
+    "file": "yarn-berry/exec/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "repo-patch",
+    "file": "yarn-berry/repo-patch/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "yarn-berry",
+    "case": "workspace-outside",
+    "file": "yarn-berry/workspace-outside/yarn.lock",
+    "refused": "not a registry package"
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "clean",
+    "file": "poetry/clean/poetry.lock",
+    "refused": null
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "pypi-index",
+    "file": "poetry/pypi-index/poetry.lock",
+    "refused": null
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "private-ip",
+    "file": "poetry/private-ip/poetry.lock",
+    "refused": "IP address"
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "metadata-ip",
+    "file": "poetry/metadata-ip/poetry.lock",
+    "refused": "http:"
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "localhost",
+    "file": "poetry/localhost/poetry.lock",
+    "refused": "localhost"
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "plain-http",
+    "file": "poetry/plain-http/poetry.lock",
+    "refused": "http:"
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "foreign-host",
+    "file": "poetry/foreign-host/poetry.lock",
+    "refused": "evil.example"
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "odd-port",
+    "file": "poetry/odd-port/poetry.lock",
+    "refused": "port 8443"
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "credentials",
+    "file": "poetry/credentials/poetry.lock",
+    "refused": "credentials"
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "source-git",
+    "file": "poetry/source-git/poetry.lock",
+    "refused": "not a package index"
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "source-url",
+    "file": "poetry/source-url/poetry.lock",
+    "refused": "not a package index"
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "source-file",
+    "file": "poetry/source-file/poetry.lock",
+    "refused": "not a package index"
+  },
+  {
+    "ecosystem": "poetry",
+    "case": "source-directory",
+    "file": "poetry/source-directory/poetry.lock",
+    "refused": "not a package index"
+  },
+  {
+    "ecosystem": "composer",
+    "case": "clean",
+    "file": "composer/clean/composer.lock",
+    "refused": null
+  },
+  {
+    "ecosystem": "composer",
+    "case": "private-ip",
+    "file": "composer/private-ip/composer.lock",
+    "refused": "IP address"
+  },
+  {
+    "ecosystem": "composer",
+    "case": "metadata-ip",
+    "file": "composer/metadata-ip/composer.lock",
+    "refused": "http:"
+  },
+  {
+    "ecosystem": "composer",
+    "case": "localhost",
+    "file": "composer/localhost/composer.lock",
+    "refused": "localhost"
+  },
+  {
+    "ecosystem": "composer",
+    "case": "plain-http",
+    "file": "composer/plain-http/composer.lock",
+    "refused": "http:"
+  },
+  {
+    "ecosystem": "composer",
+    "case": "foreign-host",
+    "file": "composer/foreign-host/composer.lock",
+    "refused": "evil.example"
+  },
+  {
+    "ecosystem": "composer",
+    "case": "odd-port",
+    "file": "composer/odd-port/composer.lock",
+    "refused": "port 8443"
+  },
+  {
+    "ecosystem": "composer",
+    "case": "credentials",
+    "file": "composer/credentials/composer.lock",
+    "refused": "credentials"
+  },
+  {
+    "ecosystem": "composer",
+    "case": "git",
+    "file": "composer/git/composer.lock",
+    "refused": "git"
+  },
+  {
+    "ecosystem": "composer",
+    "case": "github-port",
+    "file": "composer/github-port/composer.lock",
+    "refused": "port 8443"
+  },
+  {
+    "ecosystem": "composer",
+    "case": "path",
+    "file": "composer/path/composer.lock",
+    "refused": "file:"
+  }
+]

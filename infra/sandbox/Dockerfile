@@ -1,6 +1,7 @@
 # CodeSentra sandbox image: runs untrusted project code (install, build, typecheck, lint,
 # tests) with no network, no secrets and an unprivileged user (Section 8.4, ADR 0016).
-# Toolchains: Python 3.12, the repo's pinned Node 22 with npm and corepack (pnpm/yarn), Go
+# Toolchains: Python 3.12, the repo's pinned Node 22 with npm, CodeSentra's own pinned pnpm
+# and Yarn releases (no Corepack: a project's packageManager field never picks one, ADR 0030), Go
 # (ADR 0026), Ruby with Bundler, Java 21 with Maven (ADR 0027), Rust with Cargo and Clippy, and
 # PHP with Composer (ADR 0028). Keep the SANDBOX_*_VERSION constants in
 # packages/scan/src/probe/plan.ts equal to these tags (a test checks).
@@ -14,6 +15,27 @@ FROM rust:1.99.0-slim-bookworm AS rust
 RUN --mount=type=secret,id=build-ca \
     if [ -f /run/secrets/build-ca ]; then export SSL_CERT_FILE=/run/secrets/build-ca; fi \
  && rustup component add clippy
+# Package managers for Node projects, pinned and checked against the registry's sha512
+# (ADR 0030). Each lockfile format gets the release that reads it: pnpm 7 (lockfile 5.x), pnpm
+# 8 (6.x), pnpm 10 (9.x), Yarn 1 (classic lockfiles) and Yarn 4 (Berry lockfiles).
+FROM node AS pms
+RUN --mount=type=secret,id=build-ca \
+    if [ -f /run/secrets/build-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/build-ca npm_config_cafile=/run/secrets/build-ca; fi \
+ && mkdir -p /opt/codesentra/pm /tmp/pm && cd /tmp/pm \
+ && printf '%s\n' \
+      'pnpm-7.33.5 pnpm/-/pnpm-7.33.5.tgz sha512-TkmfIv/+WEWqj5Rj4ThrLXLDE04OvvlAk2CthE/vApDoK0ebMusuwPMOVmB+GCDCIWeCn9YmVtQaj9DMSg9CZw==' \
+      'pnpm-8.15.9 pnpm/-/pnpm-8.15.9.tgz sha512-SZQ0ydj90aJ5Tr9FUrOyXApjOrzuW7Fee13pDzL0e1E6ypjNXP0AHDHw20VLw4BO3M1XhQHkyik6aBYWa72fgQ==' \
+      'pnpm-10.34.9 pnpm/-/pnpm-10.34.9.tgz sha512-9JtajqD97bRLs8DB1ldQkqU8KVDZW3rRXfEfF5dId6LeOgHAfpNOmyjOcW5RwJqUlixzBtCb4uHksYqMh2L9Mg==' \
+      'yarn-1.22.22 yarn/-/yarn-1.22.22.tgz sha512-prL3kGtyG7o9Z9Sv8IPfBNrWTDmXB4Qbes8A9rEzt6wkJV8mUvoirjU0Mp3GGAU06Y0XQyA3/2/RQFVuK7MTfg==' \
+      'yarn-4.18.1 @yarnpkg/cli-dist/-/cli-dist-4.18.1.tgz sha512-EH+A4TxAtBWXKE0DGQxW9Bo9crXHLJ73mfxjTQJuv8XonNWWTpei8BQ5JjczHJNU9GROTycwMFn8iOvRIZXUcA==' \
+    > list \
+ && while read -r dir path sri; do \
+      npm pack --silent "https://registry.npmjs.org/$path" >/dev/null \
+   && f=$(ls -t *.tgz | head -1) \
+   && got="sha512-$(node -e 'process.stdout.write(require("crypto").createHash("sha512").update(require("fs").readFileSync(process.argv[1])).digest("base64"))' "$f")" \
+   && [ "$got" = "$sri" ] || { echo "$path: checksum mismatch ($got)"; exit 1; } \
+   && mkdir "/opt/codesentra/pm/$dir" && tar -xzf "$f" -C "/opt/codesentra/pm/$dir" --strip-components=1 && rm "$f"; \
+    done < list
 FROM php:8.4.27-cli-bookworm AS php
 FROM composer:2.10.3 AS composer
 
@@ -36,7 +58,8 @@ RUN mkdir /out && dpkg -L libargon2-1 libbrotli1 libcurl4 libicu72 libldap-2.5-0
 
 FROM python:3.12.15-slim-bookworm
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
-COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+COPY --from=pms /opt/codesentra/pm /opt/codesentra/pm
 COPY --from=go /usr/local/go /usr/local/go
 # Ruby: the interpreter, its library tree and the one shared library the Python base lacks.
 COPY --from=ruby /usr/local/lib/ruby /usr/local/lib/ruby
@@ -66,7 +89,6 @@ RUN ln -s gcc /usr/bin/cc \
  && ln -s /usr/share/maven/bin/mvn /usr/local/bin/mvn \
  && ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
  && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
- && ln -s ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack \
  && useradd --uid 10001 --create-home --shell /usr/sbin/nologin sandbox \
  && mkdir /work && chown sandbox:sandbox /work
 ENV HOME=/home/sandbox \

@@ -202,6 +202,7 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
       fetch.status = "refused";
       fetch.reason = `not downloaded: ${refusal}`;
       blocked = `dependencies were not installed: ${fetch.reason}`;
+      blockedIsGap = true;
     } else if (fetch.status !== "pass") {
       // Classify the failure: a network/environment failure is a coverage gap (Unverified),
       // not a finding against the project; a manifest error is a real install failure (F-05).

@@ -45,7 +45,25 @@ publish (plus a license choice).
 
 ### Gate result
 
-Running; replaced with the recorded output once the gate finishes.
+Run on this machine on 2026-10-29, after the last code change (sandbox runtime `runc`;
+sandbox image with Ruby 3.4.10, Java 21, Maven 3.9.12 and Go 1.27.2). CI on the PR head
+passed all eight jobs.
+
+```
+pnpm lint          Checked 681 files. No fixes applied.
+pnpm typecheck     Tasks: 61 successful, 61 total
+pnpm build         Tasks: 30 successful, 30 total
+pnpm test          20 packages, 656 tests, 0 failed
+  @codesentra/scan             118 passed  (Scan gate on 5 fixture repos; Go, Ruby and
+                                            Maven probes in the sandbox)
+  @codesentra/fixture-harness   64 passed  @codesentra/parsers  33 passed
+  @codesentra/claims            39 passed  @codesentra/link     24 passed
+  @codesentra/graph             15 passed  (and api 64, ssrf 71, core 70, checks 38, db 28,
+                                            cli 26, config 19, sandbox 10, prompts 10,
+                                            github 9, queue 6, storage 6, notify 3,
+                                            telemetry 3)
+pnpm e2e           16 passed (6.5m)
+```
 
 ## Phase 8 — Go, Ruby and Java (2026-10-28)
 

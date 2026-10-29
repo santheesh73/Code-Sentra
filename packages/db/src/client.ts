@@ -32,6 +32,11 @@ export interface DatabaseOptions {
   max?: number;
   applicationName?: string;
   statementTimeoutMs?: number;
+  /**
+   * An idle pooled connection failed (Postgres restarted, failed over or ended it). The
+   * pool has already dropped it and opens a new one on demand. Default: a warning.
+   */
+  onError?: (e: Error) => void;
 }
 
 export function createDatabase(connectionString: string, opts: DatabaseOptions = {}): Database {
@@ -42,6 +47,12 @@ export function createDatabase(connectionString: string, opts: DatabaseOptions =
     statement_timeout: opts.statementTimeoutMs ?? 30_000,
     idle_in_transaction_session_timeout: 60_000,
   });
+  // Without a listener, an idle connection's error is an unhandled 'error' event, which
+  // ends the process.
+  pool.on(
+    "error",
+    opts.onError ?? ((e) => process.emitWarning(`database connection error: ${e.message}`)),
+  );
   const system = drizzle(pool, { schema });
 
   return {
@@ -56,7 +67,18 @@ export function createDatabase(connectionString: string, opts: DatabaseOptions =
       });
     },
     async close() {
+      // pool.end() resolves once no client is idle or checked out, before each connection has
+      // finished closing. Wait for those too (each emits "remove"), so whatever stops
+      // Postgres next does not race them; never more than 5 s.
+      let open = pool.totalCount;
+      const closed = new Promise<void>((resolve) => {
+        if (open === 0) resolve();
+        pool.on("remove", () => {
+          if (--open <= 0) resolve();
+        });
+      });
       await pool.end();
+      await Promise.race([closed, new Promise((r) => setTimeout(r, 5_000).unref())]);
     },
   };
 }

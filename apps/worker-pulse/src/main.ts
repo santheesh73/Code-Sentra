@@ -61,7 +61,10 @@ async function getBrowser() {
   return launching;
 }
 
-const db = createDatabase(config.DATABASE_URL, { applicationName: "codesentra-worker-pulse" });
+const db = createDatabase(config.DATABASE_URL, {
+  applicationName: "codesentra-worker-pulse",
+  onError: (e) => log.error({ err: e.message }, "database connection error"),
+});
 const queue = await startQueueClient(config.DATABASE_URL, {
   onError: (e) => log.error({ err: e.message }, "queue error"),
 });

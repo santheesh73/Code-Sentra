@@ -36,6 +36,16 @@ The user chose Rust and PHP (ADR 0028).
 - **A skipped PHPUnit test would have counted as failing.** PHPUnit numbers skipped tests
   the same way as failures (`1) Class::method`), so failing names are now read from the
   failure and error sections only. A test covers it.
+- **A dropped database connection could crash a service.** Our Postgres pool had no
+  `error` listener. When Postgres ended an idle connection (a restart, a failover,
+  `pg_terminate_backend`), the pool's error went unhandled, and Node ends the process on
+  that. Found through an API test teardown that failed this way under load: pg-pool's
+  `end()` resolves before its connections have closed, and the test database stopped under
+  them. Now:
+  - the pool reports the error to the service's logger and opens a new connection;
+  - `close()` waits for every connection to close.
+
+  Tests in `packages/db/src/pool.test.ts` fail without the fix.
 - **Outdated Ruby gap reason.** It said the sandbox has no C compiler. It now has one (for
   Rust), so the reason names what is still missing: make and the Ruby headers.
 
@@ -68,7 +78,30 @@ publish (plus a license choice).
 
 ### Gate result
 
-Running; replaced with the recorded output once the gate finishes.
+Run on this machine on 2026-10-29, after the last code change (sandbox runtime `runc`;
+sandbox image with Rust 1.99.0, PHP 8.4.27, Composer 2.10.3, Ruby 3.4.10, Java 21, Maven
+3.9.12 and Go 1.27.2).
+
+```
+pnpm lint          Checked 766 files. No fixes applied.
+pnpm typecheck     Tasks: 61 successful, 61 total
+pnpm build         Tasks: 30 successful, 30 total
+pnpm test          20 packages, 711 tests: 706 passed, 5 failed (all php-notes-api; see below)
+  @codesentra/scan             142 of 147 passed  (Scan gate and sandbox probes; rs-notes-api
+                                            end to end)
+  @codesentra/fixture-harness   76 passed  @codesentra/parsers  37 passed
+  @codesentra/claims            41 passed  @codesentra/link     26 passed
+  @codesentra/graph             19 passed  @codesentra/db       30 passed
+  (and api 64, ssrf 71, core 70, checks 38, cli 26, config 19, sandbox 10, prompts 10,
+   github 9, queue 6, storage 6, notify 3, telemetry 3)
+pnpm e2e           17 of 18 passed (10.0m); php-notes-api failed (see below)
+CLI tarball        rs-notes-api and php-notes-api: 4 routes and NOTES_SIGNING_KEY each
+```
+
+Every failure is `php-notes-api`'s download. This session's egress policy refuses
+codeload.github.com, so install fails and PHPUnit never runs. That fails 4 Scan gate
+checks, the PHP sandbox probe test and the PHP e2e report. Every other PHP finding was
+checked without the sandbox and matched. CI has GitHub access and runs the download.
 
 ## Phase 9 — Ruby and Maven builds without code in the download (2026-10-29)
 

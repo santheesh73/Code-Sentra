@@ -43,6 +43,7 @@ const SHEBANG: [RegExp, string][] = [
   [/^#!.*\bpython[0-9.]*\b/, "Python"],
   [/^#!.*\b(node|deno|bun)\b/, "JavaScript"],
   [/^#!.*\bruby\b/, "Ruby"],
+  [/^#!.*\bphp\b/, "PHP"],
   [/^#!.*\b(ba|z)?sh\b/, "Shell"],
 ];
 
@@ -77,10 +78,13 @@ export function parserLanguageFor(path: string, firstLine = ""): ParserLanguage 
   if (ext === ".go") return "go";
   if ([".rb", ".rake", ".gemspec"].includes(ext)) return "ruby";
   if (ext === ".java") return "java";
+  if (ext === ".rs") return "rust";
+  if (ext === ".php") return "php";
   const lang = detectLanguage(path, firstLine);
   if (lang === "Python") return "python";
   if (lang === "JavaScript") return "javascript";
   if (lang === "Ruby") return "ruby";
+  if (lang === "PHP") return "php";
   return null;
 }
 
@@ -92,10 +96,12 @@ export const PARSED_LANGUAGES = new Set([
   "Go",
   "Ruby",
   "Java",
+  "Rust",
+  "PHP",
 ]);
 
 const TEST_PATH =
-  /(^|\/)(__tests__|tests?|spec)\/|\.(test|spec)\.[cm]?[jt]sx?$|(^|\/)test_[^/]*\.py$|_test\.(py|go|rb)$|_spec\.rb$|(^|\/)src\/test\/|Tests?\.java$/;
+  /(^|\/)(__tests__|tests?|spec)\/|\.(test|spec)\.[cm]?[jt]sx?$|(^|\/)test_[^/]*\.py$|_test\.(py|go|rb)$|_spec\.rb$|(^|\/)src\/test\/|Tests?\.java$|Test\.php$/;
 
 export function isTestPath(path: string): boolean {
   return TEST_PATH.test(path);

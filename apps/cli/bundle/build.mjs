@@ -18,6 +18,8 @@ const wasm = {
   go: "tree-sitter-go/tree-sitter-go.wasm",
   ruby: "tree-sitter-ruby/tree-sitter-ruby.wasm",
   java: "tree-sitter-java/tree-sitter-java.wasm",
+  rust: "tree-sitter-rust/tree-sitter-rust.wasm",
+  php: "tree-sitter-php/tree-sitter-php.wasm",
 };
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const b64 = (spec) => readFileSync(parsers.resolve(spec)).toString("base64");
@@ -35,6 +37,8 @@ useEmbeddedWasm({
     go: bytes(${JSON.stringify(b64(wasm.go))}),
     ruby: bytes(${JSON.stringify(b64(wasm.ruby))}),
     java: bytes(${JSON.stringify(b64(wasm.java))}),
+    rust: bytes(${JSON.stringify(b64(wasm.rust))}),
+    php: bytes(${JSON.stringify(b64(wasm.php))}),
   },
 });
 await import("./dist/main.js");

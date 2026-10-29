@@ -25,7 +25,10 @@ describe("language detection", () => {
     expect(parserLanguageFor("Gemfile")).toBe("ruby");
     expect(detectLanguage("Rakefile")).toBe("Ruby");
     expect(parserLanguageFor("src/main/java/A.java")).toBe("java");
-    expect(parserLanguageFor("a.rs")).toBeNull();
+    expect(parserLanguageFor("src/main.rs")).toBe("rust");
+    expect(parserLanguageFor("src/Store.php")).toBe("php");
+    expect(parserLanguageFor("bin/console", "#!/usr/bin/env php")).toBe("php");
+    expect(parserLanguageFor("a.swift")).toBeNull();
   });
   it("recognizes test paths", () => {
     for (const p of [
@@ -38,6 +41,8 @@ describe("language detection", () => {
       "spec/models/note_spec.rb",
       "test/store_test.rb",
       "src/test/java/com/x/CartTest.java",
+      "tests/store.rs",
+      "tests/Unit/StoreTest.php",
     ])
       expect(isTestPath(p), p).toBe(true);
     for (const p of [
@@ -46,6 +51,8 @@ describe("language detection", () => {
       "notes_api/app.py",
       "internal/cart/cart.go",
       "src/main/java/com/x/Contest.java",
+      "src/store.rs",
+      "src/Latest.php",
     ])
       expect(isTestPath(p), p).toBe(false);
   });
@@ -305,7 +312,7 @@ describe("edge cases", () => {
   });
 
   it("returns null for languages without a parser", async () => {
-    expect(await parseFile("main.rs", "fn main() {}")).toBeNull();
+    expect(await parseFile("main.swift", "func main() {}")).toBeNull();
   });
 });
 
@@ -628,6 +635,250 @@ describe("Java", () => {
     expect(t?.tests.map((x) => `${x.name}:${x.line}:${x.skipped}:${x.skipLine}`)).toEqual([
       "adds:3:false:null",
       "exports:6:true:4",
+    ]);
+  });
+});
+
+describe("Rust", () => {
+  const src = lines(
+    "mod store;", //                                               1
+    "pub mod api;",
+    "use crate::store::{Store, Note as N};",
+    "use axum::{routing::get, Router};",
+    "use std::env;",
+    "",
+    "// TODO: add auth", //                                        7
+    "pub fn app() -> Router {",
+    '    let base = std::env::var("API_URL").unwrap();',
+    "    Router::new()", //                                        10
+    '        .route("/notes", get(list).post(create))',
+    '        .nest("/api", Router::new().route("/items/:id", axum::routing::delete(remove)))',
+    "}",
+    "",
+    "pub fn export() -> String {",
+    "    todo!()",
+    "}",
+    "",
+    "fn urls() {",
+    '    let a = format!("{}/api/ping", env::var("API_URL").unwrap());', // 20
+    '    let b = env::var("API_URL").unwrap() + "/v1/items";',
+    '    let c = "http://localhost:4000/data";',
+    '    panic!("store is closed");',
+    '    let d = anyhow!("note not found");',
+    '    eprintln!("bad input {}", a);',
+    "}",
+    "",
+    '#[get("/health")]',
+    'async fn health() -> &\'static str { "ok" }',
+    "struct Hidden;", //                                           30
+    "pub const PORT: u16 = 3000;",
+  );
+
+  it("extracts imports, symbols, routes, env reads, URLs, messages, markers and stubs", async () => {
+    const f = await parseFile("src/lib.rs", src);
+    if (!f) throw new Error("not parsed");
+    expect(f.parseErrors).toBe(0);
+    expect(f.imports.map((i) => `${i.kind} ${i.specifier}`)).toEqual([
+      "rust-mod store",
+      "rust-mod api",
+      "rust crate::store::Store",
+      "rust crate::store::Note",
+      "rust axum::routing::get",
+      "rust axum::Router",
+      "rust std::env",
+    ]);
+    expect(f.symbols.map((s) => `${s.name}:${s.kind}:${s.exported}`)).toEqual([
+      "app:function:true",
+      "export:function:true",
+      "urls:function:false",
+      "health:function:false",
+      "Hidden:class:false",
+      "PORT:variable:true",
+    ]);
+    expect(
+      at(
+        f.routes,
+        (r: { method: string; path: string; handler: string }) =>
+          `${r.method} ${r.path} ${r.handler}`,
+      ),
+    ).toEqual([
+      "GET /notes list:11",
+      "POST /notes create:11",
+      "DELETE /api/items/:id remove:12",
+      "GET /health health:28",
+    ]);
+    expect(at(f.envReads, (e: { name: string }) => e.name)).toEqual([
+      "API_URL:9",
+      "API_URL:20",
+      "API_URL:21",
+    ]);
+    expect(f.urlLiterals.map((u) => `${u.template} ${u.value} [${u.envVars}]`)).toEqual([
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal template form Link matches
+      'true ${env::var("API_URL")}/api/ping [API_URL]',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal template form Link matches
+      'true ${env::var("API_URL")}/v1/items [API_URL]',
+      "false http://localhost:4000/data []",
+    ]);
+    expect(at(f.messages, (m: { kind: string; value: string }) => `${m.kind} ${m.value}`)).toEqual([
+      "throw store is closed:23",
+      "error note not found:24",
+      "console bad input {}:25",
+    ]);
+    expect(at(f.markers, (m: { kind: string }) => m.kind)).toEqual(["TODO:7"]);
+    expect(at(f.stubs, (s: { symbol: string }) => s.symbol)).toEqual(["export:16"]);
+  });
+
+  it("finds #[test] functions anywhere and #[ignore] skips", async () => {
+    const f = await parseFile(
+      "src/store.rs",
+      lines(
+        "pub fn add() {}",
+        "#[cfg(test)]",
+        "mod tests {",
+        "    #[test]",
+        "    fn adds() {}",
+        "    #[tokio::test]",
+        '    #[ignore = "export is not built yet"]',
+        "    async fn exports() {}",
+        "    fn helper() {}",
+        "}",
+      ),
+    );
+    expect(f?.tests.map((t) => `${t.name}:${t.line}:${t.skipped}:${t.skipLine}`)).toEqual([
+      "adds:5:false:null",
+      "exports:8:true:7",
+    ]);
+    expect(f?.symbols.map((s) => s.name)).toEqual(["add"]);
+  });
+});
+
+describe("PHP", () => {
+  const src = lines(
+    "<?php", //                                                    1
+    "namespace App;",
+    "",
+    "use App\\Store\\{Notes, Tags as T};",
+    "use Psr\\Http\\Message\\ResponseInterface;",
+    "use function App\\helper;",
+    "require __DIR__ . '/../vendor/autoload.php';",
+    "",
+    "// TODO: rate limiting",
+    "$app->get('/health', function ($req, $res) { return $res; });", // 10
+    "$app->group('/api', function ($group) {",
+    "    $group->post('/notes', [NotesController::class, 'create']);",
+    "    $group->map(['PUT', 'PATCH'], '/notes/{id}', 'NotesController:update');",
+    "});",
+    "Route::prefix('admin')->group(function () {",
+    "    Route::delete('users/{id}', [UserController::class, 'destroy']);",
+    "});",
+    "$base = getenv('API_URL');",
+    "$key = $_ENV['API_KEY'] ?? env('APP_KEY');",
+    "$u = getenv('API_URL') . '/api/ping';", //                     20
+    "$v = sprintf('%s/v1/items', getenv('API_URL'));",
+    "$w = 'http://localhost:4000/data';",
+    "error_log('cache miss');",
+    "",
+    "#[Route('/reports')]",
+    "final class ReportController",
+    "{",
+    "    #[Route('/{id}', methods: ['GET'])]",
+    "    public function show(): string",
+    "    {", //                                                      30
+    "        throw new \\RuntimeException('report not found');",
+    "    }",
+    "",
+    "    private function export(): string",
+    "    {",
+    "        throw new \\LogicException('Not implemented yet');",
+    "    }",
+    "}",
+  );
+
+  it("extracts imports, symbols, routes, env reads, URLs, messages, markers and stubs", async () => {
+    const f = await parseFile("src/routes.php", src);
+    if (!f) throw new Error("not parsed");
+    expect(f.parseErrors).toBe(0);
+    expect(f.imports.map((i) => `${i.kind} ${i.specifier}`)).toEqual([
+      "php App\\Store\\Notes",
+      "php App\\Store\\Tags",
+      "php Psr\\Http\\Message\\ResponseInterface",
+      "php-require ../vendor/autoload.php",
+    ]);
+    expect(f.symbols.map((s) => `${s.name}:${s.kind}:${s.exported}`)).toEqual([
+      "ReportController:class:true",
+      "show:function:true",
+      "export:function:false",
+    ]);
+    expect(
+      at(
+        f.routes,
+        (r: { method: string; path: string; handler: string }) =>
+          `${r.method} ${r.path} ${r.handler}`,
+      ),
+    ).toEqual([
+      "GET /health null:10",
+      "POST /api/notes create:12",
+      "PUT /api/notes/{id} update:13",
+      "PATCH /api/notes/{id} update:13",
+      "DELETE /admin/users/{id} destroy:16",
+      "GET /reports/{id} show:28",
+    ]);
+    expect(at(f.envReads, (e: { name: string }) => e.name)).toEqual([
+      "API_URL:18",
+      "API_KEY:19",
+      "APP_KEY:19",
+      "API_URL:20",
+      "API_URL:21",
+    ]);
+    expect(f.urlLiterals.map((u) => `${u.template} ${u.value} [${u.envVars}]`)).toEqual([
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal template form Link matches
+      "true ${getenv('API_URL')}/api/ping [API_URL]",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal template form Link matches
+      "true ${getenv('API_URL')}/v1/items [API_URL]",
+      "false http://localhost:4000/data []",
+    ]);
+    expect(at(f.messages, (m: { kind: string; value: string }) => `${m.kind} ${m.value}`)).toEqual([
+      "console cache miss:23",
+      "throw report not found:31",
+      "throw Not implemented yet:36",
+    ]);
+    expect(at(f.markers, (m: { kind: string }) => m.kind)).toEqual(["TODO:9"]);
+    expect(at(f.stubs, (s: { symbol: string }) => s.symbol)).toEqual(["export:36"]);
+  });
+
+  it("finds PHPUnit and Pest tests and their skips", async () => {
+    const unit = await parseFile(
+      "tests/StoreTest.php",
+      lines(
+        "<?php",
+        "use PHPUnit\\Framework\\TestCase;",
+        "final class StoreTest extends TestCase",
+        "{",
+        "    public function testAdds(): void {}",
+        "    #[Test]",
+        "    public function exports(): void",
+        "    {",
+        "        $this->markTestSkipped('export is not built yet');",
+        "    }",
+        "    private function helper(): void {}",
+        "}",
+      ),
+    );
+    expect(unit?.tests.map((t) => `${t.name}:${t.line}:${t.skipped}:${t.skipLine}`)).toEqual([
+      "testAdds:5:false:null",
+      "exports:7:true:9",
+    ]);
+    const pest = await parseFile(
+      "tests/Feature/NotesTest.php",
+      lines(
+        "<?php",
+        "test('lists notes', function () {});",
+        "it('exports', function () {})->skip();",
+      ),
+    );
+    expect(pest?.tests.map((t) => `${t.name}:${t.line}:${t.skipped}:${t.skipLine}`)).toEqual([
+      "lists notes:2:false:null",
+      "exports:3:true:3",
     ]);
   });
 });

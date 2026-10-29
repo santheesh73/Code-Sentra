@@ -31,8 +31,12 @@ The user chose to close the build gaps left by Phases 9 and 10 (ADR 0029).
   Maven loads nothing. It now follows Maven's rules.
 - **Native extensions could not link.** The image had `libruby.so.3.4` but not
   `libruby.so`, so linking failed (`cannot find -lruby`) even with a compiler present.
-- **Rate limiting at Central.** Central answers bursts with 429; the parent check backs
-  off and retries.
+- **Rate limiting at Central.** Central answers bursts with 429, including to Maven itself
+  during the gate.
+  - The parent check backs off and retries.
+  - It places the POMs it verified into Maven's local repository, so Maven does not fetch
+    them again.
+  - Maven retries 429s six times, 10 s apart.
 
 ### Still open (needs the user)
 
@@ -48,7 +52,26 @@ publish (plus a license choice).
 
 ### Gate result
 
-Running; replaced with the recorded output once the gate finishes.
+Run on this machine on 2026-10-29 (sandbox runtime `runc`; sandbox image with make, the
+Ruby headers and `libruby.so` added).
+
+```
+pnpm lint          Checked 768 files. No fixes applied.
+pnpm typecheck     exit 0
+pnpm build         exit 0
+pnpm test          20 packages, 714 tests: 708 passed, 6 failed
+  @codesentra/scan             144 of 150 passed
+    php-notes-api              5 failed: this session cannot reach GitHub archives (as in
+                               Phase 10; CI runs them, and PR #11's CI passed them)
+    java-shop-api probes       1 failed: Maven got 429 from Central fetching the parent POM.
+                               Fixed (verified POMs reused, Maven retries 429s); rerun:
+                               java-shop-api and rb-notes-api sandbox probes pass
+  every other package passed (api 64, db 30, parsers 37, link 26, fixture-harness 76, …)
+pnpm e2e           17 of 18 passed (8.7m); php-notes-api failed, for the same reason
+```
+
+`rb-notes-api` compiles bcrypt's native extension offline in every run that passed above.
+`java-shop-api` checks 2 parent POMs, then builds and tests (1 pass, 1 fail, 1 skipped).
 
 ## Phase 10 — Rust and PHP (2026-10-29)
 

@@ -628,7 +628,8 @@ if [ -f /etc/codesentra-ca.pem ]; then
   keytool -importcert -noprompt -alias egress -file /etc/codesentra-ca.pem -keystore $M2/cacerts -storepass changeit >/dev/null
   export MAVEN_OPTS="-Djavax.net.ssl.trustStore=$M2/cacerts -Djavax.net.ssl.trustStorePassword=changeit"
 fi
-mvn() { command mvn -B -q -s $M2/settings.xml -C "$@"; }
+# Central rate-limits bursts (429): retry those patiently.
+mvn() { command mvn -B -q -s $M2/settings.xml -C -Daether.transport.http.retryHandler.count=6 -Daether.transport.http.retryHandler.interval=10000 "$@"; }
 mvn ${DEPENDENCY_PLUGIN}:go-offline
 for plugin in maven-surefire-plugin maven-failsafe-plugin; do
   for dir in $M2/repository/org/apache/maven/plugins/$plugin/*/; do
@@ -723,7 +724,7 @@ export function pomExtensions(poms: { name: string; xml: string }[]): string | n
  * downloads the POM, checks it against Central's sha1, and refuses (printing the
  * `codesentra-refused:` line the runner reads) if any declares build extensions.
  */
-const MAVEN_PARENTS_PY = `import hashlib, re, sys, time, urllib.error, urllib.request
+const MAVEN_PARENTS_PY = `import hashlib, os, re, sys, time, urllib.error, urllib.request
 CENTRAL = "${MAVEN_CENTRAL}"
 COORD = re.compile(r"^[A-Za-z0-9_.-]+$")
 def strip(xml):
@@ -788,6 +789,10 @@ while queue:
     data = get(url)
     if hashlib.sha1(data).hexdigest() != get(url + ".sha1").decode().split()[0].strip():
         sys.exit("%s:%s:%s does not match its checksum on Maven Central" % (g, a, v))
+    # Maven reads the checked POM from its local repository instead of fetching it again.
+    local = ".cs-m2/repository/%s/%s/%s/%s-%s.pom" % (g.replace(".", "/"), a, v, a, v)
+    os.makedirs(os.path.dirname(local), exist_ok=True)
+    open(local, "wb").write(data)
     xml = strip(data.decode("utf-8", "replace"))
     poms.append(("the parent POM %s:%s:%s" % (g, a, v), xml))
     parent = re.search(r"<parent>(.*?)</parent>", xml, re.S)

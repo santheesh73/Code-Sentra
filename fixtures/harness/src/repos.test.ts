@@ -6,7 +6,8 @@ const repos = loadFixtureRepos();
 describe("fixture repos", () => {
   it("include a repo for every parsed language", () => {
     const langs = repos.flatMap((r) => r.expected.languages);
-    for (const l of ["TypeScript", "Python", "Go", "Ruby", "Java"]) expect(langs).toContain(l);
+    for (const l of ["TypeScript", "Python", "Go", "Ruby", "Java", "Rust", "PHP"])
+      expect(langs).toContain(l);
   });
 
   for (const { expected, repoDir } of repos) {
@@ -36,7 +37,10 @@ describe("fixture repos", () => {
 
       it("route locators point at the route registration", () => {
         for (const r of expected.routes) {
-          expect(readLocator(repoDir, r.locator), r.locator).toContain(`"${r.path}"`);
+          // Double-quoted, or single-quoted (PHP, Ruby).
+          expect(readLocator(repoDir, r.locator), r.locator).toMatch(
+            new RegExp(`["']${r.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`),
+          );
         }
       });
 

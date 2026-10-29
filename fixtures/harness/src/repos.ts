@@ -19,7 +19,7 @@ export const RepoExpectation = z.object({
   }),
   /**
    * Probe outcomes. `skipped` and `tests: null` are for ecosystems whose dependency
-   * download would run code, so nothing runs in the sandbox (Ruby, Maven/Gradle; ADR 0026).
+   * download would run code, so nothing runs in the sandbox (Gradle; ADR 0026, ADR 0027).
    */
   probes: z.object({
     install: z.enum(["pass", "fail", "not_applicable", "skipped"]),

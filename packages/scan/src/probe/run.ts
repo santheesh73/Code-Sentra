@@ -1,6 +1,7 @@
 import { chmod, cp, lstat, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { RunResult, Sandbox } from "@codesentra/sandbox";
+import { classifyFetchFailure } from "./classify.js";
 import { materializeFetchDir, planFetchDir } from "./fetch-dir.js";
 import { type ErrorLine, parseErrorLines, parseTestOutput, type TestSummary } from "./parse.js";
 import { PROBES, type ProbeName, type ProbePlan } from "./plan.js";
@@ -156,12 +157,16 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
 
   const fetch: ProbeRun["fetch"] = { status: "none", durationMs: 0, reason: null, excerpt: "" };
   let blocked: string | null = null;
+  // Whether the block is a coverage gap (network/environment, or our refusal) rather than a
+  // failure of the project: a gap reports the install as skipped, not failed (ADR 0030, F-05).
+  let blockedIsGap = false;
   const refused =
     plan.refused ?? (plan.fetch ? await lockSourceRefusal(opts.sourceDir, plan) : null);
   if (refused) {
     fetch.status = "refused";
     fetch.reason = refused;
     blocked = `dependencies were not installed: ${refused}`;
+    blockedIsGap = true;
   } else if (plan.fetch) {
     // A manifest-only download runs in a directory holding only the dependency manifests and
     // lockfiles (ADR 0030): no project script or hook is present, so none can run with the
@@ -197,8 +202,14 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
       fetch.status = "refused";
       fetch.reason = `not downloaded: ${refusal}`;
       blocked = `dependencies were not installed: ${fetch.reason}`;
-    } else if (fetch.status !== "pass")
-      blocked = `dependency download ${fetch.status === "timeout" ? "timed out" : "failed"}`;
+    } else if (fetch.status !== "pass") {
+      // Classify the failure: a network/environment failure is a coverage gap (Unverified),
+      // not a finding against the project; a manifest error is a real install failure (F-05).
+      const verdict = classifyFetchFailure(`${r.stdout}\n${r.stderr}`, r.exitCode, r.timedOut);
+      fetch.reason = verdict.reason;
+      blocked = `dependencies were not installed: ${verdict.reason}`;
+      blockedIsGap = verdict.kind === "infra";
+    }
   }
 
   for (const s of plan.steps) {
@@ -215,10 +226,10 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
     if (blocked) {
       if (s.name === "install") {
         results.push({
-          ...skipped(s.name, blocked, fetch.status === "refused" ? "skipped" : "fail"),
+          ...skipped(s.name, blocked, blockedIsGap ? "skipped" : "fail"),
           excerpt: fetch.excerpt,
         });
-        if (fetch.status !== "refused") blocked = "install failed";
+        if (!blockedIsGap) blocked = "install failed";
       } else results.push(skipped(s.name, blocked));
       continue;
     }

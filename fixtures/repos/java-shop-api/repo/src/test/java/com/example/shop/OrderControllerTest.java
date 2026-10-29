@@ -12,6 +12,11 @@ class OrderControllerTest {
         assertEquals(3700, OrderController.total(List.of("p1", "p2"), ""));
     }
 
+    @Test
+    void appliesDiscount() {
+        assertEquals(600, OrderController.total(List.of("p1"), "HALF"));
+    }
+
     @Disabled("export is not built yet")
     @Test
     void exportsOrders() {

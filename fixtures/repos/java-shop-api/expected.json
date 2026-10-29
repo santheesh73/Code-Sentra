@@ -1,9 +1,16 @@
 {
   "name": "java-shop-api",
-  "description": "Spring Boot shop API. Its probes do not run: Maven runs build plugins to resolve dependencies (ADR 0026). jackson-databind 2.13.2 is affected by GHSA-57j2-w4cx-62h2 / CVE-2020-36518 (fixed in 2.13.2.1); the Spring Boot starters take their versions from the parent POM, so they are listed as not audited.",
-  "snapshot": { "kind": "zip", "hasHistory": false },
-  "languages": ["Java"],
-  "frameworks": ["Spring Boot"],
+  "description": "Spring Boot shop API. Verified by hand in the sandbox image (Java 21, Maven 3.9.12): the download through Maven Central and Maven's pinned dependency plugin passes, then offline mvn package passes and mvn test gives 1 pass, 1 fail (discount codes are not applied), 1 skipped. jackson-databind 2.13.2 is affected by GHSA-57j2-w4cx-62h2 / CVE-2020-36518 (fixed in 2.13.2.1); the Spring Boot starters take their versions from the parent POM, so they are listed as not audited.",
+  "snapshot": {
+    "kind": "zip",
+    "hasHistory": false
+  },
+  "languages": [
+    "Java"
+  ],
+  "frameworks": [
+    "Spring Boot"
+  ],
   "packageManager": "maven",
   "routes": [
     {
@@ -29,51 +36,84 @@
   ],
   "envVars": {
     "read": [
-      { "name": "SHOP_PORT", "locator": "src/main/java/com/example/shop/Settings.java:8" },
-      { "name": "SHOP_API_KEY", "locator": "src/main/java/com/example/shop/Settings.java:13" }
+      {
+        "name": "SHOP_PORT",
+        "locator": "src/main/java/com/example/shop/Settings.java:8"
+      },
+      {
+        "name": "SHOP_API_KEY",
+        "locator": "src/main/java/com/example/shop/Settings.java:13"
+      }
     ],
-    "documented": ["REDIS_URL", "SHOP_PORT"]
+    "documented": [
+      "REDIS_URL",
+      "SHOP_PORT"
+    ]
   },
   "probes": {
-    "install": "skipped",
-    "build": "skipped",
-    "tests": null
+    "install": "pass",
+    "build": "pass",
+    "tests": {
+      "pass": 1,
+      "fail": 1,
+      "skip": 1
+    }
   },
   "features": [
     {
       "name": "List products",
       "status": "complete",
-      "implementation": ["src/main/java/com/example/shop/ProductController.java:11"]
+      "implementation": [
+        "src/main/java/com/example/shop/ProductController.java:11"
+      ]
     },
     {
       "name": "Product details",
       "status": "complete",
-      "implementation": ["src/main/java/com/example/shop/ProductController.java:16"]
+      "implementation": [
+        "src/main/java/com/example/shop/ProductController.java:16"
+      ]
     },
     {
       "name": "Checkout with discount codes",
       "status": "partial",
-      "implementation": ["src/main/java/com/example/shop/OrderController.java:20"],
-      "why": "TODO marker in OrderController.java"
+      "implementation": [
+        "src/main/java/com/example/shop/OrderController.java:20"
+      ],
+      "why": "TODO marker in OrderController.java and the discount test fails",
+      "tests": [
+        "src/test/java/com/example/shop/OrderControllerTest.java:16"
+      ]
     },
     {
       "name": "Export orders as CSV",
       "status": "partial",
-      "implementation": ["src/main/java/com/example/shop/OrderController.java:27"],
-      "tests": ["src/test/java/com/example/shop/OrderControllerTest.java:17"],
+      "implementation": [
+        "src/main/java/com/example/shop/OrderController.java:27"
+      ],
+      "tests": [
+        "src/test/java/com/example/shop/OrderControllerTest.java:22"
+      ],
       "why": "exportCsv throws UnsupportedOperationException and its test is disabled"
     },
     {
       "name": "Gift cards",
       "status": "planned",
-      "intent": ["README.md:14"],
+      "intent": [
+        "README.md:14"
+      ],
       "why": "README roadmap only; no implementation"
     }
   ],
   "findings": [
     {
+      "code": "TESTS_FAILING",
+      "locator": "src/test/java/com/example/shop/OrderControllerTest.java:16",
+      "lineContains": "void appliesDiscount()"
+    },
+    {
       "code": "SKIPPED_TESTS",
-      "locator": "src/test/java/com/example/shop/OrderControllerTest.java:15",
+      "locator": "src/test/java/com/example/shop/OrderControllerTest.java:20",
       "lineContains": "@Disabled(\"export is not built yet\")"
     },
     {
@@ -115,14 +155,39 @@
       "mustIncludeAdvisory": "GHSA-57j2-w4cx-62h2"
     }
   ],
-  "absentFindings": ["BUILD_FAILED", "TESTS_FAILING", "NO_TESTS", "TYPECHECK_ERRORS"],
+  "absentFindings": [
+    "BUILD_FAILED",
+    "NO_TESTS",
+    "TYPECHECK_ERRORS"
+  ],
   "forbiddenClaims": [
-    { "text": "All 2 tests pass.", "reason": "the tests were not run, and one is disabled" },
-    { "text": "Gift cards can be redeemed at checkout.", "reason": "planned only" },
-    { "text": "CSV export is complete.", "reason": "throws UnsupportedOperationException" },
-    { "text": "Discount codes are applied at checkout.", "reason": "TODO in OrderController" },
-    { "text": "The API uses Quarkus.", "reason": "it uses Spring Boot" },
-    { "text": "Orders are signed with SHOP_SIGNING_KEY.", "reason": "no such variable" },
-    { "text": "Dependencies have no known vulnerabilities.", "reason": "jackson-databind 2.13.2 has advisories" }
+    {
+      "text": "All 3 tests pass.",
+      "reason": "one fails, one is disabled"
+    },
+    {
+      "text": "Gift cards can be redeemed at checkout.",
+      "reason": "planned only"
+    },
+    {
+      "text": "CSV export is complete.",
+      "reason": "throws UnsupportedOperationException"
+    },
+    {
+      "text": "Discount codes are applied at checkout.",
+      "reason": "TODO in OrderController"
+    },
+    {
+      "text": "The API uses Quarkus.",
+      "reason": "it uses Spring Boot"
+    },
+    {
+      "text": "Orders are signed with SHOP_SIGNING_KEY.",
+      "reason": "no such variable"
+    },
+    {
+      "text": "Dependencies have no known vulnerabilities.",
+      "reason": "jackson-databind 2.13.2 has advisories"
+    }
   ]
 }

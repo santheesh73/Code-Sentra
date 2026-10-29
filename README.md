@@ -7,7 +7,7 @@ an exact, verifiable fix:
 - **Sentra Link:** where in the code does each problem come from, how do we fix it, and how
   do we prove the fix?
 
-**Status:** Phase 8 (Go, Ruby and Java; ADR 0026).
+**Status:** Phase 9 (Ruby and Maven builds; ADR 0027).
 - **Pulse:** paste a URL, or check a project environment, and get `live`, `degraded`,
   `down` or `unverified`, with evidence-backed issues and a fix prompt for each.
 - **Scan:** upload a zip or point at a public repository (TypeScript, JavaScript, Python,

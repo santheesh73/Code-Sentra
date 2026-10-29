@@ -4,7 +4,17 @@ const stripAnsi = (s: string) => s.replace(ANSI, "");
 
 /** Parsed test run: counts and failing test names (as the runner printed them). */
 export interface TestSummary {
-  runner: "node:test" | "pytest" | "vitest" | "jest" | "mocha" | "go" | "unknown";
+  runner:
+    | "node:test"
+    | "pytest"
+    | "vitest"
+    | "jest"
+    | "mocha"
+    | "go"
+    | "rspec"
+    | "minitest"
+    | "surefire"
+    | "unknown";
   pass: number;
   fail: number;
   skip: number;
@@ -131,6 +141,66 @@ export function parseTestOutput(output: string): TestSummary | null {
       ),
     };
   }
+  // RSpec: "3 examples, 1 failure, 1 pending"; failing examples as "rspec ./spec/x_spec.rb:21 # …"
+  // (reported as `file:line`, which points at the example itself).
+  const rs = /^(\d+) examples?, (\d+) failures?(?:, (\d+) pending)?/m.exec(s);
+  if (rs) {
+    const total = Number(rs[1]);
+    const fail = Number(rs[2]);
+    const skip = Number(rs[3] ?? 0);
+    return {
+      runner: "rspec",
+      pass: total - fail - skip,
+      fail,
+      skip,
+      failing: [...s.matchAll(/^rspec \.\/(\S+:\d+) #/gm)].map((m) => m[1] as string),
+    };
+  }
+  // Minitest: "5 runs, 7 assertions, 1 failures, 0 errors, 1 skips"; "Class#test_x [file:line]".
+  const mt = /^(\d+) runs, \d+ assertions, (\d+) failures, (\d+) errors, (\d+) skips/m.exec(s);
+  if (mt) {
+    const [runs, f, e, sk] = [mt[1], mt[2], mt[3], mt[4]].map(Number) as [
+      number,
+      number,
+      number,
+      number,
+    ];
+    return {
+      runner: "minitest",
+      pass: runs - f - e - sk,
+      fail: f + e,
+      skip: sk,
+      failing: [...s.matchAll(/^\S+#(test_\w+) \[/gm)].map((m) => m[1] as string),
+    };
+  }
+  // Maven Surefire: each module's "Results:" summary is a "Tests run:" line without a class
+  // ("-- in x.Y"); failing tests as "[ERROR]   OrderControllerTest.appliesDiscount:18 …".
+  const sf = [
+    ...s.matchAll(
+      /^\[(?:INFO|WARNING|ERROR)\] Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)\s*$/gm,
+    ),
+  ];
+  if (sf.length) {
+    let [run, fail, skip] = [0, 0, 0];
+    for (const m of sf) {
+      run += Number(m[1]);
+      fail += Number(m[2]) + Number(m[3]);
+      skip += Number(m[4]);
+    }
+    return {
+      runner: "surefire",
+      pass: run - fail - skip,
+      fail,
+      skip,
+      failing: [
+        ...new Set(
+          [...s.matchAll(/^\[ERROR\]\s+[\w$]+\.(\w+)(?::\d+)?(?: [»\w].*)?$/gm)].map(
+            (m) => m[1] as string,
+          ),
+        ),
+      ],
+    };
+  }
   // mocha: "2 passing", "1 failing", "1 pending".
   if (/^\s*\d+ passing/m.test(s)) {
     return {
@@ -163,7 +233,9 @@ export function parseErrorLines(output: string, max = 20): ErrorLine[] {
       f.startsWith("/") ||
       f.includes("node_modules/") ||
       f.includes(".cs-venv/") ||
-      f.startsWith(".cs-gomod/")
+      f.startsWith(".cs-gomod/") ||
+      f.startsWith(".cs-m2/") ||
+      f.startsWith(".cs-bundle/")
     )
       return;
     if (
@@ -177,6 +249,9 @@ export function parseErrorLines(output: string, max = 20): ErrorLine[] {
   for (const m of s.matchAll(/^(\S+?\.[a-z]{1,5}):(\d+):\d+ - (error .+)$/gm))
     push(m[1] as string, m[2] as string, m[3] as string);
   for (const m of s.matchAll(/^(\S+?\.py):(\d+):(?:\d+:)? (.+)$/gm))
+    push(m[1] as string, m[2] as string, m[3] as string);
+  // javac through Maven: "[ERROR] /work/src/main/java/a/B.java:[12,5] cannot find symbol".
+  for (const m of s.matchAll(/^\[ERROR\] (\S+?\.java):\[(\d+),\d+\] (.+)$/gm))
     push(m[1] as string, m[2] as string, m[3] as string);
   // Go compiler and vet: "./cart.go:12:5: undefined: x" (vet may prefix "vet: ").
   for (const m of s.matchAll(/^(?:vet: )?(\S+?\.go):(\d+):(?:\d+:)? (.+)$/gm))

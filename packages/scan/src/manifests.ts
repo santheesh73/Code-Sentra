@@ -3,9 +3,9 @@ import { posix } from "node:path";
 /** What a Go, Ruby or JVM manifest declares; parsed as text, never evaluated. */
 export interface ManifestInfo {
   file: string;
-  ecosystem: "go" | "ruby" | "maven" | "gradle";
-  packageManager: "go" | "bundler" | "maven" | "gradle";
-  /** The Go module path, the Maven `groupId:artifactId`, or null. */
+  ecosystem: "go" | "ruby" | "maven" | "gradle" | "rust" | "php";
+  packageManager: "go" | "bundler" | "maven" | "gradle" | "cargo" | "composer";
+  /** The Go module path, the Maven `groupId:artifactId`, the Cargo or Composer package name, or null. */
   name: string | null;
   version: string | null;
   description: string | null;
@@ -13,9 +13,9 @@ export interface ManifestInfo {
   dependencies: Record<string, string>;
 }
 
-/** Manifest file names the map stage reads for the languages added in ADR 0026. */
+/** Manifest file names the map stage reads for the languages added in ADR 0026 and ADR 0028. */
 export const MANIFEST_FILE =
-  /(^|\/)(go\.mod|go\.sum|Gemfile|Gemfile\.lock|pom\.xml|build\.gradle(\.kts)?|gradle\.lockfile|settings\.gradle(\.kts)?)$/;
+  /(^|\/)(go\.mod|go\.sum|Gemfile|Gemfile\.lock|pom\.xml|build\.gradle(\.kts)?|gradle\.lockfile|settings\.gradle(\.kts)?|Cargo\.toml|Cargo\.lock|composer\.json|composer\.lock)$/;
 
 /** `module x` and the `require` lines (single and block form) of a go.mod. */
 export function parseGoMod(file: string, text: string): ManifestInfo {
@@ -111,6 +111,86 @@ export function parseGradle(file: string, text: string): ManifestInfo {
   };
 }
 
+/** The `key = value` lines of one TOML table, up to the next `[header]`. */
+function tomlTable(text: string, header: string): string[] {
+  const out: string[] = [];
+  let inside = false;
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/\s+#.*$/, "").trim();
+    const h = /^\[([^\]]+)\]$/.exec(line);
+    if (h) {
+      inside = h[1]?.trim() === header;
+      continue;
+    }
+    if (inside && line) out.push(line);
+  }
+  return out;
+}
+const tomlString = (lines: string[], key: string) =>
+  lines
+    .map((l) => new RegExp(`^${key}\\s*=\\s*"([^"]*)"`).exec(l)?.[1])
+    .find((v) => v !== undefined) ?? null;
+
+/**
+ * A Cargo.toml's `[package]` and its dependency tables, read as text: `name = "1.0"`,
+ * `name = { version = "1.0", … }`, or a `[dependencies.name]` table. A path or git dependency
+ * without a version is `*`.
+ */
+export function parseCargoToml(file: string, text: string): ManifestInfo {
+  const pkg = tomlTable(text, "package");
+  const deps: Record<string, string> = {};
+  for (const table of ["dependencies", "dev-dependencies", "build-dependencies"]) {
+    for (const line of tomlTable(text, table)) {
+      const m = /^([A-Za-z0-9_-]+)\s*=\s*(.+)$/.exec(line);
+      if (!m) continue;
+      const v = m[2] as string;
+      deps[m[1] as string] =
+        /^"([^"]*)"/.exec(v)?.[1] ?? /\bversion\s*=\s*"([^"]*)"/.exec(v)?.[1] ?? "*";
+    }
+  }
+  for (const m of text.matchAll(/^\[(?:dev-|build-)?dependencies\.([A-Za-z0-9_-]+)\]\s*$/gm)) {
+    const name = m[1] as string;
+    deps[name] = tomlString(tomlTable(text, m[0].trim().slice(1, -1)), "version") ?? "*";
+  }
+  return {
+    file,
+    ecosystem: "rust",
+    packageManager: "cargo",
+    name: tomlString(pkg, "name"),
+    version: tomlString(pkg, "version"),
+    description: tomlString(pkg, "description"),
+    dependencies: deps,
+  };
+}
+
+/** A composer.json's name, description and `require`/`require-dev` (platform `php`/`ext-*` left out). */
+export function parseComposerJson(file: string, text: string): ManifestInfo | null {
+  let doc: {
+    name?: string;
+    version?: string;
+    description?: string;
+    require?: Record<string, string>;
+    "require-dev"?: Record<string, string>;
+  };
+  try {
+    doc = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const deps: Record<string, string> = {};
+  for (const [n, v] of Object.entries({ ...doc.require, ...doc["require-dev"] }))
+    if (n.includes("/")) deps[n] = typeof v === "string" ? v : "*";
+  return {
+    file,
+    ecosystem: "php",
+    packageManager: "composer",
+    name: doc.name ?? null,
+    version: doc.version ?? null,
+    description: doc.description ?? null,
+    dependencies: deps,
+  };
+}
+
 /** Parses a manifest by file name; null when it is not one (or is a lock/sum file). */
 export function parseManifest(path: string, text: string): ManifestInfo | null {
   const base = posix.basename(path);
@@ -118,5 +198,7 @@ export function parseManifest(path: string, text: string): ManifestInfo | null {
   if (base === "Gemfile") return parseGemfile(path, text);
   if (base === "pom.xml") return parsePom(path, text);
   if (base === "build.gradle" || base === "build.gradle.kts") return parseGradle(path, text);
+  if (base === "Cargo.toml") return parseCargoToml(path, text);
+  if (base === "composer.json") return parseComposerJson(path, text);
   return null;
 }

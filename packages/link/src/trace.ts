@@ -100,7 +100,7 @@ export function normalizeMessage(text: string): string {
     .trim();
 }
 
-/** A route pattern matches a request path: `[id]`, `:id` and `{id}` match one segment. */
+/** A route pattern matches a request path: `[id]`, `:id`, `{id}` and `<id>` match one segment. */
 export function routeMatches(pattern: string, path: string): boolean {
   const a = pattern.replace(/\/$/, "").split("/");
   const b = path.replace(/\/$/, "").split("/");
@@ -111,7 +111,7 @@ export function routeMatches(pattern: string, path: string): boolean {
     );
   }
   if (a.length !== b.length) return false;
-  return a.every((s, i) => s === b[i] || /^(\[.+\]|:.+|\{.+\})$/.test(s));
+  return a.every((s, i) => s === b[i] || /^(\[.+\]|:.+|\{.+\}|<.+>)$/.test(s));
 }
 
 function siteOf(n: LinkNode, graph: LinkGraph): TraceSite {

@@ -1,6 +1,6 @@
 import { posix } from "node:path";
 
-export type Ecosystem = "npm" | "PyPI" | "Go" | "RubyGems" | "Maven";
+export type Ecosystem = "npm" | "PyPI" | "Go" | "RubyGems" | "Maven" | "crates.io" | "Packagist";
 
 export interface LockedPackage {
   ecosystem: Ecosystem;
@@ -37,6 +37,9 @@ export const LOCKFILES = [
   "pom.xml",
   "build.gradle",
   "build.gradle.kts",
+  // ADR 0028.
+  "Cargo.lock",
+  "composer.lock",
 ] as const;
 
 /** Lockfiles that pin direct dependencies only, so transitive ones go unaudited. */
@@ -304,6 +307,80 @@ function gemfileLock(file: string, text: string): LockfileParse {
   return out;
 }
 
+/**
+ * Cargo.lock: `[[package]]` blocks. Packages without a `source` are the workspace's own crates;
+ * a git source is not a crates.io release, so it is listed as unpinned.
+ */
+function cargoLock(file: string, text: string): LockfileParse {
+  const out: LockfileParse = { file, ecosystem: "crates.io", packages: [], unpinned: [] };
+  const lines = text.split("\n");
+  let start = -1;
+  const flush = (end: number) => {
+    if (start < 0) return;
+    const block = lines.slice(start, end).join("\n");
+    const name = /^name\s*=\s*"([^"]+)"/m.exec(block)?.[1];
+    const version = /^version\s*=\s*"([^"]+)"/m.exec(block)?.[1];
+    const source = /^source\s*=\s*"([^"]+)"/m.exec(block)?.[1];
+    const nameLine = lines.slice(start, end).findIndex((l) => /^name\s*=/.test(l));
+    const locator = `${file}:${start + Math.max(nameLine, 0) + 1}`;
+    if (!name || !version || !source) return;
+    if (
+      /^(registry|sparse)\+https:\/\/(github\.com\/rust-lang\/crates\.io-index|index\.crates\.io\/)/.test(
+        source,
+      )
+    )
+      out.packages.push({
+        ecosystem: "crates.io",
+        name,
+        version,
+        locator,
+        dev: false,
+        resolved: null,
+      });
+    else
+      out.unpinned.push({ locator, text: `${name} ${version} (${source.split("+")[0]} source)` });
+  };
+  lines.forEach((l, i) => {
+    if (/^\[\[package\]\]\s*$/.test(l)) {
+      flush(i);
+      start = i + 1;
+    } else if (/^\[/.test(l)) {
+      flush(i);
+      start = -1;
+    }
+  });
+  flush(lines.length);
+  return out;
+}
+
+/** composer.lock: `packages` and `packages-dev`; a `dev-…` branch is not a release. */
+function composerLock(file: string, text: string): LockfileParse {
+  const out: LockfileParse = { file, ecosystem: "Packagist", packages: [], unpinned: [] };
+  const doc = JSON.parse(text) as Record<string, { name?: string; version?: string }[] | undefined>;
+  const lines = text.split("\n");
+  for (const key of ["packages", "packages-dev"]) {
+    for (const pkg of doc[key] ?? []) {
+      if (!pkg.name || !pkg.version) continue;
+      const at = lines.findIndex((l) => l.includes(`"name": ${JSON.stringify(pkg.name)}`));
+      const locator = at >= 0 ? `${file}:${at + 1}` : file;
+      if (/^dev-|-dev$/.test(pkg.version)) {
+        out.unpinned.push({ locator, text: `${pkg.name} ${pkg.version} (branch)` });
+        continue;
+      }
+      out.packages.push({
+        ecosystem: "Packagist",
+        name: pkg.name,
+        // Composer locks tags as written (`v4.12.0`); OSV ranges use the bare version.
+        version: pkg.version.replace(/^v/, ""),
+        locator,
+        dev: key === "packages-dev",
+        resolved: null,
+      });
+    }
+  }
+  return out;
+}
+
 /** gradle.lockfile: `group:artifact:version=configurations`. */
 function gradleLock(file: string, text: string): LockfileParse {
   const out: LockfileParse = { file, ecosystem: "Maven", packages: [], unpinned: [] };
@@ -402,6 +479,8 @@ export function parseLockfile(path: string, text: string): LockfileParse | null 
     if (base === "gradle.lockfile") return gradleLock(path, text);
     if (base === "pom.xml") return pomXml(path, text);
     if (base === "build.gradle" || base === "build.gradle.kts") return gradleBuild(path, text);
+    if (base === "Cargo.lock") return cargoLock(path, text);
+    if (base === "composer.lock") return composerLock(path, text);
     if (REQUIREMENTS.test(path)) return requirements(path, text);
   } catch {
     return null;

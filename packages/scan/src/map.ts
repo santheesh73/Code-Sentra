@@ -5,6 +5,8 @@ import {
   buildGraph,
   type CodeGraph,
   type PathAliases,
+  type PhpAutoload,
+  psr4FromComposer,
 } from "@codesentra/graph";
 import {
   detectLanguage,
@@ -64,6 +66,12 @@ const FRAMEWORKS: [string, RegExp][] = [
   ["Sinatra", /^sinatra$/],
   ["Spring Boot", /^org\.springframework\.boot:/],
   ["Jakarta REST", /^(jakarta|javax)\.ws\.rs:/],
+  ["Axum", /^axum$/],
+  ["Actix Web", /^actix-web$/],
+  ["Rocket", /^rocket$/],
+  ["Laravel", /^laravel\/(framework|lumen-framework)$/],
+  ["Slim", /^slim\/slim$/],
+  ["Symfony", /^symfony\/framework-bundle$/],
 ];
 
 const ENV_EXAMPLES = new Set([
@@ -229,12 +237,15 @@ export async function mapProject(
       dependencies: pyDeps,
     });
   }
-  // Go, Ruby and JVM manifests (ADR 0026), read as text: a Gemfile or build.gradle is code
-  // and is never evaluated.
+  // Go, Ruby, JVM (ADR 0026), Rust and PHP (ADR 0028) manifests, read as text: a Gemfile or
+  // build.gradle is code and is never evaluated.
   const manifests: ManifestInfo[] = [];
   for (const p of paths.filter((x) => MANIFEST_FILE.test(x)).sort()) {
     const m = parseManifest(p, text.get(p) ?? "");
-    if (!m) continue;
+    if (!m) {
+      if (posix.basename(p) === "composer.json") gaps.push(`${p} is not valid JSON`);
+      continue;
+    }
     manifests.push(m);
     for (const d of Object.keys(m.dependencies)) deps.add(d);
     if (!p.includes("/")) packageManager ??= m.packageManager;
@@ -314,7 +325,19 @@ export async function mapProject(
       dir: posix.dirname(m.file) === "." ? "" : posix.dirname(m.file),
       module: m.name as string,
     }));
-  const graph = buildGraph({ files: facts, allPaths, aliases, goModules });
+  const dirOf = (file: string) => (posix.dirname(file) === "." ? "" : posix.dirname(file));
+  const rustCrates = manifests
+    .filter((m) => m.ecosystem === "rust" && m.name)
+    .map((m) => ({ dir: dirOf(m.file), name: (m.name as string).replace(/-/g, "_") }));
+  const phpAutoload: PhpAutoload[] = [];
+  for (const m of manifests.filter((x) => x.ecosystem === "php")) {
+    try {
+      phpAutoload.push(...psr4FromComposer(m.file, JSON.parse(text.get(m.file) ?? "")));
+    } catch {
+      // parseComposerJson already returned null for invalid JSON.
+    }
+  }
+  const graph = buildGraph({ files: facts, allPaths, aliases, goModules, rustCrates, phpAutoload });
   const fileEvidence = new Map<string, string>();
   const testEvidence = new Map<string, string>();
   const envRead = new Map<string, { file: string; line: number; key: string }[]>();

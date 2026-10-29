@@ -139,6 +139,20 @@ const TECH = [
   "Maven",
   "Gradle",
   "Bundler",
+  // Rust and PHP (ADR 0028).
+  "Axum",
+  "Actix",
+  "Rocket",
+  "Warp",
+  "Tokio",
+  "Cargo",
+  "Slim",
+  "Symfony",
+  "Lumen",
+  "CodeIgniter",
+  "PHPUnit",
+  "Pest",
+  "Composer",
 ];
 const TECH_RE = new RegExp(
   `(?<![\\w.-])(${TECH.map((t) => t.replace(/[.]/g, "\\.")).join("|")})(?![\\w-])`,

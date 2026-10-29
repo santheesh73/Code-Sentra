@@ -202,3 +202,142 @@ export function javaRootsOf(files: Iterable<string>): string[] {
   }
   return roots.size ? [...roots].sort() : ["src", ""];
 }
+
+/** A Cargo package rooted at `dir` (where its Cargo.toml is), by its crate name (`-` → `_`). */
+export interface RustCrate {
+  dir: string;
+  name: string;
+}
+
+const RUST_ROOT_DIRS = /(^|\/)(tests|examples|benches|src\/bin)\/[^/]+\.rs$/;
+
+/** The crate a file belongs to: the one whose directory is the file's longest prefix. */
+function crateOf(file: string, crates: RustCrate[]): RustCrate | null {
+  return (
+    [...crates]
+      .sort((a, b) => b.dir.length - a.dir.length)
+      .find((c) => c.dir === "" || file.startsWith(`${c.dir}/`)) ?? null
+  );
+}
+
+/** The directory a module's children live in: `src/` for `src/lib.rs`, `src/api/` for `src/api.rs`. */
+function rustModuleDir(file: string): string {
+  const base = posix.basename(file);
+  if (["lib.rs", "main.rs", "mod.rs", "build.rs"].includes(base) || RUST_ROOT_DIRS.test(file))
+    return posix.dirname(file) === "." ? "" : posix.dirname(file);
+  return file.slice(0, -3);
+}
+
+/**
+ * Resolves `mod x;` declared in `fromFile` to `x.rs` or `x/mod.rs` in the declaring module's
+ * directory.
+ */
+export function resolveRustMod(
+  fromFile: string,
+  name: string,
+  files: ReadonlySet<string>,
+): string | null {
+  const dir = rustModuleDir(fromFile);
+  for (const c of [`${name}.rs`, `${name}/mod.rs`]) {
+    const n = norm(dir ? posix.join(dir, c) : c);
+    if (files.has(n)) return n;
+  }
+  return null;
+}
+
+/**
+ * Resolves a `use` path (`crate::store::Store`, `super::x`, `my_crate::api`) to the file of the
+ * deepest module it names; an item defined in the crate root resolves to `lib.rs`/`main.rs`.
+ * Paths into other crates (`std::`, dependencies) resolve to nothing.
+ */
+export function resolveRustUse(
+  fromFile: string,
+  path: string,
+  files: ReadonlySet<string>,
+  crates: RustCrate[],
+): string | null {
+  const segs = path.split("::");
+  const own = crateOf(fromFile, crates);
+  let base: string;
+  let crate: RustCrate | null;
+  const head = segs[0];
+  if (head === "crate" || head === "self" || head === "super") {
+    crate = own;
+    base = head === "crate" ? (own ? posix.join(own.dir, "src") : "src") : rustModuleDir(fromFile);
+    segs.shift();
+    if (head === "super") {
+      base = posix.dirname(base);
+      while (segs[0] === "super") {
+        segs.shift();
+        base = posix.dirname(base);
+      }
+    }
+  } else {
+    crate = crates.find((c) => c.name === head) ?? null;
+    if (!crate) return null;
+    base = posix.join(crate.dir, "src");
+    segs.shift();
+  }
+  base = norm(base);
+  for (let k = segs.length; k >= 1; k--) {
+    const p = posix.join(base, ...segs.slice(0, k));
+    for (const c of [`${p}.rs`, `${p}/mod.rs`]) if (files.has(norm(c))) return norm(c);
+  }
+  // The item is defined in the module itself.
+  const src = crate ? norm(posix.join(crate.dir, "src")) : "src";
+  const candidates =
+    base === src
+      ? fromFile === `${src}/main.rs`
+        ? [`${src}/main.rs`]
+        : [`${src}/lib.rs`, `${src}/main.rs`]
+      : [`${base}.rs`, `${base}/mod.rs`];
+  return candidates.find((c) => files.has(c) && c !== fromFile) ?? null;
+}
+
+/** A PSR-4 autoload entry: namespace prefix (`App\`) → directory (repo-relative). */
+export interface PhpAutoload {
+  prefix: string;
+  dir: string;
+}
+
+/** Reads `autoload` and `autoload-dev` PSR-4 maps from a parsed composer.json at `file`. */
+export function psr4FromComposer(file: string, json: unknown): PhpAutoload[] {
+  const root = posix.dirname(file) === "." ? "" : posix.dirname(file);
+  const out: PhpAutoload[] = [];
+  const doc = json as Record<string, { "psr-4"?: Record<string, string | string[]> } | undefined>;
+  for (const key of ["autoload", "autoload-dev"])
+    for (const [prefix, dirs] of Object.entries(doc?.[key]?.["psr-4"] ?? {}))
+      for (const d of Array.isArray(dirs) ? dirs : [dirs])
+        if (typeof d === "string")
+          out.push({
+            prefix: prefix.replace(/^\\/, ""),
+            dir: norm(posix.join(root || ".", d)).replace(/\/$/, ""),
+          });
+  return out;
+}
+
+/** Resolves a `use`d PHP class (`App\Store\Notes`) through the PSR-4 map (longest prefix first). */
+export function resolvePhpUse(
+  name: string,
+  files: ReadonlySet<string>,
+  autoload: PhpAutoload[],
+): string | null {
+  const cls = name.replace(/^\\/, "");
+  for (const { prefix, dir } of [...autoload].sort((a, b) => b.prefix.length - a.prefix.length)) {
+    if (!cls.startsWith(prefix)) continue;
+    const rel = `${cls.slice(prefix.length).replace(/\\/g, "/")}.php`;
+    const p = norm(dir && dir !== "." ? posix.join(dir, rel) : rel);
+    if (files.has(p)) return p;
+  }
+  return null;
+}
+
+/** Resolves a `require`/`include` path against the requiring file's directory. */
+export function resolvePhpRequire(
+  fromFile: string,
+  spec: string,
+  files: ReadonlySet<string>,
+): string | null {
+  const p = norm(posix.join(posix.dirname(fromFile), spec));
+  return !p.startsWith("..") && files.has(p) ? p : null;
+}

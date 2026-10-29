@@ -13,11 +13,16 @@ import {
   javaRootsOf,
   nextRouteOf,
   parseGitLog,
+  psr4FromComposer,
   resolveGoImport,
   resolveJavaImport,
   resolveJsImport,
+  resolvePhpRequire,
+  resolvePhpUse,
   resolvePyImport,
   resolveRubyRequire,
+  resolveRustMod,
+  resolveRustUse,
 } from "./index.js";
 
 const REPOS = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../fixtures/repos");
@@ -288,5 +293,99 @@ describe("Go, Ruby and Java resolution", () => {
       "file:internal/cart/cart_test.go -> file:internal/cart/total.go",
       "file:src/test/java/com/x/shop/ItemTest.java -> file:src/main/java/com/x/shop/Item.java",
     ]);
+  });
+});
+
+describe("Rust and PHP resolution", () => {
+  const rust = new Set([
+    "Cargo.toml",
+    "src/lib.rs",
+    "src/main.rs",
+    "src/store.rs",
+    "src/api/mod.rs",
+    "src/api/notes.rs",
+    "tests/notes.rs",
+    "tests/common/mod.rs",
+  ]);
+  const crates = [{ dir: "", name: "notes_api" }];
+
+  it("resolves mod declarations next to the declaring module", () => {
+    expect(resolveRustMod("src/lib.rs", "store", rust)).toBe("src/store.rs");
+    expect(resolveRustMod("src/lib.rs", "api", rust)).toBe("src/api/mod.rs");
+    expect(resolveRustMod("src/api/mod.rs", "notes", rust)).toBe("src/api/notes.rs");
+    expect(resolveRustMod("tests/notes.rs", "common", rust)).toBe("tests/common/mod.rs");
+    expect(resolveRustMod("src/lib.rs", "missing", rust)).toBeNull();
+  });
+
+  it("resolves use paths to the deepest module file, or the crate root", () => {
+    expect(resolveRustUse("src/api/notes.rs", "crate::store::Store", rust, crates)).toBe(
+      "src/store.rs",
+    );
+    expect(resolveRustUse("src/api/notes.rs", "super::helpers", rust, crates)).toBe(
+      "src/api/mod.rs",
+    );
+    expect(resolveRustUse("src/api/mod.rs", "self::notes::list", rust, crates)).toBe(
+      "src/api/notes.rs",
+    );
+    expect(resolveRustUse("tests/notes.rs", "notes_api::api::notes", rust, crates)).toBe(
+      "src/api/notes.rs",
+    );
+    expect(resolveRustUse("tests/notes.rs", "notes_api::Config", rust, crates)).toBe("src/lib.rs");
+    // An item in main.rs, used from main.rs itself, is no edge.
+    expect(resolveRustUse("src/main.rs", "crate::Config", rust, crates)).toBeNull();
+    expect(resolveRustUse("src/lib.rs", "std::env", rust, crates)).toBeNull();
+    expect(resolveRustUse("src/lib.rs", "axum::Router", rust, crates)).toBeNull();
+  });
+
+  it("resolves PHP classes through PSR-4 and requires against the file", () => {
+    const php = new Set([
+      "composer.json",
+      "src/Store/Notes.php",
+      "src/App.php",
+      "tests/NotesTest.php",
+    ]);
+    const autoload = psr4FromComposer("composer.json", {
+      autoload: { "psr-4": { "App\\": "src/" } },
+      "autoload-dev": { "psr-4": { "App\\Tests\\": ["tests/"] } },
+    });
+    expect(autoload).toEqual([
+      { prefix: "App\\", dir: "src" },
+      { prefix: "App\\Tests\\", dir: "tests" },
+    ]);
+    expect(resolvePhpUse("App\\Store\\Notes", php, autoload)).toBe("src/Store/Notes.php");
+    expect(resolvePhpUse("\\App\\Tests\\NotesTest", php, autoload)).toBe("tests/NotesTest.php");
+    expect(resolvePhpUse("Slim\\App", php, autoload)).toBeNull();
+    expect(resolvePhpRequire("src/App.php", "Store/Notes.php", php)).toBe("src/Store/Notes.php");
+    expect(resolvePhpRequire("src/App.php", "../vendor/autoload.php", php)).toBeNull();
+  });
+
+  it("draws edges for mod, use and PHP imports, and flags a missing mod", async () => {
+    const lib = await parseFile("src/lib.rs", "mod store;\nmod gone;\nuse crate::store::Store;\n");
+    const test = await parseFile(
+      "tests/notes.rs",
+      "use notes_api::store::Store;\n#[test]\nfn t() {}\n",
+    );
+    const phpTest = await parseFile(
+      "tests/NotesTest.php",
+      "<?php\nuse App\\Store\\Notes;\nrequire __DIR__ . '/../vendor/autoload.php';\n",
+    );
+    const g = buildGraph({
+      files: [lib, test, phpTest] as FileFacts[],
+      allPaths: [...rust, "src/Store/Notes.php", "tests/NotesTest.php"],
+      rustCrates: crates,
+      phpAutoload: [{ prefix: "App\\", dir: "src" }],
+    });
+    expect(
+      g.edges
+        .filter((e) => e.kind === "imports" || e.kind === "tests")
+        .map((e) => `${e.kind} ${e.from} -> ${e.to}`),
+    ).toEqual([
+      "imports file:src/lib.rs -> file:src/store.rs",
+      "imports file:tests/notes.rs -> file:src/store.rs",
+      "imports file:tests/NotesTest.php -> file:src/Store/Notes.php",
+      "tests file:tests/notes.rs -> file:src/store.rs",
+      "tests file:tests/NotesTest.php -> file:src/Store/Notes.php",
+    ]);
+    expect(g.unresolved).toEqual([{ from: "src/lib.rs", specifier: "gone", line: 2 }]);
   });
 });

@@ -1,9 +1,28 @@
 import { chmod, cp, lstat, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { RunResult, Sandbox } from "@codesentra/sandbox";
+import { materializeFetchDir, planFetchDir } from "./fetch-dir.js";
 import { type ErrorLine, parseErrorLines, parseTestOutput, type TestSummary } from "./parse.js";
 import { PROBES, type ProbeName, type ProbePlan } from "./plan.js";
 import { checkLockSources, LOCKFILES_BY_MANAGER } from "./sources/index.js";
+
+/** The download cache inside the work tree, copied from the manifest-only fetch (ADR 0030). */
+const NODE_CACHE_DIR = ".cs-pm-cache";
+
+/** Snapshot paths, relative, for building the manifest-only download directory. */
+async function listFiles(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  const walk = async (d: string, rel: string) => {
+    for (const e of await readdir(d, { withFileTypes: true })) {
+      if (e.name === ".git") continue;
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) await walk(join(d, e.name), r);
+      else if (e.isFile()) out.push(r);
+    }
+  };
+  await walk(dir, "");
+  return out;
+}
 
 export type ProbeStatus = "pass" | "fail" | "timeout" | "not_applicable" | "skipped";
 
@@ -144,13 +163,30 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
     fetch.reason = refused;
     blocked = `dependencies were not installed: ${refused}`;
   } else if (plan.fetch) {
+    // A manifest-only download runs in a directory holding only the dependency manifests and
+    // lockfiles (ADR 0030): no project script or hook is present, so none can run with the
+    // network. Its cache is then copied into the work tree for the offline install.
+    let fetchWorkdir = work;
+    if (plan.fetch.manifestOnly) {
+      fetchWorkdir = join(opts.scratchDir, "fetch");
+      const paths = await listFiles(opts.sourceDir);
+      await materializeFetchDir(opts.sourceDir, fetchWorkdir, planFetchDir(paths));
+      await openUp(fetchWorkdir);
+    }
     const r = await sandbox.run({
       image,
-      workdir: work,
+      workdir: fetchWorkdir,
       command: plan.fetch.command,
       network: "fetch",
+      env: plan.fetch.env,
       limits: { timeoutMs: 10 * 60_000 },
     });
+    if (plan.fetch.manifestOnly && r.exitCode === 0) {
+      await cp(join(fetchWorkdir, NODE_CACHE_DIR), join(work, NODE_CACHE_DIR), {
+        recursive: true,
+      }).catch(() => {});
+      await openUp(work);
+    }
     fetch.durationMs = r.durationMs;
     fetch.excerpt = tail(r);
     fetch.reason = plan.fetch.reason;
@@ -196,6 +232,7 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
       workdir: work,
       command: s.command as string[],
       network: "none",
+      env: s.env,
       limits: { timeoutMs: Math.min(s.timeoutMs, left) },
     });
     const out = `${r.stdout}\n${r.stderr}`;

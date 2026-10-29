@@ -154,10 +154,12 @@ describe("test output parsing", () => {
 });
 
 describe("probe planning", () => {
-  it("ts-taskboard: npm ci with scripts off, then rebuild, build, tsc, no lint, npm test", () => {
+  it("ts-taskboard: manifest-only npm download with scripts off, then offline install, build, tsc, no lint, test", () => {
     const p = planProbes(viewOf(repoDir("ts-taskboard")));
     expect(p.packageManager).toBe("npm");
     expect(p.refused).toBeNull();
+    // The download runs in a manifest-only directory with scripts off (ADR 0030).
+    expect(p.fetch?.manifestOnly).toBe(true);
     expect(p.fetch?.command).toContain("--ignore-scripts");
     expect(
       p.steps.map(
@@ -165,7 +167,7 @@ describe("probe planning", () => {
           `${s.name}:${s.command ? s.command.join(" ") : `[${s.skip?.kind}] ${s.skip?.reason}`}`,
       ),
     ).toEqual([
-      "install:npm rebuild",
+      "install:npm ci --offline --no-audit --no-fund --cache=/work/.cs-pm-cache",
       "build:npm run --silent build",
       "typecheck:npx --no-install tsc --noEmit -p tsconfig.json",
       "lint:[gap] no lint script in package.json",

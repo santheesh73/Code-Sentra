@@ -1,4 +1,5 @@
 import { parseLockfile } from "../audit/lockfiles.js";
+import { selectNodeManager } from "./node.js";
 
 export type ProbeName = "install" | "build" | "typecheck" | "lint" | "tests";
 export const PROBES: readonly ProbeName[] = ["install", "build", "typecheck", "lint", "tests"];
@@ -10,6 +11,8 @@ export interface ProbeStep {
   /** Why the step does not run. `not_applicable` steps are not gaps (nothing to measure). */
   skip: { kind: "not_applicable" | "gap"; reason: string } | null;
   timeoutMs: number;
+  /** Explicit, non-secret environment for the step (e.g. a package manager's config). */
+  env?: Record<string, string>;
   /**
    * Failures that are the sandbox's limit, not the project's (a missing system library, a pinned
    * runtime the sandbox lacks, an artifact the offline cache missed): when the output
@@ -32,7 +35,18 @@ export interface ProbePlan {
     | "composer"
     | null;
   /** Dependency download (network on, project code never runs); null when nothing to fetch. */
-  fetch: { command: string[]; reason: string } | null;
+  fetch: {
+    command: string[];
+    reason: string;
+    /** Explicit, non-secret environment for the download. */
+    env?: Record<string, string>;
+    /**
+     * Run the download in a directory holding only the dependency manifests and lockfiles,
+     * not the repository, so no project script or hook takes part (ADR 0030). The download's
+     * `.cs-pm-cache` is then copied into the work tree for the offline install.
+     */
+    manifestOnly?: boolean;
+  } | null;
   /** Files rewritten in the scratch copy before fetch (sanitized requirements, disabled .npmrc). */
   prepare: { rename?: [string, string]; write?: [string, string] }[];
   steps: ProbeStep[];
@@ -45,7 +59,6 @@ export interface ProjectView {
   read(path: string): string | null;
 }
 
-const NPM_REGISTRY = "https://registry.npmjs.org/";
 const PYPI_INDEX = "https://pypi.org/simple";
 const MIN = 60_000;
 
@@ -60,11 +73,17 @@ const skip = (
   skip: { kind, reason },
   timeoutMs,
 });
-const step = (name: ProbeName, command: string[], timeoutMs: number): ProbeStep => ({
+const step = (
+  name: ProbeName,
+  command: string[],
+  timeoutMs: number,
+  env?: Record<string, string>,
+): ProbeStep => ({
   name,
   command,
   skip: null,
   timeoutMs,
+  ...(env ? { env } : {}),
 });
 const sh = (script: string) => ["sh", "-c", script];
 
@@ -113,45 +132,14 @@ function nodePlan(view: ProjectView): ProbePlan {
     steps: [],
     refused: null,
   };
-  if (view.files.has(".npmrc"))
-    plan.prepare.push({ rename: [".npmrc", ".npmrc.codesentra-disabled"] });
+  // A project config or hook that the offline install or the probes would otherwise run is
+  // set aside in the work tree; the download never sees them (manifest-only directory).
+  for (const f of [".npmrc", ".pnpmfile.cjs", ".yarnrc", ".yarnrc.yml", ".yarn"])
+    if (view.files.has(f) || [...view.files].some((p) => p.startsWith(`${f}/`)))
+      plan.prepare.push({ rename: [f, `${f}.codesentra-disabled`] });
 
-  const env = "export COREPACK_HOME=/work/.cs-corepack COREPACK_ENABLE_DOWNLOAD_PROMPT=0;";
-  let run: (script: string) => string[];
-  if (view.files.has("package-lock.json") || view.files.has("npm-shrinkwrap.json")) {
-    plan.packageManager = "npm";
-    const lock = view.files.has("package-lock.json") ? "package-lock.json" : "npm-shrinkwrap.json";
-    plan.fetch = {
-      command: [
-        "npm",
-        "ci",
-        "--ignore-scripts",
-        "--no-audit",
-        "--no-fund",
-        `--registry=${NPM_REGISTRY}`,
-      ],
-      reason: `npm ci from ${lock} with install scripts disabled`,
-    };
-    run = (s) => ["npm", "run", "--silent", s];
-  } else if (view.files.has("pnpm-lock.yaml")) {
-    plan.packageManager = "pnpm";
-    plan.fetch = {
-      command: sh(
-        `${env} corepack pnpm install --frozen-lockfile --ignore-scripts --registry=${NPM_REGISTRY}`,
-      ),
-      reason: "pnpm install --frozen-lockfile with install scripts disabled",
-    };
-    run = (s) => sh(`${env} corepack pnpm run ${s}`);
-  } else if (view.files.has("yarn.lock")) {
-    plan.packageManager = "yarn";
-    plan.fetch = {
-      command: sh(
-        `${env} corepack yarn install --frozen-lockfile --ignore-scripts --registry ${NPM_REGISTRY}`,
-      ),
-      reason: "yarn install --frozen-lockfile with install scripts disabled",
-    };
-    run = (s) => sh(`${env} corepack yarn run ${s}`);
-  } else {
+  const node = selectNodeManager(view);
+  if (!node) {
     plan.packageManager = "npm";
     const noDeps = Object.keys(deps).length === 0;
     plan.steps.push(
@@ -163,32 +151,48 @@ function nodePlan(view: ProjectView): ProbePlan {
             "no lockfile, so dependencies were not installed (installs must be reproducible)",
           ),
     );
-    run = (s) => ["npm", "run", "--silent", s];
-    if (!noDeps) {
-      for (const name of ["build", "typecheck", "lint", "tests"] as const)
-        plan.steps.push(skip(name, "gap", "dependencies were not installed"));
-      return plan;
-    }
+    for (const name of noDeps ? [] : (["build", "typecheck", "lint", "tests"] as const))
+      plan.steps.push(skip(name, "gap", "dependencies were not installed"));
+    if (!noDeps) return plan;
+    return addNodeProbeSteps(plan, view, scripts, deps, (s) => ({
+      argv: ["npm", "run", "--silent", s],
+      env: {},
+    }));
   }
-  if (plan.fetch) {
-    // Install scripts run here, offline, inside the sandbox.
-    plan.steps.push(
-      step(
-        "install",
-        plan.packageManager === "npm" ? ["npm", "rebuild"] : run("--if-present postinstall"),
-        10 * MIN,
-      ),
-    );
-  }
+
+  plan.packageManager = node.manager === "yarn-berry" ? "yarn" : node.manager;
+  plan.fetch = {
+    command: node.fetch.argv,
+    env: node.fetch.env,
+    reason: `download the ${node.lockfile} dependencies with CodeSentra's pinned ${node.manager}, scripts and hooks disabled, then install offline`,
+    manifestOnly: true,
+  };
+  // The offline install runs project install scripts, with the network off, from the cache.
+  plan.steps.push(step("install", node.install.argv, 10 * MIN, node.install.env));
+  return addNodeProbeSteps(plan, view, scripts, deps, node.run);
+}
+
+/** The build/typecheck/lint/tests steps a Node project runs, with the manager's env. */
+function addNodeProbeSteps(
+  plan: ProbePlan,
+  view: ProjectView,
+  scripts: Record<string, string>,
+  deps: Record<string, string>,
+  run: (script: string) => { argv: string[]; env: Record<string, string> },
+): ProbePlan {
+  const asStep = (name: ProbeName, script: string, timeoutMs: number) => {
+    const { argv, env } = run(script);
+    return step(name, argv, timeoutMs, env);
+  };
   plan.steps.push(
     scripts.build
-      ? step("build", run("build"), 10 * MIN)
+      ? asStep("build", "build", 10 * MIN)
       : skip("build", "not_applicable", "package.json has no build script"),
   );
   const hasTs = view.files.has("tsconfig.json") && "typescript" in deps;
   plan.steps.push(
     scripts.typecheck
-      ? step("typecheck", run("typecheck"), 5 * MIN)
+      ? asStep("typecheck", "typecheck", 5 * MIN)
       : hasTs
         ? step(
             "typecheck",
@@ -205,13 +209,13 @@ function nodePlan(view: ProjectView): ProbePlan {
   );
   plan.steps.push(
     scripts.lint
-      ? step("lint", run("lint"), 5 * MIN)
+      ? asStep("lint", "lint", 5 * MIN)
       : skip("lint", "gap", "no lint script in package.json"),
   );
   const test = scripts.test;
   plan.steps.push(
     test && !/no test specified/.test(test)
-      ? step("tests", run("test"), 10 * MIN)
+      ? asStep("tests", "test", 10 * MIN)
       : skip("tests", "gap", "no test script in package.json"),
   );
   return plan;

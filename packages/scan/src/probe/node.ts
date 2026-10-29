@@ -87,7 +87,14 @@ function pnpmPlan(binary: string): NodePlan {
     "--ignore-pnpmfile",
     `--store-dir=${store}`,
   ];
-  const env = { HOME: "/tmp", npm_config_update_notifier: "false" };
+  // Stop pnpm 9+ from honouring a project `packageManager` field, which would otherwise make
+  // it download and run that pnpm version instead of our pinned binary (ADR 0030). Ignored by
+  // pnpm 7/8, which never read the field.
+  const env = {
+    HOME: "/tmp",
+    npm_config_update_notifier: "false",
+    npm_config_manage_package_manager_versions: "false",
+  };
   return {
     manager: "pnpm",
     lockfile: "pnpm-lock.yaml",

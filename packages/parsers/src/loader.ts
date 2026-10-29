@@ -9,6 +9,9 @@ const WASM: Record<ParserLanguage, string> = {
   tsx: "tree-sitter-typescript/tree-sitter-tsx.wasm",
   javascript: "tree-sitter-javascript/tree-sitter-javascript.wasm",
   python: "tree-sitter-python/tree-sitter-python.wasm",
+  go: "tree-sitter-go/tree-sitter-go.wasm",
+  ruby: "tree-sitter-ruby/tree-sitter-ruby.wasm",
+  java: "tree-sitter-java/tree-sitter-java.wasm",
 };
 
 let init: Promise<void> | null = null;

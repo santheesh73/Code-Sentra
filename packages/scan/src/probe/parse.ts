@@ -4,7 +4,7 @@ const stripAnsi = (s: string) => s.replace(ANSI, "");
 
 /** Parsed test run: counts and failing test names (as the runner printed them). */
 export interface TestSummary {
-  runner: "node:test" | "pytest" | "vitest" | "jest" | "mocha" | "unknown";
+  runner: "node:test" | "pytest" | "vitest" | "jest" | "mocha" | "go" | "unknown";
   pass: number;
   fail: number;
   skip: number;
@@ -20,8 +20,51 @@ const num = (re: RegExp, s: string) => {
  * Reads pass/fail/skip counts from a test runner's output. Returns null when no known
  * summary is found, so an unparseable run is reported as unknown, never as passing.
  */
+/**
+ * `go test -json`: one event per line. Top-level tests are counted (subtests roll up into
+ * their parent); a package that fails with no failing test (it did not build) counts as one
+ * failure, so it is never read as passing.
+ */
+function parseGoTestJson(s: string): TestSummary | null {
+  const final = new Map<string, string>();
+  const pkgFailed = new Set<string>();
+  const pkgWithFailures = new Set<string>();
+  let events = 0;
+  for (const line of s.split("\n")) {
+    if (!line.startsWith("{")) continue;
+    let e: { Action?: string; Test?: string; Package?: string };
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!e.Action) continue;
+    events++;
+    if (!["pass", "fail", "skip"].includes(e.Action)) continue;
+    if (!e.Test) {
+      if (e.Action === "fail" && e.Package) pkgFailed.add(e.Package);
+      continue;
+    }
+    if (e.Test.includes("/")) continue;
+    final.set(`${e.Package}\u0000${e.Test}`, e.Action);
+    if (e.Action === "fail" && e.Package) pkgWithFailures.add(e.Package);
+  }
+  if (!events) return null;
+  const tally = (a: string) => [...final.values()].filter((v) => v === a).length;
+  return {
+    runner: "go",
+    pass: tally("pass"),
+    fail: tally("fail") + [...pkgFailed].filter((p) => !pkgWithFailures.has(p)).length,
+    skip: tally("skip"),
+    failing: [...final.entries()]
+      .filter(([, v]) => v === "fail")
+      .map(([k]) => k.split("\u0000")[1] as string),
+  };
+}
+
 export function parseTestOutput(output: string): TestSummary | null {
   const s = stripAnsi(output);
+  if (/^\{"Time":"[^"]+","Action":/m.test(s)) return parseGoTestJson(s);
   // node:test (TAP reporter, the default without a TTY): "# pass 2", "not ok 3 - name".
   if (/^# (tests|pass) \d+/m.test(s)) {
     return {
@@ -116,7 +159,13 @@ export function parseErrorLines(output: string, max = 20): ErrorLine[] {
   const out: ErrorLine[] = [];
   const push = (file: string, line: string, message: string) => {
     const f = file.replace(/^\.\//, "").replace(/^\/work\//, "");
-    if (f.startsWith("/") || f.includes("node_modules/") || f.includes(".cs-venv/")) return;
+    if (
+      f.startsWith("/") ||
+      f.includes("node_modules/") ||
+      f.includes(".cs-venv/") ||
+      f.startsWith(".cs-gomod/")
+    )
+      return;
     if (
       out.length < max &&
       !out.some((e) => e.file === f && e.line === Number(line) && e.message === message)
@@ -128,6 +177,9 @@ export function parseErrorLines(output: string, max = 20): ErrorLine[] {
   for (const m of s.matchAll(/^(\S+?\.[a-z]{1,5}):(\d+):\d+ - (error .+)$/gm))
     push(m[1] as string, m[2] as string, m[3] as string);
   for (const m of s.matchAll(/^(\S+?\.py):(\d+):(?:\d+:)? (.+)$/gm))
+    push(m[1] as string, m[2] as string, m[3] as string);
+  // Go compiler and vet: "./cart.go:12:5: undefined: x" (vet may prefix "vet: ").
+  for (const m of s.matchAll(/^(?:vet: )?(\S+?\.go):(\d+):(?:\d+:)? (.+)$/gm))
     push(m[1] as string, m[2] as string, m[3] as string);
   for (const m of s.matchAll(/File "([^"]+\.py)", line (\d+)/g))
     push(m[1] as string, m[2] as string, "traceback");

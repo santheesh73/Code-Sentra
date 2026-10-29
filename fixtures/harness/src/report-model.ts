@@ -21,11 +21,19 @@ interface BundleItem {
 export const FIXTURE_MODEL_NAME = "codesentra-fixture-model (test only)";
 
 function fixtureOf(bundle: BundleItem[]): RepoExpectation {
+  // The project's name: a manifest's `name` (a Maven `group:artifact` counts by its
+  // artifact), else the README's title, for projects whose manifest has none (a Gemfile).
   const names = new Set(
     bundle
       .filter((b) => b.kind === "manifest")
-      .flatMap((b) => [...b.summary.matchAll(/"name":"([^"]+)"/g)].map((m) => m[1] as string)),
+      .flatMap((b) => [...b.summary.matchAll(/"name":"([^"]+)"/g)].map((m) => m[1] as string))
+      .flatMap((n) => [n, n.split(":").at(-1) as string]),
   );
+  for (const b of bundle)
+    if (b.kind === "doc_excerpt" && /^README\.md:1$/i.test(b.locator)) {
+      const title = /"text":"#\s+([^"]+)"/.exec(b.summary)?.[1];
+      if (title) names.add(title.trim());
+    }
   const repo = loadFixtureRepos().find((r) => names.has(r.expected.name));
   if (!repo) throw new Error("the fixture model only knows the fixture repos");
   return repo.expected;
@@ -93,12 +101,16 @@ export function fixtureReportModel() {
       const claim = (text: string, evidence_ids: string[]) => ({ text, evidence_ids });
       return {
         draft: {
-          summary: [
-            claim(
-              `${exp.name} is ${/"description":"([^"]+)"/.exec(b.find((x) => x.id === manifest)?.summary ?? "")?.[1] ?? "a project"}.`,
-              ids(manifest),
-            ),
-          ],
+          // Only a manifest that describes the project supports a summary (go.mod and a
+          // Gemfile do not).
+          summary: manifest
+            ? [
+                claim(
+                  `${exp.name} is ${/"description":"([^"]+)"/.exec(b.find((x) => x.id === manifest)?.summary ?? "")?.[1] ?? "a project"}.`,
+                  ids(manifest),
+                ),
+              ]
+            : [],
           value: [
             claim(
               `It is built with ${exp.frameworks[0]}.`,
@@ -110,10 +122,14 @@ export function fixtureReportModel() {
             ...(envRead && envEv
               ? [claim(`${envRead.name} is read in ${fileOf(envRead.locator)}.`, ids(envEv))]
               : []),
-            claim(
-              `${t.pass} of ${t.pass + t.fail + t.skip} tests pass and ${t.fail} fails.`,
-              ids(tests),
-            ),
+            ...(t
+              ? [
+                  claim(
+                    `${t.pass} of ${t.pass + t.fail + t.skip} tests pass and ${t.fail} fails.`,
+                    ids(tests),
+                  ),
+                ]
+              : []),
             // Every forbidden claim, citing as much as possible: the verifier must drop all.
             ...exp.forbiddenClaims.map((c) => claim(c.text, everything)),
           ],

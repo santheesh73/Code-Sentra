@@ -1,0 +1,120 @@
+{
+  "name": "go-shop-api",
+  "description": "Go shop API on chi. Verified by hand in the sandbox image (Go 1.27.2, modules from proxy.golang.org): go build and go vet pass; go test gives 3 pass, 1 fail (discount codes are not applied), 1 skip. github.com/go-chi/chi/v5 v5.2.1 is affected by GHSA-vrw8-fxc6-2r93 / GO-2025-3770 (fixed in 5.2.2).",
+  "snapshot": { "kind": "zip", "hasHistory": false },
+  "languages": ["Go"],
+  "frameworks": ["Chi"],
+  "packageManager": "go",
+  "routes": [
+    { "method": "GET", "path": "/products", "locator": "cmd/shop/main.go:16" },
+    { "method": "GET", "path": "/products/{id}", "locator": "cmd/shop/main.go:17" },
+    { "method": "POST", "path": "/checkout", "locator": "cmd/shop/main.go:18" },
+    { "method": "GET", "path": "/orders/export.csv", "locator": "cmd/shop/main.go:19" }
+  ],
+  "envVars": {
+    "read": [
+      { "name": "SHOP_ADDR", "locator": "cmd/shop/main.go:21" },
+      { "name": "SHOP_API_KEY", "locator": "internal/orders/orders.go:27" }
+    ],
+    "documented": ["REDIS_URL", "SHOP_ADDR"]
+  },
+  "probes": {
+    "install": "pass",
+    "build": "pass",
+    "tests": { "pass": 3, "fail": 1, "skip": 1 }
+  },
+  "features": [
+    {
+      "name": "List products",
+      "status": "complete",
+      "implementation": ["cmd/shop/main.go:16", "internal/catalog/catalog.go:37"],
+      "tests": ["internal/catalog/catalog_test.go:5"]
+    },
+    {
+      "name": "Product details",
+      "status": "complete",
+      "implementation": ["cmd/shop/main.go:17", "internal/catalog/catalog.go:42"],
+      "tests": ["internal/catalog/catalog_test.go:11"]
+    },
+    {
+      "name": "Checkout with discount codes",
+      "status": "partial",
+      "implementation": ["cmd/shop/main.go:18", "internal/orders/orders.go:26"],
+      "tests": ["internal/orders/orders_test.go:11"],
+      "why": "TODO marker in internal/orders/orders.go and the discount test fails"
+    },
+    {
+      "name": "Export orders as CSV",
+      "status": "partial",
+      "implementation": ["cmd/shop/main.go:19", "internal/orders/orders.go:40"],
+      "tests": ["internal/orders/orders_test.go:17"],
+      "why": "exportOrders panics with \"not implemented\" and its test is skipped"
+    },
+    {
+      "name": "Gift cards",
+      "status": "planned",
+      "intent": ["README.md:14"],
+      "why": "README roadmap only; no implementation"
+    }
+  ],
+  "findings": [
+    {
+      "code": "TESTS_FAILING",
+      "locator": "internal/orders/orders_test.go:11",
+      "lineContains": "func TestTotalAppliesDiscount"
+    },
+    {
+      "code": "SKIPPED_TESTS",
+      "locator": "internal/orders/orders_test.go:18",
+      "lineContains": "t.Skip("
+    },
+    {
+      "code": "TODO_MARKER",
+      "locator": "internal/orders/orders.go:20",
+      "lineContains": "TODO: apply discount codes"
+    },
+    {
+      "code": "STUB_IMPLEMENTATION",
+      "locator": "internal/orders/orders.go:46",
+      "lineContains": "panic(\"not implemented\")"
+    },
+    {
+      "code": "ENV_VAR_UNDOCUMENTED",
+      "locator": "internal/orders/orders.go:27",
+      "lineContains": "os.Getenv(\"SHOP_API_KEY\")",
+      "envVar": "SHOP_API_KEY"
+    },
+    {
+      "code": "ENV_VAR_UNUSED",
+      "locator": ".env.example:3",
+      "lineContains": "REDIS_URL=",
+      "envVar": "REDIS_URL"
+    },
+    {
+      "code": "SECRET_EXPOSED",
+      "locator": "config/defaults.go:5",
+      "lineContains": "AKIACODESENTRAFIXGO3",
+      "secretType": "aws-access-token",
+      "storedPreviewMustNotContain": "AKIACODESENTRAFIXGO3"
+    },
+    {
+      "code": "VULNERABLE_DEPENDENCY",
+      "locator": "go.mod:5",
+      "lineContains": "github.com/go-chi/chi/v5 v5.2.1",
+      "ecosystem": "Go",
+      "package": "github.com/go-chi/chi/v5",
+      "version": "v5.2.1",
+      "mustIncludeAdvisory": "GHSA-vrw8-fxc6-2r93"
+    }
+  ],
+  "absentFindings": ["BUILD_FAILED", "NO_TESTS", "TYPECHECK_ERRORS", "LINT_ERRORS"],
+  "forbiddenClaims": [
+    { "text": "All 5 tests pass.", "reason": "one fails, one is skipped" },
+    { "text": "Gift cards can be redeemed at checkout.", "reason": "planned only" },
+    { "text": "CSV export is complete.", "reason": "exportOrders panics with not implemented" },
+    { "text": "Discount codes are applied at checkout.", "reason": "TODO; the discount test fails" },
+    { "text": "The API uses Gin.", "reason": "it uses chi" },
+    { "text": "Orders are signed with SHOP_SIGNING_KEY.", "reason": "no such variable" },
+    { "text": "Dependencies have no known vulnerabilities.", "reason": "chi v5.2.1 has advisories" }
+  ]
+}

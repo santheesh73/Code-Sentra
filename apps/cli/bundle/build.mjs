@@ -15,6 +15,9 @@ const wasm = {
   tsx: "tree-sitter-typescript/tree-sitter-tsx.wasm",
   javascript: "tree-sitter-javascript/tree-sitter-javascript.wasm",
   python: "tree-sitter-python/tree-sitter-python.wasm",
+  go: "tree-sitter-go/tree-sitter-go.wasm",
+  ruby: "tree-sitter-ruby/tree-sitter-ruby.wasm",
+  java: "tree-sitter-java/tree-sitter-java.wasm",
 };
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const b64 = (spec) => readFileSync(parsers.resolve(spec)).toString("base64");
@@ -29,6 +32,9 @@ useEmbeddedWasm({
     tsx: bytes(${JSON.stringify(b64(wasm.tsx))}),
     javascript: bytes(${JSON.stringify(b64(wasm.javascript))}),
     python: bytes(${JSON.stringify(b64(wasm.python))}),
+    go: bytes(${JSON.stringify(b64(wasm.go))}),
+    ruby: bytes(${JSON.stringify(b64(wasm.ruby))}),
+    java: bytes(${JSON.stringify(b64(wasm.java))}),
   },
 });
 await import("./dist/main.js");

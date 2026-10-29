@@ -156,8 +156,17 @@ for (const repo of loadFixtureRepos()) {
 
     // The report fits a phone screen.
     await page.setViewportSize({ width: 375, height: 812 });
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    ).toBe(true);
+    // The elements that stick out, innermost first, so a failure names what to fix.
+    const overflowing = await page.evaluate(() =>
+      [...document.querySelectorAll("body *")]
+        .filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1)
+        .filter(
+          (el) =>
+            ![...el.children].some((c) => c.getBoundingClientRect().right > window.innerWidth + 1),
+        )
+        .slice(0, 5)
+        .map((el) => `${el.tagName.toLowerCase()} "${(el.textContent ?? "").trim().slice(0, 80)}"`),
+    );
+    expect(overflowing).toEqual([]);
   });
 }

@@ -4,10 +4,9 @@ import { loadFixtureRepos, readLocator } from "./repos.js";
 const repos = loadFixtureRepos();
 
 describe("fixture repos", () => {
-  it("include a TypeScript and a Python repo", () => {
+  it("include a repo for every parsed language", () => {
     const langs = repos.flatMap((r) => r.expected.languages);
-    expect(langs).toContain("TypeScript");
-    expect(langs).toContain("Python");
+    for (const l of ["TypeScript", "Python", "Go", "Ruby", "Java"]) expect(langs).toContain(l);
   });
 
   for (const { expected, repoDir } of repos) {
@@ -15,7 +14,8 @@ describe("fixture repos", () => {
       it("plants every finding category required by Section 13", () => {
         const codes = new Set(expected.findings.map((f) => f.code));
         for (const code of [
-          "TESTS_FAILING",
+          // A failing test can only be observed where tests run in the sandbox.
+          ...(expected.probes.tests ? ["TESTS_FAILING"] : []),
           "TODO_MARKER",
           "ENV_VAR_UNDOCUMENTED",
           "SECRET_EXPOSED",
@@ -82,8 +82,13 @@ describe("fixture repos", () => {
       it("probe expectations are internally consistent", () => {
         const failing = expected.findings.filter((f) => f.code === "TESTS_FAILING").length;
         const skipped = expected.findings.filter((f) => f.code === "SKIPPED_TESTS").length;
-        expect(expected.probes.tests.fail).toBe(failing);
-        expect(expected.probes.tests.skip).toBe(skipped);
+        if (expected.probes.tests) {
+          expect(expected.probes.tests.fail).toBe(failing);
+          expect(expected.probes.tests.skip).toBe(skipped);
+        } else {
+          // Not run: no failing test can be claimed; skips are read from the source.
+          expect(failing).toBe(0);
+        }
       });
     });
   }

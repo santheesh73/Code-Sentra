@@ -3,9 +3,12 @@
  * per-ecosystem dumps (https://osv-vulnerabilities.storage.googleapis.com/<eco>/all.zip,
  * the same data osv-scanner's offline mode uses), keeps every record that names a package
  * from the given lockfiles, and writes SNAPSHOT.json with what it covers and when.
+ * Ecosystems the lockfiles do not name keep their existing records and entry, so adding
+ * an ecosystem does not refresh (and shift) the others.
  *
  *   pnpm --filter @codesentra/scan build
  *   node packages/scan/scripts/build-osv-snapshot.ts fixtures/osv <lockfile>...
+ *   npx biome check --write fixtures/osv   # the repo's JSON format
  */
 import { createWriteStream } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -35,10 +38,13 @@ for (const f of lockfiles) {
   wanted.set(parsed.ecosystem, set);
 }
 
+const previous = await readFile(join(outDir, "SNAPSHOT.json"), "utf8")
+  .then((t) => JSON.parse(t) as { ecosystems?: Record<string, unknown> })
+  .catch(() => null);
 const manifest: Record<string, unknown> = {
   source: "https://osv-vulnerabilities.storage.googleapis.com",
   fetchedAt: new Date().toISOString(),
-  ecosystems: {},
+  ecosystems: { ...(previous?.ecosystems ?? {}) },
 };
 for (const [eco, names] of wanted) {
   const url = `https://osv-vulnerabilities.storage.googleapis.com/${eco}/all.zip`;
@@ -83,6 +89,7 @@ for (const [eco, names] of wanted) {
     }),
   );
   (manifest.ecosystems as Record<string, unknown>)[eco] = {
+    fetchedAt: new Date().toISOString(),
     lastModified: res.headers.get("last-modified"),
     packages: [...names].sort(),
     records: kept.sort(),

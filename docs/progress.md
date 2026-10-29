@@ -1,5 +1,86 @@
 # Progress
 
+## Phase 8 — Go, Ruby and Java (2026-10-28)
+
+The user chose more languages (ADR 0026).
+
+### Built
+
+- **Parsers** for Go, Ruby and Java, with the same facts as TypeScript and Python: imports,
+  symbols, routes, env reads, URL literals and env-built URL templates, error messages,
+  tests and their skips, TODO markers, and not-implemented stubs. The single-file CLI
+  embeds the three grammars.
+- **Map and graph:**
+  - Go imports resolve by `go.mod` module path, Ruby `require`/`require_relative` resolve
+    to files, and Java imports resolve under the source roots.
+  - Go and Java test files also count for their own package.
+  - `go.mod`, `Gemfile`, `pom.xml` and `build.gradle` are read as text, never run.
+  - New frameworks: Gin, Echo, Chi, Fiber, Rails, Sinatra, Spring Boot, Jakarta REST.
+- **Dependency audit** for Go, RubyGems and Maven, each with its own version ordering.
+- **Go probes in the sandbox:**
+  - `go mod download` fetches from the public Go module proxy only, checked against the
+    public checksum database.
+  - Then, offline: `go mod verify`, `go build`, `go vet` and `go test -json`.
+- **Ruby and Maven/Gradle probes are gaps.** Their dependency downloads would run code
+  (the Gemfile, build plugins), which ADR 0016 forbids.
+- **Fixture repos:** `go-shop-api`, `rb-notes-api` and `java-shop-api`, each with an
+  `expected.json` checked by hand and a real advisory in the offline OSV snapshot. All
+  five fixture repos pass the Scan gate.
+
+### Defects found and fixed along the way
+
+- **Same-package tests.** A Go or Java test covers its own package without importing it,
+  so passing tests never counted as covering. They now do.
+- **Framework claims.** The claim verifier did not know Gin, Quarkus and the other new
+  names, so "The API uses Gin." verified against a chi project.
+- **Spec claims.** "All 3 specs pass." was not read as a test-result claim.
+- **Silent audit skips** (in every ecosystem, including npm and PyPI): lockfile entries
+  without a pinned version were left out of the audit without a gap. They are now
+  reported.
+
+### Still open (needs the user)
+
+Unchanged: the real-GitHub gate, deployment, a real report-model run, gVisor, and npm
+publish (plus a license choice).
+
+### Deferred or partial
+
+- **Ruby and JVM builds and tests do not run.** That needs a download path that runs no
+  code, such as Bundler's `vendor/cache` or a resolved dependency list for Maven. Each is
+  its own decision.
+- **Go packages that need cgo fail to build** in the sandbox, which has no C toolchain.
+- **Rails `resources` routes** are not expanded. Only explicit verbs and `root` are read.
+- **Kotlin, Rust, PHP and C#** are recognized and reported as not parsed.
+
+### Gate result
+
+Run on this machine on 2026-10-28 (sandbox runtime `runc`, Go 1.27.2 in the sandbox image).
+
+The first full run failed three ways:
+- **Lint:** ADR 0026 was not yet formatted when the run started.
+- **Typecheck:** a type error in the new Link test.
+- **e2e:** `java-shop-api`'s report overflowed a 375 px screen. Java paths and Maven
+  coordinates are long tokens that did not wrap.
+
+All three are fixed. The phone-width check now names the elements that overflow, and the
+issue lists wrap long tokens (`overflow-wrap: anywhere`). Reruns after the fixes:
+
+```
+pnpm lint          Checked 680 files. No fixes applied.
+pnpm typecheck     Tasks: 61 successful, 61 total
+pnpm build         Tasks: 30 successful, 30 total
+pnpm test          20 packages, 651 tests, 0 failed
+  @codesentra/scan             113 passed  (Scan gate on 5 fixture repos; Go probes in the
+                                            sandbox; Go/RubyGems/Maven audit)
+  @codesentra/fixture-harness   64 passed  @codesentra/parsers  33 passed
+  @codesentra/claims            39 passed  @codesentra/link     24 passed
+  @codesentra/graph             15 passed  (and api 64, ssrf 71, core 70, checks 38, db 28,
+                                            cli 26, config 19, sandbox 10, prompts 10,
+                                            github 9, queue 6, storage 6, notify 3,
+                                            telemetry 3)
+pnpm e2e           16 passed (2.9m)  (the Phase 3 gate now runs all five fixture repos)
+```
+
 ## Phase 7 — Hardening and the Phase 6 leftovers (2026-10-28)
 
 The user chose this scope; Section 18 ends at Phase 5 (ADR 0025). I ran the CLI against

@@ -1,5 +1,12 @@
 /** Languages with a tree-sitter grammar behind the parser interface. */
-export type ParserLanguage = "typescript" | "tsx" | "javascript" | "python";
+export type ParserLanguage =
+  | "typescript"
+  | "tsx"
+  | "javascript"
+  | "python"
+  | "go"
+  | "ruby"
+  | "java";
 
 export type MarkerKind = "TODO" | "FIXME" | "HACK" | "XXX";
 
@@ -7,11 +14,25 @@ export type MarkerKind = "TODO" | "FIXME" | "HACK" | "XXX";
 export interface FileFacts {
   path: string;
   language: ParserLanguage;
-  /** `python-member` is `from pkg import name`: a submodule if it resolves, else a symbol. */
+  /**
+   * `python-member` is `from pkg import name`: a submodule if it resolves, else a symbol.
+   * `go` names a package (a directory); `ruby` is `require`, `ruby-relative` is
+   * `require_relative`; `java` is a type (`a.b.C`), `java-wildcard` a package (`a.b.*`).
+   */
   imports: {
     specifier: string;
     line: number;
-    kind: "static" | "dynamic" | "require" | "python" | "python-member";
+    kind:
+      | "static"
+      | "dynamic"
+      | "require"
+      | "python"
+      | "python-member"
+      | "go"
+      | "ruby"
+      | "ruby-relative"
+      | "java"
+      | "java-wildcard";
   }[];
   symbols: {
     name: string;
@@ -19,7 +40,10 @@ export interface FileFacts {
     line: number;
     exported: boolean;
   }[];
-  /** HTTP routes registered in code (Express/Fastify-style calls, FastAPI/Flask decorators). */
+  /**
+   * HTTP routes registered in code: Express/Fastify-style calls, FastAPI/Flask decorators,
+   * Go `HandleFunc`/Gin/Echo/Chi, Sinatra/Rails route DSL, Spring and JAX-RS annotations.
+   */
   routes: { method: string; path: string; line: number; text: string; handler: string | null }[];
   envReads: { name: string; line: number; text: string }[];
   /**
@@ -52,7 +76,10 @@ export interface FileFacts {
     skipText: string | null;
   }[];
   markers: { kind: MarkerKind; line: number; text: string }[];
-  /** Functions whose only statement throws "not implemented" (or raises NotImplementedError). */
+  /**
+   * Functions whose only statement throws "not implemented": NotImplementedError,
+   * `panic("not implemented")`, UnsupportedOperationException.
+   */
   stubs: { symbol: string | null; line: number; text: string }[];
   cliCommands: { name: string; line: number }[];
   /** Number of syntax error nodes; facts from a file with errors may be incomplete. */

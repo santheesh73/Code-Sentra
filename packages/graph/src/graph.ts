@@ -1,5 +1,14 @@
 import { type FileFacts, isTestPath } from "@codesentra/parsers";
-import { type PathAliases, resolveJsImport, resolvePyImport } from "./resolve.js";
+import {
+  type GoModule,
+  javaRootsOf,
+  type PathAliases,
+  resolveGoImport,
+  resolveJavaImport,
+  resolveJsImport,
+  resolvePyImport,
+  resolveRubyRequire,
+} from "./resolve.js";
 
 export type NodeKind =
   | "file"
@@ -43,6 +52,8 @@ export interface GraphInput {
   allPaths: string[];
   aliases?: PathAliases;
   pythonRoots?: string[];
+  /** go.mod modules (directory and module path), for Go import resolution. */
+  goModules?: GoModule[];
 }
 
 const NEXT_PAGE =
@@ -86,16 +97,40 @@ export function buildGraph(input: GraphInput): CodeGraph {
 
   for (const p of [...input.allPaths].sort()) fileKey(p);
 
+  const javaRoots = javaRootsOf(input.allPaths);
+  const resolveImport = (f: FileFacts, imp: FileFacts["imports"][number]): string[] => {
+    const one = (t: string | null) => (t ? [t] : []);
+    switch (imp.kind) {
+      case "go":
+        return resolveGoImport(imp.specifier, paths, input.goModules ?? []);
+      case "ruby":
+      case "ruby-relative":
+        return one(resolveRubyRequire(f.path, imp.specifier, imp.kind === "ruby-relative", paths));
+      case "java":
+      case "java-wildcard":
+        return resolveJavaImport(imp.specifier, imp.kind === "java-wildcard", paths, javaRoots);
+      case "python":
+      case "python-member":
+        return one(resolvePyImport(f.path, imp.specifier, paths, input.pythonRoots));
+      default:
+        return f.language === "python"
+          ? one(resolvePyImport(f.path, imp.specifier, paths, input.pythonRoots))
+          : one(resolveJsImport(f.path, imp.specifier, paths, input.aliases));
+    }
+  };
+
   for (const f of input.files) {
     const from = fileKey(f.path);
     for (const imp of f.imports) {
-      const target =
-        f.language === "python" || imp.kind === "python-member"
-          ? resolvePyImport(f.path, imp.specifier, paths, input.pythonRoots)
-          : resolveJsImport(f.path, imp.specifier, paths, input.aliases);
-      if (target) {
-        edges.push({ from, to: fileKey(target), kind: "imports", weight: 1 });
-      } else if (imp.kind !== "python-member" && imp.specifier.startsWith(".")) {
+      const targets = resolveImport(f, imp);
+      for (const target of targets)
+        if (target !== f.path)
+          edges.push({ from, to: fileKey(target), kind: "imports", weight: 1 });
+      if (
+        !targets.length &&
+        ((imp.kind !== "python-member" && imp.specifier.startsWith(".")) ||
+          imp.kind === "ruby-relative")
+      ) {
         unresolved.push({ from: f.path, specifier: imp.specifier, line: imp.line });
       }
     }
@@ -192,6 +227,36 @@ export function buildGraph(input: GraphInput): CodeGraph {
       },
     });
     edges.push({ from: fileKey(p), to: key, kind: "defines_route", weight: 1 });
+  }
+
+  // A Go or Java test file sees its own package without importing it (Go `_test.go`
+  // files in the package's directory; Java tests in the same package under another
+  // source root), so it tests those files too.
+  const dirOf = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
+  const byDir = new Map<string, string[]>();
+  for (const p of input.allPaths) {
+    const list = byDir.get(dirOf(p));
+    if (list) list.push(p);
+    else byDir.set(dirOf(p), [p]);
+  }
+  for (const f of input.files) {
+    if (!isTestPath(f.path)) continue;
+    let siblings: string[] = [];
+    if (f.language === "go") {
+      siblings = (byDir.get(dirOf(f.path)) ?? []).filter(
+        (p) => p.endsWith(".go") && !p.endsWith("_test.go"),
+      );
+    } else if (f.language === "java") {
+      const root = javaRoots.find((r) => f.path.startsWith(`${r}/`));
+      if (root) {
+        const pkgDir = dirOf(f.path).slice(root.length);
+        siblings = javaRoots
+          .flatMap((r) => byDir.get(`${r}${pkgDir}`) ?? [])
+          .filter((p) => p.endsWith(".java") && !isTestPath(p));
+      }
+    }
+    for (const p of siblings)
+      edges.push({ from: fileKey(f.path), to: fileKey(p), kind: "tests", weight: 1 });
   }
 
   // Test files test what they import.

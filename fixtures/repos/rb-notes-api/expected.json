@@ -1,0 +1,112 @@
+{
+  "name": "rb-notes-api",
+  "description": "Sinatra notes API. Its probes do not run: Bundler would evaluate the Gemfile (Ruby code) to download gems (ADR 0026). rack 2.2.3 is affected by GHSA-hxqx-xwvh-44m2 / CVE-2022-30122 (fixed in 2.2.3.1).",
+  "snapshot": { "kind": "zip", "hasHistory": false },
+  "languages": ["Ruby"],
+  "frameworks": ["Sinatra"],
+  "packageManager": "bundler",
+  "routes": [
+    { "method": "GET", "path": "/notes", "locator": "app.rb:11" },
+    { "method": "POST", "path": "/notes", "locator": "app.rb:16" },
+    { "method": "GET", "path": "/notes/search", "locator": "app.rb:23" },
+    { "method": "GET", "path": "/notes/:id/export.md", "locator": "app.rb:28" }
+  ],
+  "envVars": {
+    "read": [
+      { "name": "NOTES_DB_PATH", "locator": "lib/config.rb:4" },
+      { "name": "NOTES_SIGNING_KEY", "locator": "lib/config.rb:8" }
+    ],
+    "documented": ["NOTES_DB_PATH", "SENTRY_DSN"]
+  },
+  "probes": {
+    "install": "skipped",
+    "build": "skipped",
+    "tests": null
+  },
+  "features": [
+    {
+      "name": "List notes",
+      "status": "complete",
+      "implementation": ["app.rb:11"]
+    },
+    {
+      "name": "Create notes",
+      "status": "complete",
+      "implementation": ["app.rb:16"]
+    },
+    {
+      "name": "Search notes",
+      "status": "partial",
+      "implementation": ["app.rb:23", "lib/store.rb:22"],
+      "why": "TODO marker in lib/store.rb"
+    },
+    {
+      "name": "Export a note as Markdown",
+      "status": "partial",
+      "implementation": ["app.rb:28", "lib/export.rb:3"],
+      "tests": ["spec/store_spec.rb:16"],
+      "why": "Export.markdown raises NotImplementedError and its spec is skipped"
+    },
+    {
+      "name": "Share notes via link",
+      "status": "planned",
+      "intent": ["README.md:14"],
+      "why": "README roadmap only; no implementation"
+    }
+  ],
+  "findings": [
+    {
+      "code": "SKIPPED_TESTS",
+      "locator": "spec/store_spec.rb:16",
+      "lineContains": "xit \"exports a note as Markdown\""
+    },
+    {
+      "code": "TODO_MARKER",
+      "locator": "lib/store.rb:23",
+      "lineContains": "TODO: search note bodies too"
+    },
+    {
+      "code": "STUB_IMPLEMENTATION",
+      "locator": "lib/export.rb:4",
+      "lineContains": "raise NotImplementedError"
+    },
+    {
+      "code": "ENV_VAR_UNDOCUMENTED",
+      "locator": "lib/config.rb:8",
+      "lineContains": "ENV[\"NOTES_SIGNING_KEY\"]",
+      "envVar": "NOTES_SIGNING_KEY"
+    },
+    {
+      "code": "ENV_VAR_UNUSED",
+      "locator": ".env.example:3",
+      "lineContains": "SENTRY_DSN=",
+      "envVar": "SENTRY_DSN"
+    },
+    {
+      "code": "SECRET_EXPOSED",
+      "locator": "scripts/seed.rb:2",
+      "lineContains": "AKIACODESENTRAFIXRB4",
+      "secretType": "aws-access-token",
+      "storedPreviewMustNotContain": "AKIACODESENTRAFIXRB4"
+    },
+    {
+      "code": "VULNERABLE_DEPENDENCY",
+      "locator": "Gemfile.lock:7",
+      "lineContains": "rack (2.2.3)",
+      "ecosystem": "RubyGems",
+      "package": "rack",
+      "version": "2.2.3",
+      "mustIncludeAdvisory": "GHSA-hxqx-xwvh-44m2"
+    }
+  ],
+  "absentFindings": ["BUILD_FAILED", "TESTS_FAILING", "NO_TESTS", "TYPECHECK_ERRORS"],
+  "forbiddenClaims": [
+    { "text": "All 3 specs pass.", "reason": "the specs were not run, and one is skipped" },
+    { "text": "Notes can be shared via public links.", "reason": "planned only" },
+    { "text": "Markdown export is complete.", "reason": "raises NotImplementedError" },
+    { "text": "Search covers note bodies.", "reason": "TODO; titles only" },
+    { "text": "The API uses Rails.", "reason": "it uses Sinatra" },
+    { "text": "Notes are encrypted with NOTES_ENCRYPTION_KEY.", "reason": "no such variable" },
+    { "text": "Dependencies have no known vulnerabilities.", "reason": "rack 2.2.3 has advisories" }
+  ]
+}

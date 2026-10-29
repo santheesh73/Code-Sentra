@@ -20,7 +20,12 @@ describe("language detection", () => {
     expect(detectLanguage("bin/tool", "#!/usr/bin/env python3")).toBe("Python");
     expect(detectLanguage("README")).toBeNull();
     expect(parserLanguageFor("a.jsx")).toBe("tsx");
-    expect(parserLanguageFor("a.go")).toBeNull();
+    expect(parserLanguageFor("a.go")).toBe("go");
+    expect(parserLanguageFor("app/models/note.rb")).toBe("ruby");
+    expect(parserLanguageFor("Gemfile")).toBe("ruby");
+    expect(detectLanguage("Rakefile")).toBe("Ruby");
+    expect(parserLanguageFor("src/main/java/A.java")).toBe("java");
+    expect(parserLanguageFor("a.rs")).toBeNull();
   });
   it("recognizes test paths", () => {
     for (const p of [
@@ -29,9 +34,19 @@ describe("language detection", () => {
       "tests/test_notes.py",
       "a.spec.js",
       "pkg/x_test.py",
+      "internal/cart/cart_test.go",
+      "spec/models/note_spec.rb",
+      "test/store_test.rb",
+      "src/test/java/com/x/CartTest.java",
     ])
       expect(isTestPath(p), p).toBe(true);
-    for (const p of ["src/latest.ts", "src/testing-utils.ts", "notes_api/app.py"])
+    for (const p of [
+      "src/latest.ts",
+      "src/testing-utils.ts",
+      "notes_api/app.py",
+      "internal/cart/cart.go",
+      "src/main/java/com/x/Contest.java",
+    ])
       expect(isTestPath(p), p).toBe(false);
   });
 });
@@ -290,6 +305,329 @@ describe("edge cases", () => {
   });
 
   it("returns null for languages without a parser", async () => {
-    expect(await parseFile("main.go", "package main")).toBeNull();
+    expect(await parseFile("main.rs", "fn main() {}")).toBeNull();
+  });
+});
+
+const lines = (...l: string[]) => `${l.join("\n")}\n`;
+const at = (xs: { line: number }[], f: (x: never) => string) =>
+  xs.map((x) => `${f(x as never)}:${x.line}`);
+
+describe("Go", () => {
+  const src = lines(
+    "package main", //                                            1
+    "",
+    "import (",
+    '\t"errors"',
+    '\t"net/http"',
+    '\t"os"',
+    '\tapi "example.com/shop/internal/api"',
+    ")",
+    "",
+    "// TODO: wire the cache", //                                 10
+    "func Handler(w http.ResponseWriter, r *http.Request) {}",
+    "",
+    "func Export() error {",
+    '\tpanic("not implemented")',
+    "}",
+    "",
+    "func main() {",
+    '\tbase := os.Getenv("API_URL")',
+    '\t_, _ = os.LookupEnv("PORT")',
+    '\thttp.HandleFunc("/health", Handler)', //                   20
+    '\tmux.HandleFunc("GET /items/{id}", api.Item)',
+    '\tr.POST("/users", createUser)',
+    '\tr.Get("/users/:id", getUser)',
+    '\t_ = os.Getenv("API_URL") + "/api/ping"',
+    '\t_ = fmt.Sprintf("%s/v1/items", os.Getenv("API_URL"))',
+    '\t_ = "http://localhost:4000/data"',
+    '\t_ = errors.New("cart is empty")',
+    "\t_ = base",
+    "}",
+  );
+
+  it("extracts imports, symbols, routes, env reads, URLs, messages, markers and stubs", async () => {
+    const f = await parseFile("cmd/shop/main.go", src);
+    if (!f) throw new Error("not parsed");
+    expect(f.parseErrors).toBe(0);
+    expect(f.imports.map((i) => `${i.kind} ${i.specifier}`)).toEqual([
+      "go errors",
+      "go net/http",
+      "go os",
+      "go example.com/shop/internal/api",
+    ]);
+    expect(f.symbols.map((s) => `${s.name}:${s.exported}`)).toEqual([
+      "Handler:true",
+      "Export:true",
+      "main:false",
+    ]);
+    expect(
+      at(
+        f.routes,
+        (r: { method: string; path: string; handler: string }) =>
+          `${r.method} ${r.path} ${r.handler}`,
+      ),
+    ).toEqual([
+      "GET /health Handler:20",
+      "GET /items/{id} Item:21",
+      "POST /users createUser:22",
+      "GET /users/:id getUser:23",
+    ]);
+    expect(at(f.envReads, (e: { name: string }) => e.name)).toEqual([
+      "API_URL:18",
+      "PORT:19",
+      "API_URL:24",
+      "API_URL:25",
+    ]);
+    expect(f.urlLiterals.map((u) => `${u.template} ${u.value} [${u.envVars}]`)).toEqual([
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal template form Link matches
+      'true ${os.Getenv("API_URL")}/api/ping [API_URL]',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal template form Link matches
+      'true ${os.Getenv("API_URL")}/v1/items [API_URL]',
+      "false http://localhost:4000/data []",
+    ]);
+    expect(at(f.messages, (m: { kind: string; value: string }) => `${m.kind} ${m.value}`)).toEqual([
+      "throw not implemented:14",
+      "error cart is empty:27",
+    ]);
+    expect(at(f.markers, (m: { kind: string }) => m.kind)).toEqual(["TODO:10"]);
+    expect(at(f.stubs, (s: { symbol: string }) => s.symbol)).toEqual(["Export:14"]);
+  });
+
+  it("finds Test functions and t.Skip in _test.go files", async () => {
+    const f = await parseFile(
+      "internal/cart/cart_test.go",
+      lines(
+        "package cart",
+        'import "testing"',
+        "func TestAdd(t *testing.T) {}",
+        "func TestExport(t *testing.T) {",
+        '\tt.Skip("later")',
+        "}",
+        "func helper() {}",
+      ),
+    );
+    expect(f?.tests.map((t) => `${t.name}:${t.line}:${t.skipped}:${t.skipLine}`)).toEqual([
+      "TestAdd:3:false:null",
+      "TestExport:4:true:5",
+    ]);
+  });
+});
+
+describe("Ruby", () => {
+  it("extracts Sinatra routes, ENV reads, requires, raises and stubs", async () => {
+    const f = await parseFile(
+      "app.rb",
+      lines(
+        'require "sinatra/base"', //                                1
+        'require_relative "lib/store"',
+        "",
+        "# FIXME: cache this",
+        "class NotesApp < Sinatra::Base",
+        '  get "/notes/:id" do',
+        '    ENV["NOTES_KEY"]',
+        "  end",
+        '  post "/notes" do',
+        "  end", //                                                  10
+        "  def export",
+        "    raise NotImplementedError",
+        "  end",
+        "  def boom",
+        '    raise ArgumentError, "note is empty"',
+        "  end",
+        "  def api",
+        '    ENV.fetch("API_URL") + "/api/ping"',
+        "  end",
+        "end", //                                                    20
+        'LEAK = "http://localhost:4000/data"',
+        'U = "#{ENV["API_URL"]}/v1/notes"',
+      ),
+    );
+    if (!f) throw new Error("not parsed");
+    expect(f.parseErrors).toBe(0);
+    expect(f.imports.map((i) => `${i.kind} ${i.specifier}`)).toEqual([
+      "ruby sinatra/base",
+      "ruby-relative lib/store",
+    ]);
+    expect(f.symbols.map((s) => `${s.kind} ${s.name}`)).toEqual([
+      "class NotesApp",
+      "function export",
+      "function boom",
+      "function api",
+    ]);
+    expect(at(f.routes, (r: { method: string; path: string }) => `${r.method} ${r.path}`)).toEqual([
+      "GET /notes/:id:6",
+      "POST /notes:9",
+    ]);
+    expect(at(f.envReads, (e: { name: string }) => e.name)).toEqual([
+      "NOTES_KEY:7",
+      "API_URL:18",
+      "API_URL:22",
+    ]);
+    expect(f.urlLiterals.map((u) => `${u.template} ${u.value} [${u.envVars}]`)).toEqual([
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal template form Link matches
+      'true ${ENV.fetch("API_URL")}/api/ping [API_URL]',
+      "false http://localhost:4000/data []",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal template form Link matches
+      'true ${ENV["API_URL"]}/v1/notes [API_URL]',
+    ]);
+    expect(at(f.messages, (m: { value: string }) => m.value)).toEqual(["note is empty:15"]);
+    expect(at(f.markers, (m: { kind: string }) => m.kind)).toEqual(["FIXME:4"]);
+    expect(at(f.stubs, (s: { symbol: string }) => s.symbol)).toEqual(["export:12"]);
+  });
+
+  it("reads Rails routes with namespaces and root", async () => {
+    const f = await parseFile(
+      "config/routes.rb",
+      lines(
+        "Rails.application.routes.draw do",
+        '  root "home#index"',
+        '  get "up", to: "health#show"',
+        "  namespace :api do",
+        '    post "users/sign_in", to: "sessions#create"',
+        "  end",
+        "end",
+      ),
+    );
+    expect(f?.routes.map((r) => `${r.method} ${r.path} ${r.handler}:${r.line}`)).toEqual([
+      "GET / home#index:2",
+      "GET /up health#show:3",
+      "POST /api/users/sign_in sessions#create:5",
+    ]);
+  });
+
+  it("finds RSpec and Minitest cases and their skips", async () => {
+    const spec = await parseFile(
+      "spec/store_spec.rb",
+      lines(
+        "RSpec.describe Store do",
+        '  it "adds a note" do',
+        "  end",
+        '  xit "exports" do',
+        "  end",
+        '  it "searches", skip: true do',
+        "  end",
+        '  it "pends" do',
+        '    pending "later"',
+        "  end",
+        "end",
+      ),
+    );
+    expect(spec?.tests.map((t) => `${t.name}:${t.line}:${t.skipped}:${t.skipLine}`)).toEqual([
+      "adds a note:2:false:null",
+      "exports:4:true:4",
+      "searches:6:true:6",
+      "pends:8:true:9",
+    ]);
+    const mini = await parseFile(
+      "test/store_test.rb",
+      lines("class StoreTest < Minitest::Test", "  def test_add", "    skip", "  end", "end"),
+    );
+    expect(mini?.tests.map((t) => `${t.name}:${t.skipped}:${t.skipLine}`)).toEqual([
+      "test_add:true:3",
+    ]);
+  });
+});
+
+describe("Java", () => {
+  it("extracts Spring routes with the class prefix, env reads, throws and stubs", async () => {
+    const f = await parseFile(
+      "src/main/java/com/example/shop/ItemController.java",
+      lines(
+        "package com.example.shop;", //                              1
+        "",
+        "import java.util.List;",
+        "import com.example.shop.model.*;",
+        "import static com.example.shop.Util.slug;",
+        "",
+        "// TODO: paginate",
+        "@RestController",
+        '@RequestMapping("/api")',
+        "public class ItemController {", //                          10
+        '  private static final String BASE = System.getenv("API_URL");',
+        '  @GetMapping("/items/{id}")',
+        "  public Item get(@PathVariable String id) { return null; }",
+        '  @PostMapping(value = "/items")',
+        '  public Item create() { throw new UnsupportedOperationException("Not implemented yet"); }',
+        '  @RequestMapping(path = "/legacy", method = RequestMethod.DELETE)',
+        '  void legacy() { throw new IllegalStateException("cart is empty"); }',
+        '  String url() { return System.getenv("API_URL") + "/api/ping"; }',
+        '  String loc = "http://localhost:4000/data";',
+        "}", //                                                      20
+      ),
+    );
+    if (!f) throw new Error("not parsed");
+    expect(f.parseErrors).toBe(0);
+    expect(f.imports.map((i) => `${i.kind} ${i.specifier}`)).toEqual([
+      "java java.util.List",
+      "java-wildcard com.example.shop.model",
+      "java com.example.shop.Util",
+    ]);
+    expect(f.symbols.map((s) => `${s.kind} ${s.name}:${s.exported}`)).toEqual([
+      "class ItemController:true",
+      "function get:true",
+      "function create:true",
+      "function legacy:false",
+      "function url:false",
+    ]);
+    expect(
+      at(
+        f.routes,
+        (r: { method: string; path: string; handler: string }) =>
+          `${r.method} ${r.path} ${r.handler}`,
+      ),
+    ).toEqual([
+      "GET /api/items/{id} get:12",
+      "POST /api/items create:14",
+      "DELETE /api/legacy legacy:16",
+    ]);
+    expect(at(f.envReads, (e: { name: string }) => e.name)).toEqual(["API_URL:11", "API_URL:18"]);
+    expect(f.urlLiterals.map((u) => `${u.template} ${u.value} [${u.envVars}]`)).toEqual([
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal template form Link matches
+      'true ${System.getenv("API_URL")}/api/ping [API_URL]',
+      "false http://localhost:4000/data []",
+    ]);
+    expect(at(f.messages, (m: { kind: string; value: string }) => `${m.kind} ${m.value}`)).toEqual([
+      "throw Not implemented yet:15",
+      "throw cart is empty:17",
+    ]);
+    expect(at(f.markers, (m: { kind: string }) => m.kind)).toEqual(["TODO:7"]);
+    expect(at(f.stubs, (s: { symbol: string }) => s.symbol)).toEqual(["create:15"]);
+  });
+
+  it("reads JAX-RS routes and JUnit tests with @Disabled", async () => {
+    const res = await parseFile(
+      "src/main/java/a/Notes.java",
+      lines(
+        '@Path("/notes")',
+        "public class Notes {",
+        "  @GET",
+        '  @Path("/{id}")',
+        "  public String one() { return null; }",
+        "  @POST",
+        "  public void add() {}",
+        "}",
+      ),
+    );
+    expect(res?.routes.map((r) => `${r.method} ${r.path}:${r.line}`)).toEqual([
+      "GET /notes/{id}:3",
+      "POST /notes:6",
+    ]);
+    const t = await parseFile(
+      "src/test/java/a/NotesTest.java",
+      lines(
+        "class NotesTest {",
+        "  @Test",
+        "  void adds() {}",
+        '  @Disabled("flaky")',
+        "  @Test",
+        "  void exports() {}",
+        "}",
+      ),
+    );
+    expect(t?.tests.map((x) => `${x.name}:${x.line}:${x.skipped}:${x.skipLine}`)).toEqual([
+      "adds:3:false:null",
+      "exports:6:true:4",
+    ]);
   });
 });

@@ -1,0 +1,128 @@
+{
+  "name": "java-shop-api",
+  "description": "Spring Boot shop API. Its probes do not run: Maven runs build plugins to resolve dependencies (ADR 0026). jackson-databind 2.13.2 is affected by GHSA-57j2-w4cx-62h2 / CVE-2020-36518 (fixed in 2.13.2.1); the Spring Boot starters take their versions from the parent POM, so they are listed as not audited.",
+  "snapshot": { "kind": "zip", "hasHistory": false },
+  "languages": ["Java"],
+  "frameworks": ["Spring Boot"],
+  "packageManager": "maven",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/products",
+      "locator": "src/main/java/com/example/shop/ProductController.java:11"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/{id}",
+      "locator": "src/main/java/com/example/shop/ProductController.java:16"
+    },
+    {
+      "method": "POST",
+      "path": "/api/checkout",
+      "locator": "src/main/java/com/example/shop/OrderController.java:20"
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders/export.csv",
+      "locator": "src/main/java/com/example/shop/OrderController.java:27"
+    }
+  ],
+  "envVars": {
+    "read": [
+      { "name": "SHOP_PORT", "locator": "src/main/java/com/example/shop/Settings.java:8" },
+      { "name": "SHOP_API_KEY", "locator": "src/main/java/com/example/shop/Settings.java:13" }
+    ],
+    "documented": ["REDIS_URL", "SHOP_PORT"]
+  },
+  "probes": {
+    "install": "skipped",
+    "build": "skipped",
+    "tests": null
+  },
+  "features": [
+    {
+      "name": "List products",
+      "status": "complete",
+      "implementation": ["src/main/java/com/example/shop/ProductController.java:11"]
+    },
+    {
+      "name": "Product details",
+      "status": "complete",
+      "implementation": ["src/main/java/com/example/shop/ProductController.java:16"]
+    },
+    {
+      "name": "Checkout with discount codes",
+      "status": "partial",
+      "implementation": ["src/main/java/com/example/shop/OrderController.java:20"],
+      "why": "TODO marker in OrderController.java"
+    },
+    {
+      "name": "Export orders as CSV",
+      "status": "partial",
+      "implementation": ["src/main/java/com/example/shop/OrderController.java:27"],
+      "tests": ["src/test/java/com/example/shop/OrderControllerTest.java:17"],
+      "why": "exportCsv throws UnsupportedOperationException and its test is disabled"
+    },
+    {
+      "name": "Gift cards",
+      "status": "planned",
+      "intent": ["README.md:14"],
+      "why": "README roadmap only; no implementation"
+    }
+  ],
+  "findings": [
+    {
+      "code": "SKIPPED_TESTS",
+      "locator": "src/test/java/com/example/shop/OrderControllerTest.java:15",
+      "lineContains": "@Disabled(\"export is not built yet\")"
+    },
+    {
+      "code": "TODO_MARKER",
+      "locator": "src/main/java/com/example/shop/OrderController.java:16",
+      "lineContains": "TODO: apply discount codes"
+    },
+    {
+      "code": "STUB_IMPLEMENTATION",
+      "locator": "src/main/java/com/example/shop/OrderController.java:29",
+      "lineContains": "throw new UnsupportedOperationException(\"Not implemented yet\")"
+    },
+    {
+      "code": "ENV_VAR_UNDOCUMENTED",
+      "locator": "src/main/java/com/example/shop/Settings.java:13",
+      "lineContains": "System.getenv(\"SHOP_API_KEY\")",
+      "envVar": "SHOP_API_KEY"
+    },
+    {
+      "code": "ENV_VAR_UNUSED",
+      "locator": ".env.example:3",
+      "lineContains": "REDIS_URL=",
+      "envVar": "REDIS_URL"
+    },
+    {
+      "code": "SECRET_EXPOSED",
+      "locator": "src/main/java/com/example/shop/Defaults.java:5",
+      "lineContains": "AKIACODESENTRAFIXJV5",
+      "secretType": "aws-access-token",
+      "storedPreviewMustNotContain": "AKIACODESENTRAFIXJV5"
+    },
+    {
+      "code": "VULNERABLE_DEPENDENCY",
+      "locator": "pom.xml:24",
+      "lineContains": "<artifactId>jackson-databind</artifactId>",
+      "ecosystem": "Maven",
+      "package": "com.fasterxml.jackson.core:jackson-databind",
+      "version": "2.13.2",
+      "mustIncludeAdvisory": "GHSA-57j2-w4cx-62h2"
+    }
+  ],
+  "absentFindings": ["BUILD_FAILED", "TESTS_FAILING", "NO_TESTS", "TYPECHECK_ERRORS"],
+  "forbiddenClaims": [
+    { "text": "All 2 tests pass.", "reason": "the tests were not run, and one is disabled" },
+    { "text": "Gift cards can be redeemed at checkout.", "reason": "planned only" },
+    { "text": "CSV export is complete.", "reason": "throws UnsupportedOperationException" },
+    { "text": "Discount codes are applied at checkout.", "reason": "TODO in OrderController" },
+    { "text": "The API uses Quarkus.", "reason": "it uses Spring Boot" },
+    { "text": "Orders are signed with SHOP_SIGNING_KEY.", "reason": "no such variable" },
+    { "text": "Dependencies have no known vulnerabilities.", "reason": "jackson-databind 2.13.2 has advisories" }
+  ]
+}

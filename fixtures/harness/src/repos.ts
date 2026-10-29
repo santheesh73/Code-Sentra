@@ -17,10 +17,16 @@ export const RepoExpectation = z.object({
     read: z.array(z.object({ name: z.string(), locator: Locator })),
     documented: z.array(z.string()),
   }),
+  /**
+   * Probe outcomes. `skipped` and `tests: null` are for ecosystems whose dependency
+   * download would run code, so nothing runs in the sandbox (Ruby, Maven/Gradle; ADR 0026).
+   */
   probes: z.object({
-    install: z.enum(["pass", "fail"]),
-    build: z.enum(["pass", "fail", "not_applicable"]),
-    tests: z.object({ pass: z.number().int(), fail: z.number().int(), skip: z.number().int() }),
+    install: z.enum(["pass", "fail", "not_applicable", "skipped"]),
+    build: z.enum(["pass", "fail", "not_applicable", "skipped"]),
+    tests: z
+      .object({ pass: z.number().int(), fail: z.number().int(), skip: z.number().int() })
+      .nullable(),
   }),
   features: z.array(
     z.object({

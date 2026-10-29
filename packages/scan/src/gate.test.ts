@@ -109,7 +109,8 @@ describe.each(loadFixtureRepos().map((r) => [r.expected.name, r] as const))(
       const by = Object.fromEntries((r().summary.probes?.results ?? []).map((p) => [p.name, p]));
       expect(by.install?.status).toBe(exp.probes.install);
       expect(by.build?.status).toBe(exp.probes.build);
-      expect(by.tests?.tests).toMatchObject(exp.probes.tests);
+      if (exp.probes.tests) expect(by.tests?.tests).toMatchObject(exp.probes.tests);
+      else expect(by.tests?.status).toBe("skipped");
     });
 
     it("classifies every feature with its expected status", () => {

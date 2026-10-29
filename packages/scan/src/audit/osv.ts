@@ -107,7 +107,8 @@ export function apiSource(opts: { baseUrl?: string; timeoutMs?: number } = {}): 
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             package: { ecosystem: pkg.ecosystem, name: pkg.name },
-            version: pkg.version,
+            // OSV writes Go module versions without go.mod's `v` prefix.
+            version: pkg.ecosystem === "Go" ? pkg.version.replace(/^v/, "") : pkg.version,
             ...(pageToken ? { page_token: pageToken } : {}),
           }),
           signal: AbortSignal.timeout(opts.timeoutMs ?? 20_000),

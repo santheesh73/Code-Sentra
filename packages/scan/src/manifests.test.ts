@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { parseGemfile, parseGoMod, parseGradle, parsePom } from "./manifests.js";
+import {
+  parseCargoToml,
+  parseComposerJson,
+  parseGemfile,
+  parseGoMod,
+  parseGradle,
+  parsePom,
+} from "./manifests.js";
 
 describe("manifests read as text", () => {
   it("go.mod: module, go version and requires (block and single line)", () => {
@@ -64,5 +71,47 @@ describe("manifests read as text", () => {
       "org.springframework.boot:spring-boot-starter-web": "*",
       "org.junit.jupiter:junit-jupiter": "5.11.0",
     });
+  });
+
+  it("Cargo.toml: package, inline and table dependencies", () => {
+    const m = parseCargoToml(
+      "Cargo.toml",
+      [
+        "[package]",
+        'name = "notes-api"',
+        'version = "0.1.0"',
+        'description = "Notes over HTTP" # a comment',
+        "",
+        "[dependencies]",
+        'axum = "0.7.5"',
+        'serde = { version = "1.0", features = ["derive"] }',
+        'local = { path = "../local" }',
+        "",
+        "[dev-dependencies.tokio]",
+        'version = "1.40"',
+        'features = ["full"]',
+      ].join("\n"),
+    );
+    expect(m).toMatchObject({
+      name: "notes-api",
+      version: "0.1.0",
+      description: "Notes over HTTP",
+    });
+    expect(m.dependencies).toEqual({ axum: "0.7.5", serde: "1.0", local: "*", tokio: "1.40" });
+  });
+
+  it("composer.json: require and require-dev, without platform packages", () => {
+    const m = parseComposerJson(
+      "composer.json",
+      JSON.stringify({
+        name: "acme/notes",
+        description: "Notes",
+        require: { php: "^8.2", "ext-json": "*", "slim/slim": "^4.12" },
+        "require-dev": { "phpunit/phpunit": "^11.0" },
+      }),
+    );
+    expect(m).toMatchObject({ name: "acme/notes", packageManager: "composer" });
+    expect(m?.dependencies).toEqual({ "slim/slim": "^4.12", "phpunit/phpunit": "^11.0" });
+    expect(parseComposerJson("composer.json", "{not json")).toBeNull();
   });
 });

@@ -23,7 +23,10 @@ const log = pino({
   redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'],
 });
 
-const db = createDatabase(config.DATABASE_URL, { applicationName: "codesentra-api" });
+const db = createDatabase(config.DATABASE_URL, {
+  applicationName: "codesentra-api",
+  onError: (e) => log.error({ err: e.message }, "database connection error"),
+});
 const queue = await startQueueClient(config.DATABASE_URL, {
   onError: (e) => log.error({ err: e.message }, "queue error"),
 });

@@ -1,0 +1,11 @@
+[package]
+name = "rs-notes-api"
+version = "0.1.0"
+edition = "2021"
+description = "A notes API in Rust with axum"
+publish = false
+
+[dependencies]
+axum = { version = "=0.7.9", default-features = false, features = ["http1", "query", "tokio"] }
+smallvec = "=1.6.0"
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "net"] }

@@ -3,11 +3,17 @@ import {
   type GoModule,
   javaRootsOf,
   type PathAliases,
+  type PhpAutoload,
+  type RustCrate,
   resolveGoImport,
   resolveJavaImport,
   resolveJsImport,
+  resolvePhpRequire,
+  resolvePhpUse,
   resolvePyImport,
   resolveRubyRequire,
+  resolveRustMod,
+  resolveRustUse,
 } from "./resolve.js";
 
 export type NodeKind =
@@ -54,6 +60,10 @@ export interface GraphInput {
   pythonRoots?: string[];
   /** go.mod modules (directory and module path), for Go import resolution. */
   goModules?: GoModule[];
+  /** Cargo packages (directory and crate name), for Rust `use` resolution. */
+  rustCrates?: RustCrate[];
+  /** composer.json PSR-4 maps, for PHP `use` resolution. */
+  phpAutoload?: PhpAutoload[];
 }
 
 const NEXT_PAGE =
@@ -109,6 +119,14 @@ export function buildGraph(input: GraphInput): CodeGraph {
       case "java":
       case "java-wildcard":
         return resolveJavaImport(imp.specifier, imp.kind === "java-wildcard", paths, javaRoots);
+      case "rust":
+        return one(resolveRustUse(f.path, imp.specifier, paths, input.rustCrates ?? []));
+      case "rust-mod":
+        return one(resolveRustMod(f.path, imp.specifier, paths));
+      case "php":
+        return one(resolvePhpUse(imp.specifier, paths, input.phpAutoload ?? []));
+      case "php-require":
+        return one(resolvePhpRequire(f.path, imp.specifier, paths));
       case "python":
       case "python-member":
         return one(resolvePyImport(f.path, imp.specifier, paths, input.pythonRoots));
@@ -128,8 +146,13 @@ export function buildGraph(input: GraphInput): CodeGraph {
           edges.push({ from, to: fileKey(target), kind: "imports", weight: 1 });
       if (
         !targets.length &&
-        ((imp.kind !== "python-member" && imp.specifier.startsWith(".")) ||
-          imp.kind === "ruby-relative")
+        ((imp.kind !== "python-member" &&
+          imp.kind !== "php-require" &&
+          imp.specifier.startsWith(".")) ||
+          imp.kind === "ruby-relative" ||
+          imp.kind === "rust-mod" ||
+          // Composer's vendor/ is installed, not committed.
+          (imp.kind === "php-require" && !/(^|\/)vendor\//.test(imp.specifier)))
       ) {
         unresolved.push({ from: f.path, specifier: imp.specifier, line: imp.line });
       }

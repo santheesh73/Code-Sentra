@@ -1,0 +1,195 @@
+{
+  "name": "rs-notes-api",
+  "description": "axum notes API. Verified by hand in the sandbox image (Rust 1.99.0): cargo fetch downloads the crates Cargo.lock pins from crates.io and checks their checksums, then offline cargo build and cargo clippy (-D warnings) pass and cargo test gives 2 pass, 1 fail (search ignores note bodies), 1 ignored. smallvec 1.6.0 is affected by GHSA-43w2-9j62-hq99 / RUSTSEC-2021-0003 (fixed in 1.6.1).",
+  "snapshot": {
+    "kind": "zip",
+    "hasHistory": false
+  },
+  "languages": [
+    "Rust"
+  ],
+  "frameworks": [
+    "Axum"
+  ],
+  "packageManager": "cargo",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/notes",
+      "locator": "src/lib.rs:15"
+    },
+    {
+      "method": "POST",
+      "path": "/notes",
+      "locator": "src/lib.rs:15"
+    },
+    {
+      "method": "GET",
+      "path": "/notes/search",
+      "locator": "src/lib.rs:16"
+    },
+    {
+      "method": "GET",
+      "path": "/notes/:id/export.md",
+      "locator": "src/lib.rs:17"
+    }
+  ],
+  "envVars": {
+    "read": [
+      {
+        "name": "NOTES_DB_PATH",
+        "locator": "src/config.rs:5"
+      },
+      {
+        "name": "NOTES_SIGNING_KEY",
+        "locator": "src/config.rs:9"
+      }
+    ],
+    "documented": [
+      "NOTES_DB_PATH",
+      "SENTRY_DSN"
+    ]
+  },
+  "probes": {
+    "install": "pass",
+    "build": "pass",
+    "tests": {
+      "pass": 2,
+      "fail": 1,
+      "skip": 1
+    }
+  },
+  "features": [
+    {
+      "name": "List notes",
+      "status": "complete",
+      "implementation": [
+        "src/lib.rs:15"
+      ]
+    },
+    {
+      "name": "Create notes",
+      "status": "complete",
+      "implementation": [
+        "src/lib.rs:15"
+      ]
+    },
+    {
+      "name": "Search notes",
+      "status": "partial",
+      "implementation": [
+        "src/lib.rs:16",
+        "src/store.rs:35"
+      ],
+      "why": "TODO marker in src/store.rs and the body-search test fails",
+      "tests": [
+        "tests/store.rs:26"
+      ]
+    },
+    {
+      "name": "Export a note as Markdown",
+      "status": "partial",
+      "implementation": [
+        "src/lib.rs:17",
+        "src/export.rs:4"
+      ],
+      "tests": [
+        "tests/store.rs:19"
+      ],
+      "why": "export::markdown is todo!() and its test is ignored"
+    },
+    {
+      "name": "Share notes via link",
+      "status": "planned",
+      "intent": [
+        "README.md:14"
+      ],
+      "why": "README roadmap only; no implementation"
+    }
+  ],
+  "findings": [
+    {
+      "code": "TESTS_FAILING",
+      "locator": "tests/store.rs:26",
+      "lineContains": "fn searches_note_bodies()"
+    },
+    {
+      "code": "SKIPPED_TESTS",
+      "locator": "tests/store.rs:18",
+      "lineContains": "#[ignore = \"export is not built yet\"]"
+    },
+    {
+      "code": "TODO_MARKER",
+      "locator": "src/store.rs:36",
+      "lineContains": "TODO: search note bodies too"
+    },
+    {
+      "code": "STUB_IMPLEMENTATION",
+      "locator": "src/export.rs:5",
+      "lineContains": "todo!()"
+    },
+    {
+      "code": "ENV_VAR_UNDOCUMENTED",
+      "locator": "src/config.rs:9",
+      "lineContains": "env::var(\"NOTES_SIGNING_KEY\")",
+      "envVar": "NOTES_SIGNING_KEY"
+    },
+    {
+      "code": "ENV_VAR_UNUSED",
+      "locator": ".env.example:3",
+      "lineContains": "SENTRY_DSN=",
+      "envVar": "SENTRY_DSN"
+    },
+    {
+      "code": "SECRET_EXPOSED",
+      "locator": "src/defaults.rs:2",
+      "lineContains": "AKIACODESENTRAFIXRS5",
+      "secretType": "aws-access-token",
+      "storedPreviewMustNotContain": "AKIACODESENTRAFIXRS5"
+    },
+    {
+      "code": "VULNERABLE_DEPENDENCY",
+      "locator": "Cargo.lock:368",
+      "lineContains": "name = \"smallvec\"",
+      "ecosystem": "crates.io",
+      "package": "smallvec",
+      "version": "1.6.0",
+      "mustIncludeAdvisory": "GHSA-43w2-9j62-hq99"
+    }
+  ],
+  "absentFindings": [
+    "BUILD_FAILED",
+    "NO_TESTS",
+    "TYPECHECK_ERRORS"
+  ],
+  "forbiddenClaims": [
+    {
+      "text": "All 4 tests pass.",
+      "reason": "one fails, one is ignored"
+    },
+    {
+      "text": "Notes can be shared via public links.",
+      "reason": "planned only"
+    },
+    {
+      "text": "Markdown export is complete.",
+      "reason": "export::markdown is todo!()"
+    },
+    {
+      "text": "Search covers note bodies.",
+      "reason": "TODO; titles only"
+    },
+    {
+      "text": "The API uses Actix.",
+      "reason": "it uses axum"
+    },
+    {
+      "text": "Notes are encrypted with NOTES_ENCRYPTION_KEY.",
+      "reason": "no such variable"
+    },
+    {
+      "text": "Dependencies have no known vulnerabilities.",
+      "reason": "smallvec 1.6.0 has an advisory"
+    }
+  ]
+}

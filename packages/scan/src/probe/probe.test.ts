@@ -10,13 +10,17 @@ import { scanSecrets } from "../secrets.js";
 import { parseErrorLines, parseTestOutput } from "./parse.js";
 import {
   checkNpmLockUrls,
+  lockedComposer,
   lockedGems,
   type ProjectView,
   planProbes,
+  SANDBOX_COMPOSER_VERSION,
   SANDBOX_GO_VERSION,
   SANDBOX_JAVA_VERSION,
   SANDBOX_MAVEN_VERSION,
+  SANDBOX_PHP_VERSION,
   SANDBOX_RUBY_VERSION,
+  SANDBOX_RUST_VERSION,
   sanitizeRequirements,
 } from "./plan.js";
 import { runProbes } from "./run.js";
@@ -420,6 +424,277 @@ describe("probe planning for Go, Ruby and JVM projects", () => {
     expect(dockerfile).toContain(
       `FROM maven:${SANDBOX_MAVEN_VERSION}-eclipse-temurin-${SANDBOX_JAVA_VERSION} AS maven`,
     );
+    expect(dockerfile).toContain(`FROM rust:${SANDBOX_RUST_VERSION}-slim-bookworm AS rust`);
+    expect(dockerfile).toContain(
+      `/usr/local/rustup/toolchains/${SANDBOX_RUST_VERSION}-x86_64-unknown-linux-gnu /opt/rust`,
+    );
+    expect(dockerfile).toContain(`FROM php:${SANDBOX_PHP_VERSION}-cli-bookworm AS php`);
+    expect(dockerfile).toContain(`FROM composer:${SANDBOX_COMPOSER_VERSION} AS composer`);
+  });
+});
+
+describe("probe planning for Rust and PHP projects", () => {
+  const cargoLock = (extra = "") =>
+    [
+      "version = 4",
+      "",
+      "[[package]]",
+      'name = "app"',
+      'version = "0.1.0"',
+      "",
+      "[[package]]",
+      'name = "smallvec"',
+      'version = "1.6.0"',
+      'source = "registry+https://github.com/rust-lang/crates.io-index"',
+      'checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00f441b5ff43e3b6ac2a22a0539"',
+      extra,
+    ].join("\n");
+
+  it("Rust: cargo fetch from crates.io, then offline metadata, build, clippy and cargo test", () => {
+    const p = planProbes(
+      memView({
+        "Cargo.toml": '[package]\nname = "app"',
+        "Cargo.lock": cargoLock(),
+        ".cargo/config.toml": '[build]\nrustc-wrapper = "./evil"',
+      }),
+    );
+    expect(p.ecosystem).toBe("rust");
+    expect(p.refused).toBeNull();
+    expect(p.fetch?.command).toEqual(["sh", ".cs-cargo/fetch.sh"]);
+    expect(p.fetch?.reason).toMatch(/the 1 crates Cargo.lock pins, from crates.io only/);
+    const script = p.prepare.find((x) => x.write?.[0] === ".cs-cargo/fetch.sh")?.write?.[1];
+    expect(script).toMatch(/cargo fetch --locked/);
+    expect(script).toMatch(
+      /CARGO_HOME=\/work\/.cs-cargo RUSTC=\/opt\/rust\/bin\/rustc RUSTC_WRAPPER= /,
+    );
+    // The project's cargo config (wrappers, linkers, registries) is set aside.
+    expect(p.prepare).toContainEqual({
+      rename: [".cargo/config.toml", ".cargo/config.toml.codesentra-disabled"],
+    });
+    expect(
+      p.steps.map(
+        (s) => `${s.name}:${s.command ? s.command.join(" ").split(" cargo ")[1] : s.skip?.kind}`,
+      ),
+    ).toEqual([
+      "install:metadata --frozen --format-version 1 --quiet >/dev/null",
+      "build:build --frozen",
+      "typecheck:not_applicable",
+      "lint:clippy --frozen --all-targets -- -D warnings",
+      "tests:test --frozen --no-fail-fast",
+    ]);
+    expect(p.steps[0]?.command?.join(" ")).toMatch(/CARGO_NET_OFFLINE=true/);
+  });
+
+  it("Rust: refuses git sources; gaps without a Cargo.lock; newer-Rust failures are gaps", () => {
+    const git = planProbes(
+      memView({
+        "Cargo.toml": "",
+        "Cargo.lock": cargoLock(
+          '\n[[package]]\nname = "forked"\nversion = "0.2.0"\nsource = "git+https://example.com/forked#abc"\n',
+        ),
+      }),
+    );
+    expect(git.refused).toBe("not downloaded: forked 0.2.0 comes from a git source, not crates.io");
+    const none = planProbes(memView({ "Cargo.toml": "" }));
+    expect(none.fetch).toBeNull();
+    expect(none.steps.map((s) => s.skip?.reason)).toEqual([
+      "no Cargo.lock, so crates were not downloaded (installs must be reproducible)",
+      "crates were not downloaded",
+      "crates were not downloaded",
+      "crates were not downloaded",
+      "crates were not downloaded",
+    ]);
+    const build = planProbes(memView({ "Cargo.toml": "", "Cargo.lock": cargoLock() })).steps[1];
+    expect(
+      build?.gapWhen?.find((g) =>
+        g.pattern.test(
+          "package `x v1.0.0` cannot be built because it requires rustc 1.120 or newer",
+        ),
+      )?.reason,
+    ).toBe(`a crate needs a newer Rust than the sandbox's ${SANDBOX_RUST_VERSION}`);
+  });
+
+  const pkg = (name: string, url: string, extra: Record<string, unknown> = {}) => ({
+    name,
+    version: "1.0.0",
+    dist: { type: "zip", url, reference: "a".repeat(40), shasum: "" },
+    ...extra,
+  });
+  const composerLock = (packages: unknown[], dev: unknown[] = []) =>
+    JSON.stringify({ packages, "packages-dev": dev });
+
+  it("PHP: each locked GitHub commit zip from codeload, then offline autoload, php -l and PHPUnit", () => {
+    const sha = "b".repeat(40);
+    const lock = composerLock(
+      [
+        pkg("slim/slim", `https://api.github.com/repos/slimphp/Slim/zipball/${"a".repeat(40)}`),
+        { name: "psr/meta", version: "1.0.0", type: "metapackage" },
+      ],
+      [
+        pkg(
+          "phpunit/phpunit",
+          `https://codeload.github.com/sebastianbergmann/phpunit/legacy.zip/${sha}`,
+          {
+            bin: ["phpunit"],
+            dist: {
+              type: "zip",
+              url: `https://codeload.github.com/sebastianbergmann/phpunit/legacy.zip/${sha}`,
+              shasum: "c".repeat(40),
+            },
+          },
+        ),
+      ],
+    );
+    const locked = lockedComposer(lock);
+    if ("refused" in locked) throw new Error(locked.refused);
+    expect(locked.packages.map((x) => `${x.name} ${x.url} ${x.sha1 ?? "-"} dev=${x.dev}`)).toEqual([
+      `slim/slim https://codeload.github.com/slimphp/Slim/legacy.zip/${"a".repeat(40)} - dev=false`,
+      `phpunit/phpunit https://codeload.github.com/sebastianbergmann/phpunit/legacy.zip/${sha} ${"c".repeat(40)} dev=true`,
+    ]);
+    const p = planProbes(
+      memView({
+        "composer.json": "{}",
+        "composer.lock": lock,
+        "phpunit.xml.dist": "<phpunit/>",
+        "auth.json": "{}",
+      }),
+    );
+    expect(p.ecosystem).toBe("php");
+    // Our script, run isolated; Composer does not run during the download.
+    expect(p.fetch?.command).toEqual(["python", "-I", ".cs-composer/fetch.py"]);
+    expect(p.fetch?.reason).toMatch(
+      /the 2 package zips composer.lock pins.*1 checked against the lockfile's sha1/,
+    );
+    const installed = JSON.parse(
+      p.prepare.find((x) => x.write?.[0] === ".cs-composer/installed.json")?.write?.[1] ?? "",
+    );
+    expect(installed["dev-package-names"]).toEqual(["phpunit/phpunit"]);
+    expect(installed.packages.map((x: { "install-path": string }) => x["install-path"])).toEqual([
+      "../slim/slim",
+      "../phpunit/phpunit",
+    ]);
+    expect(p.prepare).toContainEqual({ rename: ["auth.json", "auth.json.codesentra-disabled"] });
+    expect(
+      p.steps.map((s) =>
+        s.command
+          ? s.command[2]?.replace(/^COMPOSER\S+ (COMPOSER\S+ )*/, "").slice(0, 40)
+          : s.skip?.reason,
+      ),
+    ).toEqual([
+      "composer dump-autoload --no-scripts --no",
+      "find . -name '*.php' -not -path './vendo",
+      "no type checker (PHPStan or Psalm, with its config file) in composer.lock",
+      "no linter (PHP-CS-Fixer, PHP_CodeSniffer) in composer.lock",
+      "php vendor/phpunit/phpunit/phpunit --col",
+    ]);
+    expect(p.steps[0]?.command?.[2]).toMatch(/COMPOSER_DISABLE_NETWORK=1/);
+  });
+
+  it("PHP: refuses other hosts, source-only and odd names; gaps without a lockfile", () => {
+    const refused = (packages: unknown[]) => {
+      const r = lockedComposer(composerLock(packages));
+      return "refused" in r ? r.refused : null;
+    };
+    expect(refused([pkg("acme/x", "https://packages.internal/acme/x.zip")])).toBe(
+      "acme/x would be downloaded from https://packages.internal, not a GitHub commit zip",
+    );
+    expect(
+      refused([pkg("acme/x", `http://api.github.com/repos/a/x/zipball/${"a".repeat(40)}`)]),
+    ).toMatch(/would be downloaded from http:\/\/api.github.com/);
+    expect(refused([pkg("acme/x", "https://api.github.com/repos/a/x/zipball/main")])).toMatch(
+      /not a GitHub commit zip/,
+    );
+    expect(refused([{ name: "acme/x", version: "1.0", source: { type: "git" } }])).toBe(
+      "acme/x has no zip download in composer.lock (source only)",
+    );
+    expect(
+      refused([pkg("../evil", `https://codeload.github.com/a/b/legacy.zip/${"a".repeat(40)}`)]),
+    ).toBe('the lockfile entry "../evil" is not a plain package name');
+    const none = planProbes(
+      memView({ "composer.json": JSON.stringify({ require: { "slim/slim": "^4" } }) }),
+    );
+    expect(none.steps[0]?.skip?.reason).toBe(
+      "no composer.lock, so packages were not installed (installs must be reproducible)",
+    );
+    // No packages at all: nothing to download, the offline steps still run.
+    const bare = planProbes(
+      memView({ "composer.json": JSON.stringify({ require: { php: "^8.2" } }) }),
+    );
+    expect(bare.fetch).toBeNull();
+    expect(bare.steps[0]?.command).not.toBeNull();
+  });
+
+  it("cargo test, PHPUnit and Pest output; rustc and php -l diagnostics", () => {
+    const cargo = [
+      "running 0 tests",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "running 4 tests",
+      "test exports_a_note_as_markdown ... ignored, export is not built yet",
+      "test adds_a_note ... ok",
+      "test tests::searches_note_bodies ... FAILED",
+      "test result: FAILED. 2 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    ].join("\n");
+    expect(parseTestOutput(cargo)).toEqual({
+      runner: "cargo",
+      pass: 2,
+      fail: 1,
+      skip: 1,
+      failing: ["tests::searches_note_bodies"],
+    });
+    const phpunit = [
+      "PHPUnit 11.5.57 by Sebastian Bergmann and contributors.",
+      "",
+      "..SF                                                                4 / 4 (100%)",
+      "",
+      "There was 1 failure:",
+      "",
+      "1) Tests\\StoreTest::testSearchesNoteBodies",
+      "Failed asserting that actual size 0 matches expected size 1.",
+      "",
+      "/work/tests/StoreTest.php:35",
+      "",
+      "--",
+      "",
+      "There was 1 skipped test:",
+      "",
+      "1) Tests\\StoreTest::testExportsANoteAsMarkdown",
+      "export is not built yet",
+      "",
+      "FAILURES!",
+      "Tests: 4, Assertions: 3, Failures: 1, Skipped: 1.",
+    ].join("\n");
+    expect(parseTestOutput(phpunit)).toEqual({
+      runner: "phpunit",
+      pass: 2,
+      fail: 1,
+      skip: 1,
+      failing: ["Tests\\StoreTest::testSearchesNoteBodies"],
+    });
+    expect(parseTestOutput("OK (3 tests, 5 assertions)")).toMatchObject({
+      runner: "phpunit",
+      pass: 3,
+      fail: 0,
+    });
+    expect(
+      parseTestOutput(
+        "   FAILED  Tests\\Feature\\NotesTest > searches note bodies\n\n  Tests:    1 failed, 1 skipped, 2 passed (4 assertions)",
+      ),
+    ).toEqual({ runner: "pest", pass: 2, fail: 1, skip: 1, failing: ["searches note bodies"] });
+    expect(
+      parseErrorLines(
+        [
+          "error[E0432]: unresolved import `axum::extract::Query`",
+          "  --> src/lib.rs:7:27",
+          "error[E0308]: mismatched types",
+          "   --> /work/.cs-cargo/registry/src/x/lib.rs:3:1",
+          'Parse error: syntax error, unexpected token "{" in ./src/Broken.php on line 2',
+          "PHP Fatal error:  Uncaught Error in vendor/slim/slim/Slim/App.php on line 9",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      { file: "src/lib.rs", line: 7, message: "unresolved import `axum::extract::Query`" },
+      { file: "src/Broken.php", line: 2, message: 'syntax error, unexpected token "{"' },
+    ]);
   });
 });
 

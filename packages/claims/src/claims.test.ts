@@ -198,6 +198,8 @@ describe("adversarial suite: every fabricated claim is dropped", () => {
     ["wrong framework", "The API uses Django.", [E.manifest], "unsupported_token"],
     ["wrong Go framework", "The API uses Gin.", [E.manifest], "unsupported_token"],
     ["wrong JVM framework", "The API uses Quarkus.", [E.manifest], "unsupported_token"],
+    ["wrong Rust framework", "The API uses Actix.", [E.manifest], "unsupported_token"],
+    ["wrong PHP framework", "The API uses Symfony.", [E.manifest], "unsupported_token"],
     ["wrong version", "It runs on Express 5.0.0.", [E.manifest], "unsupported_token"],
     [
       "fabricated advisory",

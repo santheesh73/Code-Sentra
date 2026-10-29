@@ -14,6 +14,9 @@ export interface TestSummary {
     | "rspec"
     | "minitest"
     | "surefire"
+    | "cargo"
+    | "phpunit"
+    | "pest"
     | "unknown";
   pass: number;
   fail: number;
@@ -70,6 +73,24 @@ function parseGoTestJson(s: string): TestSummary | null {
       .filter(([, v]) => v === "fail")
       .map(([k]) => k.split("\u0000")[1] as string),
   };
+}
+
+/**
+ * PHPUnit lists failures, errors, skipped and risky tests in sections ("There was 1 failure:",
+ * "There were 2 skipped tests:"), each numbered "1) Class::method"; only the failure and error
+ * sections name failing tests.
+ */
+function phpunitFailing(s: string): string[] {
+  const out = new Set<string>();
+  let inFailures = false;
+  for (const line of s.split("\n")) {
+    const header = /^There (?:was|were) \d+ (.+?):$/.exec(line);
+    if (header) inFailures = /^(failures?|errors?)$/.test(header[1] as string);
+    else if (/^(FAILURES!|ERRORS!|OK)/.test(line)) inFailures = false;
+    const m = inFailures ? /^\d+\) (\S+::\w+)/.exec(line) : null;
+    if (m) out.add(m[1] as string);
+  }
+  return [...out];
 }
 
 export function parseTestOutput(output: string): TestSummary | null {
@@ -201,6 +222,60 @@ export function parseTestOutput(output: string): TestSummary | null {
       ],
     };
   }
+  // cargo test: one "test result:" line per test binary (unit, integration, doc tests);
+  // failing tests as "test tests::exports ... FAILED" (module path, then the function).
+  const ct = [
+    ...s.matchAll(
+      /^test result: \w+\. (\d+) passed; (\d+) failed; (\d+) ignored; \d+ measured; \d+ filtered out/gm,
+    ),
+  ];
+  if (ct.length) {
+    let [pass, fail, skip] = [0, 0, 0];
+    for (const m of ct) {
+      pass += Number(m[1]);
+      fail += Number(m[2]);
+      skip += Number(m[3]);
+    }
+    return {
+      runner: "cargo",
+      pass,
+      fail,
+      skip,
+      failing: [
+        ...new Set([...s.matchAll(/^test (\S+) \.\.\. FAILED$/gm)].map((m) => m[1] as string)),
+      ],
+    };
+  }
+  // PHPUnit: "OK (3 tests, 5 assertions)", or "Tests: 4, Assertions: 4, Failures: 1, Skipped: 1.";
+  // failing tests as "1) App\Tests\StoreTest::testSearch".
+  const pu = /^OK \((\d+) tests?, \d+ assertions?\)/m.exec(s);
+  const pc = /^Tests: (\d+), Assertions: \d+(.*)\.$/m.exec(s);
+  if (pu || pc) {
+    const total = Number((pu ?? pc)?.[1]);
+    const rest = pc?.[2] ?? "";
+    const count = (k: string) => Number(new RegExp(`${k}: (\\d+)`).exec(rest)?.[1] ?? 0);
+    const fail = count("Failures") + count("Errors");
+    const skip = count("Skipped") + count("Incomplete");
+    return {
+      runner: "phpunit",
+      pass: total - fail - skip,
+      fail,
+      skip,
+      failing: phpunitFailing(s),
+    };
+  }
+  // Pest: "Tests:    1 failed, 1 skipped, 2 passed (4 assertions)"; failures as "FAILED  Tests\X > name".
+  const pe = /^\s*Tests:\s+(.+?)\s+\(\d+ assertions?\)/m.exec(s);
+  if (pe) {
+    const part = (k: string) => Number(new RegExp(`(\\d+) ${k}`).exec(pe[1] as string)?.[1] ?? 0);
+    return {
+      runner: "pest",
+      pass: part("passed"),
+      fail: part("failed"),
+      skip: part("skipped") + part("todos?") + part("incomplete"),
+      failing: [...s.matchAll(/^\s*FAILED\s+\S+\s+>\s+(.+?)\s*$/gm)].map((m) => m[1] as string),
+    };
+  }
   // mocha: "2 passing", "1 failing", "1 pending".
   if (/^\s*\d+ passing/m.test(s)) {
     return {
@@ -235,7 +310,9 @@ export function parseErrorLines(output: string, max = 20): ErrorLine[] {
       f.includes(".cs-venv/") ||
       f.startsWith(".cs-gomod/") ||
       f.startsWith(".cs-m2/") ||
-      f.startsWith(".cs-bundle/")
+      f.startsWith(".cs-bundle/") ||
+      f.startsWith(".cs-cargo/") ||
+      f.startsWith("vendor/")
     )
       return;
     if (
@@ -256,6 +333,16 @@ export function parseErrorLines(output: string, max = 20): ErrorLine[] {
   // Go compiler and vet: "./cart.go:12:5: undefined: x" (vet may prefix "vet: ").
   for (const m of s.matchAll(/^(?:vet: )?(\S+?\.go):(\d+):(?:\d+:)? (.+)$/gm))
     push(m[1] as string, m[2] as string, m[3] as string);
+  // rustc and clippy: "error[E0425]: cannot find value `x`" then "  --> src/store.rs:12:5".
+  for (const m of s.matchAll(
+    /^error(?:\[\w+\])?: (.+)\n(?:.*\n){0,2}?\s*--> (\S+?\.rs):(\d+):\d+/gm,
+  ))
+    push(m[2] as string, m[3] as string, m[1] as string);
+  // php -l: "PHP Parse error:  syntax error, unexpected … in src/Store.php on line 12".
+  for (const m of s.matchAll(
+    /(?:PHP )?(?:Parse|Fatal) error:\s+(.+?) in (\S+?\.php) on line (\d+)/g,
+  ))
+    push(m[2] as string, m[3] as string, m[1] as string);
   for (const m of s.matchAll(/File "([^"]+\.py)", line (\d+)/g))
     push(m[1] as string, m[2] as string, "traceback");
   // eslint stylish: path on its own line, then "  3:5  error  message  rule".

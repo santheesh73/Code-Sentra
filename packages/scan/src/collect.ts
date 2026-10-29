@@ -33,6 +33,9 @@ function matchTest(
     const parts = failing.split("::");
     file = parts[0] as string;
     name = parts[parts.length - 1]?.replace(/\[.*\]$/, "") as string;
+    // cargo (`tests::exports`) and PHPUnit (`App\Tests\StoreTest::testX`) name a module or a
+    // class, not a file: match the test by name anywhere.
+    if (!map.facts.some((f) => f.path === file)) file = null;
   } else if (failing.includes(" > ")) {
     const parts = failing.split(" > ");
     if (/\.[cm]?[jt]sx?$/.test(parts[0] as string)) file = parts[0] as string;

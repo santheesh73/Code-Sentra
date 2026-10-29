@@ -12,6 +12,8 @@ const WASM: Record<ParserLanguage, string> = {
   go: "tree-sitter-go/tree-sitter-go.wasm",
   ruby: "tree-sitter-ruby/tree-sitter-ruby.wasm",
   java: "tree-sitter-java/tree-sitter-java.wasm",
+  rust: "tree-sitter-rust/tree-sitter-rust.wasm",
+  php: "tree-sitter-php/tree-sitter-php.wasm",
 };
 
 let init: Promise<void> | null = null;

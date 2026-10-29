@@ -176,9 +176,67 @@ describe("Go, RubyGems and Maven lockfiles", () => {
       "pom.xml",
       "gradle.lockfile",
       "svc/build.gradle.kts",
+      "Cargo.lock",
+      "composer.lock",
     ])
       expect(isLockfile(f), f).toBe(true);
     expect(isLockfile("go.sum")).toBe(false);
+  });
+
+  it("reads Cargo.lock registry packages; workspace crates are skipped, git sources unpinned", () => {
+    const p = parseLockfile(
+      "Cargo.lock",
+      [
+        "version = 4",
+        "",
+        "[[package]]",
+        'name = "notes-api"',
+        'version = "0.1.0"',
+        "",
+        "[[package]]",
+        'name = "smallvec"',
+        'version = "1.6.0"',
+        'source = "registry+https://github.com/rust-lang/crates.io-index"',
+        'checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00f441b5ff43e3b6ac2a22a0539"',
+        "",
+        "[[package]]",
+        'name = "forked"',
+        'version = "0.2.0"',
+        'source = "git+https://github.com/x/forked#abc"',
+        "",
+        "[metadata]",
+      ].join("\n"),
+    );
+    expect(p?.packages.map((x) => `${x.ecosystem} ${x.name}@${x.version} ${x.locator}`)).toEqual([
+      "crates.io smallvec@1.6.0 Cargo.lock:8",
+    ]);
+    expect(p?.unpinned.map((u) => `${u.locator} ${u.text}`)).toEqual([
+      "Cargo.lock:14 forked 0.2.0 (git source)",
+    ]);
+  });
+
+  it("reads composer.lock packages and dev packages; a dev branch is unpinned", () => {
+    const text = JSON.stringify(
+      {
+        packages: [
+          { name: "slim/slim", version: "4.12.0" },
+          { name: "guzzlehttp/psr7", version: "v2.4.4" },
+          { name: "acme/fork", version: "dev-main" },
+        ],
+        "packages-dev": [{ name: "phpunit/phpunit", version: "11.4.0" }],
+      },
+      null,
+      4,
+    );
+    const p = parseLockfile("composer.lock", text);
+    expect(
+      p?.packages.map((x) => `${x.ecosystem} ${x.name}@${x.version} dev=${x.dev} ${x.locator}`),
+    ).toEqual([
+      "Packagist slim/slim@4.12.0 dev=false composer.lock:4",
+      "Packagist guzzlehttp/psr7@2.4.4 dev=false composer.lock:8",
+      "Packagist phpunit/phpunit@11.4.0 dev=true composer.lock:18",
+    ]);
+    expect(p?.unpinned.map((u) => u.text)).toEqual(["acme/fork dev-main (branch)"]);
   });
 });
 

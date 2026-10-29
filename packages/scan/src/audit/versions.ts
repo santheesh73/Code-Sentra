@@ -186,5 +186,7 @@ export function compareFor(ecosystem: string): (a: string, b: string) => number 
   if (ecosystem === "PyPI") return comparePep440;
   if (ecosystem === "RubyGems") return compareGem;
   if (ecosystem === "Maven") return compareMaven;
-  return compareSemver; // npm, Go (v-prefixed semver, pseudo-versions as prereleases)
+  // npm, Go (v-prefixed semver, pseudo-versions as prereleases), crates.io (SemVer),
+  // Packagist (Composer tags, normalized without the `v`).
+  return compareSemver;
 }

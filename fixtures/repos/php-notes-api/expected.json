@@ -1,0 +1,195 @@
+{
+  "name": "php-notes-api",
+  "description": "Slim notes API. The download path is our script: each package composer.lock pins is the zip of a locked GitHub commit, fetched from codeload.github.com; then offline composer dump-autoload, php -l and PHPUnit. The offline steps were checked by hand in the sandbox image (PHP 8.4.27, Composer 2.10.3); the downloads themselves are exercised by CI, because this development session's egress policy does not reach GitHub archives. PHPUnit is expected to give 2 pass, 1 fail (search ignores note bodies), 1 skipped. guzzlehttp/psr7 2.4.4 is affected by GHSA-wxmh-65f7-jcvw / CVE-2023-29197 (fixed in 2.4.5).",
+  "snapshot": {
+    "kind": "zip",
+    "hasHistory": false
+  },
+  "languages": [
+    "PHP"
+  ],
+  "frameworks": [
+    "Slim"
+  ],
+  "packageManager": "composer",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/notes",
+      "locator": "public/index.php:17"
+    },
+    {
+      "method": "POST",
+      "path": "/notes",
+      "locator": "public/index.php:22"
+    },
+    {
+      "method": "GET",
+      "path": "/notes/search",
+      "locator": "public/index.php:31"
+    },
+    {
+      "method": "GET",
+      "path": "/notes/{id}/export.md",
+      "locator": "public/index.php:37"
+    }
+  ],
+  "envVars": {
+    "read": [
+      {
+        "name": "NOTES_DB_PATH",
+        "locator": "src/Config.php:12"
+      },
+      {
+        "name": "NOTES_SIGNING_KEY",
+        "locator": "src/Config.php:17"
+      }
+    ],
+    "documented": [
+      "NOTES_DB_PATH",
+      "SENTRY_DSN"
+    ]
+  },
+  "probes": {
+    "install": "pass",
+    "build": "pass",
+    "tests": {
+      "pass": 2,
+      "fail": 1,
+      "skip": 1
+    }
+  },
+  "features": [
+    {
+      "name": "List notes",
+      "status": "complete",
+      "implementation": [
+        "public/index.php:17"
+      ]
+    },
+    {
+      "name": "Create notes",
+      "status": "complete",
+      "implementation": [
+        "public/index.php:22"
+      ]
+    },
+    {
+      "name": "Search notes",
+      "status": "partial",
+      "implementation": [
+        "public/index.php:31",
+        "src/Store.php:39"
+      ],
+      "why": "TODO marker in src/Store.php and the body-search test fails",
+      "tests": [
+        "tests/StoreTest.php:32"
+      ]
+    },
+    {
+      "name": "Export a note as Markdown",
+      "status": "partial",
+      "implementation": [
+        "public/index.php:37",
+        "src/Export.php:10"
+      ],
+      "tests": [
+        "tests/StoreTest.php:26"
+      ],
+      "why": "Export::markdown throws LogicException('Not implemented') and its test is skipped"
+    },
+    {
+      "name": "Share notes via link",
+      "status": "planned",
+      "intent": [
+        "README.md:14"
+      ],
+      "why": "README roadmap only; no implementation"
+    }
+  ],
+  "findings": [
+    {
+      "code": "TESTS_FAILING",
+      "locator": "tests/StoreTest.php:32",
+      "lineContains": "public function testSearchesNoteBodies()"
+    },
+    {
+      "code": "SKIPPED_TESTS",
+      "locator": "tests/StoreTest.php:28",
+      "lineContains": "$this->markTestSkipped('export is not built yet')"
+    },
+    {
+      "code": "TODO_MARKER",
+      "locator": "src/Store.php:41",
+      "lineContains": "TODO: search note bodies too"
+    },
+    {
+      "code": "STUB_IMPLEMENTATION",
+      "locator": "src/Export.php:12",
+      "lineContains": "throw new \\LogicException('Not implemented')"
+    },
+    {
+      "code": "ENV_VAR_UNDOCUMENTED",
+      "locator": "src/Config.php:17",
+      "lineContains": "$_ENV['NOTES_SIGNING_KEY']",
+      "envVar": "NOTES_SIGNING_KEY"
+    },
+    {
+      "code": "ENV_VAR_UNUSED",
+      "locator": ".env.example:3",
+      "lineContains": "SENTRY_DSN=",
+      "envVar": "SENTRY_DSN"
+    },
+    {
+      "code": "SECRET_EXPOSED",
+      "locator": "src/Defaults.php:10",
+      "lineContains": "AKIACODESENTRAFIXPH6",
+      "secretType": "aws-access-token",
+      "storedPreviewMustNotContain": "AKIACODESENTRAFIXPH6"
+    },
+    {
+      "code": "VULNERABLE_DEPENDENCY",
+      "locator": "composer.lock:10",
+      "lineContains": "\"name\": \"guzzlehttp/psr7\"",
+      "ecosystem": "Packagist",
+      "package": "guzzlehttp/psr7",
+      "version": "2.4.4",
+      "mustIncludeAdvisory": "GHSA-wxmh-65f7-jcvw"
+    }
+  ],
+  "absentFindings": [
+    "BUILD_FAILED",
+    "NO_TESTS",
+    "TYPECHECK_ERRORS"
+  ],
+  "forbiddenClaims": [
+    {
+      "text": "All 4 tests pass.",
+      "reason": "one fails, one is skipped"
+    },
+    {
+      "text": "Notes can be shared via public links.",
+      "reason": "planned only"
+    },
+    {
+      "text": "Markdown export is complete.",
+      "reason": "throws LogicException"
+    },
+    {
+      "text": "Search covers note bodies.",
+      "reason": "TODO; titles only"
+    },
+    {
+      "text": "The API uses Symfony.",
+      "reason": "it uses Slim"
+    },
+    {
+      "text": "Notes are encrypted with NOTES_ENCRYPTION_KEY.",
+      "reason": "no such variable"
+    },
+    {
+      "text": "Dependencies have no known vulnerabilities.",
+      "reason": "guzzlehttp/psr7 2.4.4 has advisories"
+    }
+  ]
+}

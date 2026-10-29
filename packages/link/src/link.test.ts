@@ -49,6 +49,7 @@ describe("join keys", () => {
     expect(routeMatches("/tasks/[id]", "/tasks/42")).toBe(true);
     expect(routeMatches("/tasks/:id", "/tasks/42")).toBe(true);
     expect(routeMatches("/tasks/{id}", "/tasks/42/x")).toBe(false);
+    expect(routeMatches("/tasks/<id>", "/tasks/42")).toBe(true);
     expect(routeMatches("/docs/[...slug]", "/docs/a/b")).toBe(true);
     expect(routeMatches("/", "/")).toBe(true);
     expect(routeMatches("/about", "/pricing")).toBe(false);
@@ -166,7 +167,7 @@ async function graphOf(dir: string): Promise<LinkGraph> {
   };
 }
 
-describe("Go, Ruby and Java routes are trace targets (ADR 0026)", () => {
+describe("Go, Ruby, Java, Rust and PHP routes are trace targets (ADR 0026, ADR 0028)", () => {
   const repos = join(new URL(".", import.meta.url).pathname, "../../../fixtures/repos");
   it.each([
     ["go-shop-api", "https://shop.example/products/p9", "cmd/shop/main.go", 17],
@@ -177,6 +178,8 @@ describe("Go, Ruby and Java routes are trace targets (ADR 0026)", () => {
       "src/main/java/com/example/shop/OrderController.java",
       27,
     ],
+    ["rs-notes-api", "https://notes.example/notes/5/export.md", "src/lib.rs", 17],
+    ["php-notes-api", "https://notes.example/notes/5/export.md", "public/index.php", 37],
   ] as const)("%s: a broken %s traces to %s:%i", async (repo, url, path, line) => {
     const t = traceFinding(
       { code: "ROUTE_BROKEN", locator: url, message: "" },

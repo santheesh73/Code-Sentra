@@ -27,7 +27,10 @@ const log = pino({ level: config.LOG_LEVEL, base: { service: "worker-link" } });
 
 // The current key seals; retired ones still open values until `reseal` runs (ADR 0024).
 const keys = keyring(config.ENCRYPTION_KEY, config.ENCRYPTION_KEY_PREVIOUS);
-const db = createDatabase(config.DATABASE_URL, { applicationName: "codesentra-worker-link" });
+const db = createDatabase(config.DATABASE_URL, {
+  applicationName: "codesentra-worker-link",
+  onError: (e) => log.error({ err: e.message }, "database connection error"),
+});
 const queue = await startQueueClient(config.DATABASE_URL, {
   onError: (e) => log.error({ err: e.message }, "queue error"),
 });

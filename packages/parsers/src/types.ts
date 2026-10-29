@@ -6,7 +6,9 @@ export type ParserLanguage =
   | "python"
   | "go"
   | "ruby"
-  | "java";
+  | "java"
+  | "rust"
+  | "php";
 
 export type MarkerKind = "TODO" | "FIXME" | "HACK" | "XXX";
 
@@ -18,6 +20,8 @@ export interface FileFacts {
    * `python-member` is `from pkg import name`: a submodule if it resolves, else a symbol.
    * `go` names a package (a directory); `ruby` is `require`, `ruby-relative` is
    * `require_relative`; `java` is a type (`a.b.C`), `java-wildcard` a package (`a.b.*`).
+   * `rust` is a `use` path (`crate::store::Store`), `rust-mod` a `mod x;` declaration; `php`
+   * is a `use`d class (`App\\Store`), `php-require` a `require`/`include` path relative to the file.
    */
   imports: {
     specifier: string;
@@ -32,7 +36,11 @@ export interface FileFacts {
       | "ruby"
       | "ruby-relative"
       | "java"
-      | "java-wildcard";
+      | "java-wildcard"
+      | "rust"
+      | "rust-mod"
+      | "php"
+      | "php-require";
   }[];
   symbols: {
     name: string;
@@ -42,7 +50,8 @@ export interface FileFacts {
   }[];
   /**
    * HTTP routes registered in code: Express/Fastify-style calls, FastAPI/Flask decorators,
-   * Go `HandleFunc`/Gin/Echo/Chi, Sinatra/Rails route DSL, Spring and JAX-RS annotations.
+   * Go `HandleFunc`/Gin/Echo/Chi, Sinatra/Rails route DSL, Spring and JAX-RS annotations,
+   * axum/Actix/Rocket, Laravel/Slim and Symfony `#[Route]`.
    */
   routes: { method: string; path: string; line: number; text: string; handler: string | null }[];
   envReads: { name: string; line: number; text: string }[];
@@ -78,7 +87,8 @@ export interface FileFacts {
   markers: { kind: MarkerKind; line: number; text: string }[];
   /**
    * Functions whose only statement throws "not implemented": NotImplementedError,
-   * `panic("not implemented")`, UnsupportedOperationException.
+   * `panic("not implemented")`, UnsupportedOperationException, `todo!()`/`unimplemented!()`,
+   * PHP `throw new LogicException('Not implemented')`.
    */
   stubs: { symbol: string | null; line: number; text: string }[];
   cliCommands: { name: string; line: number }[];

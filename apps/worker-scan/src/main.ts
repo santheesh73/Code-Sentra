@@ -84,7 +84,10 @@ const model = await reportModel();
 if (!model.model)
   log.warn({ reason: model.reason }, "no report model: inventory and explain will be gaps");
 
-const db = createDatabase(config.DATABASE_URL, { applicationName: "codesentra-worker-scan" });
+const db = createDatabase(config.DATABASE_URL, {
+  applicationName: "codesentra-worker-scan",
+  onError: (e) => log.error({ err: e.message }, "database connection error"),
+});
 const queue = await startQueueClient(config.DATABASE_URL, {
   onError: (e) => log.error({ err: e.message }, "queue error"),
 });

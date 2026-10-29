@@ -11,7 +11,7 @@ export interface ProbeStep {
   skip: { kind: "not_applicable" | "gap"; reason: string } | null;
   timeoutMs: number;
   /**
-   * Failures that are the sandbox's limit, not the project's (no C compiler, a pinned
+   * Failures that are the sandbox's limit, not the project's (no make or C headers, a pinned
    * runtime the sandbox lacks, an artifact the offline cache missed): when the output
    * matches, the step is reported as not run, with the reason, instead of failed.
    */
@@ -19,8 +19,18 @@ export interface ProbeStep {
 }
 
 export interface ProbePlan {
-  ecosystem: "node" | "python" | "go" | "ruby" | "maven" | "none";
-  packageManager: "npm" | "pnpm" | "yarn" | "pip" | "go" | "bundler" | "maven" | null;
+  ecosystem: "node" | "python" | "go" | "ruby" | "maven" | "rust" | "php" | "none";
+  packageManager:
+    | "npm"
+    | "pnpm"
+    | "yarn"
+    | "pip"
+    | "go"
+    | "bundler"
+    | "maven"
+    | "cargo"
+    | "composer"
+    | null;
   /** Dependency download (network on, project code never runs); null when nothing to fetch. */
   fetch: { command: string[]; reason: string } | null;
   /** Files rewritten in the scratch copy before fetch (sanitized requirements, disabled .npmrc). */
@@ -547,7 +557,8 @@ function rubyPlan(view: ProjectView): ProbePlan {
     {
       pattern:
         /Failed to build gem native extension|make: not found|You have to install development tools/,
-      reason: "a gem needs a C compiler to build its native extension, and the sandbox has none",
+      reason:
+        "a gem has a native extension, and the sandbox cannot build it (no make, no Ruby headers)",
     },
     {
       pattern: /Your Ruby version is [\d.]+, but your Gemfile specified/,
@@ -693,6 +704,344 @@ function mavenPlan(view: ProjectView): ProbePlan {
   return plan;
 }
 
+/** The Rust toolchain in the sandbox image (ADR 0028; a test keeps it equal to the Dockerfile). */
+export const SANDBOX_RUST_VERSION = "1.99.0";
+
+/**
+ * The Cargo download (ours). `cargo fetch --locked` downloads the crates Cargo.lock pins and
+ * checks each against the lockfile's checksum; it runs no build script and no proc macro. The
+ * toolchain is on PATH directly (no rustup), so a rust-toolchain file cannot swap it, and
+ * `CARGO_HOME` is ours, so no config but ours applies (the project's `.cargo/` is set aside).
+ */
+const CARGO_ENV =
+  "CARGO_HOME=/work/.cs-cargo RUSTC=/opt/rust/bin/rustc RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= CARGO_TERM_COLOR=never";
+const CARGO_FETCH_SH = `set -eu
+if [ -f /etc/codesentra-ca.pem ]; then export CARGO_HTTP_CAINFO=/etc/codesentra-ca.pem; fi
+export ${CARGO_ENV} CARGO_NET_GIT_FETCH_WITH_CLI=false
+cargo fetch --locked
+`;
+
+/**
+ * Rust with Cargo (ADR 0028): crates.io only, pinned by Cargo.lock; build scripts, proc macros
+ * and tests run offline.
+ */
+function rustPlan(view: ProjectView): ProbePlan {
+  const plan: ProbePlan = {
+    ecosystem: "rust",
+    packageManager: "cargo",
+    fetch: null,
+    prepare: [],
+    steps: [],
+    refused: null,
+  };
+  const all = ["install", "build", "typecheck", "lint", "tests"] as const;
+  const lockText = view.read("Cargo.lock");
+  if (lockText === null) {
+    plan.steps.push(
+      skip(
+        "install",
+        "gap",
+        "no Cargo.lock, so crates were not downloaded (installs must be reproducible)",
+      ),
+    );
+    for (const n of all.slice(1)) plan.steps.push(skip(n, "gap", "crates were not downloaded"));
+    return plan;
+  }
+  const lock = parseLockfile("Cargo.lock", lockText);
+  if (!lock) plan.refused = "not downloaded: Cargo.lock could not be read";
+  else if (lock.unpinned[0])
+    plan.refused = `not downloaded: ${lock.unpinned[0].text.replace(/ \((\w+) source\)$/, " comes from a $1 source, not crates.io")}`;
+  for (const f of [...view.files].filter((x) => x.startsWith(".cargo/")))
+    plan.prepare.push({ rename: [f, `${f}.codesentra-disabled`] });
+  if (lock?.packages.length) {
+    plan.prepare.push({ write: [".cs-cargo/fetch.sh", CARGO_FETCH_SH] });
+    plan.fetch = {
+      command: ["sh", ".cs-cargo/fetch.sh"],
+      reason: `the ${lock.packages.length} crates Cargo.lock pins, from crates.io only, each checked against the lockfile's checksum (cargo fetch; no build script runs)`,
+    };
+  }
+  const cargo = (args: string) => sh(`${CARGO_ENV} CARGO_NET_OFFLINE=true cargo ${args}`);
+  const sandboxLimits = [
+    {
+      pattern:
+        /requires rustc \d+\.\d+(?:\.\d+)? or newer|is not supported by the following package|feature `[\w-]+` is required/,
+      reason: `a crate needs a newer Rust than the sandbox's ${SANDBOX_RUST_VERSION}`,
+    },
+    {
+      pattern:
+        /pkg-config|Could not find directory of OpenSSL|failed to run custom build command for `\S*-sys /,
+      reason: "a crate links a system library (found with pkg-config) the sandbox does not have",
+    },
+  ];
+  plan.steps.push({
+    ...step("install", cargo("metadata --frozen --format-version 1 --quiet >/dev/null"), 5 * MIN),
+    gapWhen: sandboxLimits,
+  });
+  plan.steps.push({ ...step("build", cargo("build --frozen"), 15 * MIN), gapWhen: sandboxLimits });
+  plan.steps.push(skip("typecheck", "not_applicable", "cargo build type-checks every crate"));
+  plan.steps.push({
+    ...step("lint", cargo("clippy --frozen --all-targets -- -D warnings"), 10 * MIN),
+    gapWhen: sandboxLimits,
+  });
+  plan.steps.push({
+    ...step("tests", cargo("test --frozen --no-fail-fast"), 15 * MIN),
+    gapWhen: sandboxLimits,
+  });
+  return plan;
+}
+
+/** The PHP and Composer in the sandbox image (ADR 0028; a test keeps them equal). */
+export const SANDBOX_PHP_VERSION = "8.4.27";
+export const SANDBOX_COMPOSER_VERSION = "2.10.3";
+const COMPOSER_NAME = /^[a-z0-9]([_.-]?[a-z0-9]+)*\/[a-z0-9](([_.]|-{1,2})?[a-z0-9]+)*$/;
+
+export interface LockedComposerPackage {
+  name: string;
+  /** Always codeload.github.com: the zip of the locked commit. */
+  url: string;
+  sha1: string | null;
+  /** The lock entry, as `vendor/composer/installed.json` lists it. */
+  entry: Record<string, unknown>;
+  dev: boolean;
+}
+
+/**
+ * The packages a composer.lock pins, for a download that runs no code. Each must be a zip
+ * of a commit on GitHub (Packagist's default for public packages): the URL is rewritten to
+ * codeload.github.com, which serves it without the API's rate limit. Anything else (other
+ * hosts, path or VCS-only packages) is refused with the reason.
+ */
+export function lockedComposer(
+  text: string,
+): { packages: LockedComposerPackage[] } | { refused: string } {
+  let doc: Record<string, Record<string, unknown>[] | undefined>;
+  try {
+    doc = JSON.parse(text);
+  } catch {
+    return { refused: "composer.lock is not valid JSON" };
+  }
+  const out: LockedComposerPackage[] = [];
+  for (const key of ["packages", "packages-dev"]) {
+    for (const pkg of doc[key] ?? []) {
+      const name = String(pkg.name ?? "");
+      if (!COMPOSER_NAME.test(name))
+        return { refused: `the lockfile entry "${name.slice(0, 80)}" is not a plain package name` };
+      if (pkg.type === "metapackage") continue;
+      const dist = pkg.dist as
+        | { type?: string; url?: string; reference?: string; shasum?: string }
+        | undefined;
+      if (!dist?.url || dist.type !== "zip")
+        return {
+          refused: `${name} has no zip download in composer.lock (${dist?.type ?? "source only"})`,
+        };
+      let u: URL;
+      try {
+        u = new URL(dist.url);
+      } catch {
+        return { refused: `${name} has a download that is not a URL` };
+      }
+      const api = /^\/repos\/([\w.-]+)\/([\w.-]+)\/zipball\/([0-9a-f]{40})$/.exec(u.pathname);
+      const direct = /^\/([\w.-]+)\/([\w.-]+)\/(?:legacy\.)?zip\/([0-9a-f]{40})$/.exec(u.pathname);
+      const m =
+        u.protocol === "https:" && u.hostname === "api.github.com"
+          ? api
+          : u.protocol === "https:" && u.hostname === "codeload.github.com"
+            ? direct
+            : null;
+      if (!m)
+        return {
+          refused: `${name} would be downloaded from ${u.protocol}//${u.hostname}, not a GitHub commit zip`,
+        };
+      out.push({
+        name,
+        url: `https://codeload.github.com/${m[1]}/${m[2]}/legacy.zip/${m[3]}`,
+        sha1: /^[0-9a-f]{40}$/.test(dist.shasum ?? "") ? (dist.shasum as string) : null,
+        entry: { ...pkg, "install-path": `../${name}` },
+        dev: key === "packages-dev",
+      });
+    }
+  }
+  return { packages: out };
+}
+
+/**
+ * The Composer download script (ours, never the project's): each locked zip from
+ * codeload.github.com, with redirects refused, checked against the lockfile's sha1 where there
+ * is one, unpacked into vendor/ (paths that would leave it are refused). Composer itself does
+ * not run during the download. Run with `python -I`, so nothing in the tree loads.
+ */
+const COMPOSER_FETCH_PY = `import hashlib, io, os, shutil, sys, urllib.request, zipfile
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(newurl, code, "redirect refused", headers, fp)
+opener = urllib.request.build_opener(NoRedirect)
+shutil.rmtree("vendor", ignore_errors=True)
+count = 0
+for line in open(".cs-composer/list.txt"):
+    name, url, sha = line.split()
+    with opener.open(url, timeout=120) as r:
+        data = r.read(200 * 1024 * 1024)
+    if sha != "-" and hashlib.sha1(data).hexdigest() != sha:
+        sys.exit(f"{name} does not match its composer.lock checksum")
+    dest = os.path.realpath(os.path.join("vendor", name))
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        for info in z.infolist():
+            rel = info.filename.split("/", 1)[1] if "/" in info.filename else ""
+            if not rel or (info.external_attr >> 16) & 0o170000 == 0o120000:
+                continue
+            target = os.path.realpath(os.path.join(dest, rel))
+            if not target.startswith(dest + os.sep):
+                sys.exit(f"{name}: {info.filename} would unpack outside vendor/{name}")
+            if info.is_dir():
+                os.makedirs(target, exist_ok=True)
+                continue
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with z.open(info) as src, open(target, "wb") as out:
+                shutil.copyfileobj(src, out)
+    count += 1
+os.makedirs("vendor/composer", exist_ok=True)
+shutil.copy(".cs-composer/installed.json", "vendor/composer/installed.json")
+print("downloaded", count, "packages")
+`;
+
+/**
+ * PHP with Composer (ADR 0028): our script downloads the locked zips; then, offline, Composer
+ * writes the autoloader (no scripts, no plugins) and the project's tools run from vendor/.
+ */
+function phpPlan(view: ProjectView): ProbePlan {
+  const plan: ProbePlan = {
+    ecosystem: "php",
+    packageManager: "composer",
+    fetch: null,
+    prepare: [],
+    steps: [],
+    refused: null,
+  };
+  const all = ["install", "build", "typecheck", "lint", "tests"] as const;
+  const lockText = view.read("composer.lock");
+  let locked: LockedComposerPackage[] = [];
+  if (lockText === null) {
+    const json = JSON.parse(view.read("composer.json") ?? "{}") as {
+      require?: Record<string, string>;
+      "require-dev"?: Record<string, string>;
+    };
+    if (Object.keys({ ...json.require, ...json["require-dev"] }).some((n) => n.includes("/"))) {
+      plan.steps.push(
+        skip(
+          "install",
+          "gap",
+          "no composer.lock, so packages were not installed (installs must be reproducible)",
+        ),
+      );
+      for (const n of all.slice(1)) plan.steps.push(skip(n, "gap", "packages were not installed"));
+      return plan;
+    }
+  } else {
+    const r = lockedComposer(lockText);
+    if ("refused" in r) plan.refused = `not downloaded: ${r.refused}`;
+    else locked = r.packages;
+  }
+  if (locked.length) {
+    const verified = locked.filter((p) => p.sha1).length;
+    const installed = {
+      packages: locked.map((p) => p.entry),
+      dev: true,
+      "dev-package-names": locked.filter((p) => p.dev).map((p) => p.name),
+    };
+    plan.prepare.push(
+      { write: [".cs-composer/fetch.py", COMPOSER_FETCH_PY] },
+      {
+        write: [
+          ".cs-composer/list.txt",
+          `${locked.map((p) => `${p.name} ${p.url} ${p.sha1 ?? "-"}`).join("\n")}\n`,
+        ],
+      },
+      { write: [".cs-composer/installed.json", `${JSON.stringify(installed, null, 2)}\n`] },
+    );
+    plan.fetch = {
+      command: ["python", "-I", ".cs-composer/fetch.py"],
+      reason: `the ${locked.length} package zips composer.lock pins, each the zip of a locked commit from codeload.github.com (${
+        verified === locked.length
+          ? "every one checked against the lockfile's sha1"
+          : verified
+            ? `${verified} checked against the lockfile's sha1; the lockfile has no checksum for the rest`
+            : "the lockfile has no checksums; the commit is pinned and the download is over HTTPS"
+      }; Composer does not run)`,
+    };
+  }
+  // A project-level Composer config or auth file applies to every Composer run; ours come from the env.
+  for (const f of ["auth.json", ".composer/config.json"])
+    if (view.files.has(f)) plan.prepare.push({ rename: [f, `${f}.codesentra-disabled`] });
+  const env =
+    "COMPOSER_HOME=/tmp/composer COMPOSER_NO_INTERACTION=1 COMPOSER_DISABLE_NETWORK=1 COMPOSER_ALLOW_SUPERUSER=0";
+  const binOf = (pkg: string): string | null => {
+    const p = locked.find((x) => x.name === pkg);
+    const bin = (p?.entry.bin as string[] | undefined)?.[0];
+    return p && bin ? `vendor/${pkg}/${bin}` : null;
+  };
+  const sandboxLimits = [
+    {
+      pattern:
+        /Composer detected issues in your platform|Your Composer dependencies require a PHP version|require the following PHP extensions to be installed|requires PHP version/,
+      reason: `the project needs a PHP version or extension the sandbox's PHP ${SANDBOX_PHP_VERSION} does not have`,
+    },
+  ];
+  plan.steps.push({
+    ...step("install", sh(`${env} composer dump-autoload --no-scripts --no-plugins`), 5 * MIN),
+    gapWhen: sandboxLimits,
+  });
+  plan.steps.push(
+    step(
+      "build",
+      sh(
+        `find . -name '*.php' -not -path './vendor/*' -not -path './.cs-*' -exec sh -c 'rc=0; for f; do php -l "$f" >/tmp/lint.out 2>&1 || { cat /tmp/lint.out; rc=1; }; done; exit $rc' sh {} +`,
+      ),
+      5 * MIN,
+    ),
+  );
+  const config = (names: string[]) => names.find((n) => view.files.has(n));
+  const phpstan = binOf("phpstan/phpstan");
+  const psalm = binOf("vimeo/psalm");
+  plan.steps.push(
+    phpstan && config(["phpstan.neon", "phpstan.neon.dist", "phpstan.dist.neon"])
+      ? step("typecheck", sh(`php ${phpstan} analyse --no-progress --no-interaction`), 10 * MIN)
+      : psalm && config(["psalm.xml", "psalm.xml.dist"])
+        ? step("typecheck", sh(`php ${psalm} --no-progress`), 10 * MIN)
+        : skip(
+            "typecheck",
+            "gap",
+            "no type checker (PHPStan or Psalm, with its config file) in composer.lock",
+          ),
+  );
+  const csFixer = binOf("friendsofphp/php-cs-fixer");
+  const phpcs = binOf("squizlabs/php_codesniffer");
+  plan.steps.push(
+    csFixer
+      ? step("lint", sh(`php ${csFixer} check --no-interaction`), 5 * MIN)
+      : phpcs
+        ? step("lint", sh(`php ${phpcs}`), 5 * MIN)
+        : skip("lint", "gap", "no linter (PHP-CS-Fixer, PHP_CodeSniffer) in composer.lock"),
+  );
+  const pest = binOf("pestphp/pest");
+  const phpunit = binOf("phpunit/phpunit");
+  const unitConfig = config(["phpunit.xml", "phpunit.xml.dist", "phpunit.dist.xml"]);
+  plan.steps.push(
+    pest
+      ? { ...step("tests", sh(`php ${pest} --colors=never`), 10 * MIN), gapWhen: sandboxLimits }
+      : phpunit
+        ? {
+            ...step(
+              "tests",
+              sh(`php ${phpunit} --colors=never${unitConfig ? "" : " tests"}`),
+              10 * MIN,
+            ),
+            gapWhen: sandboxLimits,
+          }
+        : skip("tests", "gap", "no test runner (PHPUnit or Pest) in composer.lock"),
+  );
+  return plan;
+}
+
 /** Projects whose dependency download would run code: every step is a gap with that reason. */
 function refusedEcosystem(reason: string): ProbePlan {
   return {
@@ -723,7 +1072,9 @@ export function planProbes(view: ProjectView): ProbePlan {
     return refusedEcosystem(
       "not run: Gradle evaluates the build script (code) to resolve dependencies, so the dependency download would run project code",
     );
+  if (view.files.has("Cargo.toml")) return rustPlan(view);
+  if (view.files.has("composer.json")) return phpPlan(view);
   return refusedEcosystem(
-    "no supported manifest (package.json, requirements.txt, pyproject.toml, go.mod) at the project root",
+    "no supported manifest (package.json, requirements.txt, pyproject.toml, go.mod, Gemfile, pom.xml, Cargo.toml, composer.json) at the project root",
   );
 }

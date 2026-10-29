@@ -86,3 +86,30 @@ test runs on every push and pull request (`.github/workflows/ci.yml`).
   - Residual risk: a parent POM fetched from Central could still declare extensions
     (ADR 0027).
   - Tested in `probe.test.ts` ("Maven: …").
+
+## Added in Phase 10 (ADR 0028)
+
+- **Rust downloads are `cargo fetch --locked`.**
+  - It downloads only the crates Cargo.lock pins, from crates.io, each checked against the
+    lockfile's checksum. It runs no build script and no proc macro.
+  - Git and other registry sources are refused. The project's `.cargo/` is set aside,
+    `CARGO_HOME` is ours, and `RUSTC` and the wrappers are fixed.
+  - The toolchain is on `PATH` with no rustup, so a `rust-toolchain` file cannot swap it.
+  - Build scripts and proc macros run only in the offline steps.
+  - Tested in `probe.test.ts` ("Rust: …").
+- **PHP downloads read composer.lock; Composer does not run.**
+  - CodeSentra's own script, run with `python -I`, fetches each locked commit's zip from
+    codeload.github.com, with redirects refused. It checks the sha1 where the lock has
+    one.
+  - It unpacks into `vendor/`, refusing entries that would leave it and skipping
+    symlinks.
+  - Other hosts, source-only packages and odd names are refused. `auth.json` and
+    `.composer/config.json` are set aside.
+  - The offline steps run Composer with `--no-scripts --no-plugins` and its network
+    disabled.
+  - Residual risk: without a sha1 in the lock, integrity rests on TLS and the pinned
+    commit (ADR 0028).
+  - Tested in `probe.test.ts` ("PHP: …").
+- **Image build without package mirrors.** The C toolchain and PHP's libraries are copied
+  from the official rust and php images' Debian packages (same release as the base).
+  Nothing comes from apt at build time.

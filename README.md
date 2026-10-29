@@ -7,11 +7,11 @@ an exact, verifiable fix:
 - **Sentra Link:** where in the code does each problem come from, how do we fix it, and how
   do we prove the fix?
 
-**Status:** Phase 9 (Ruby and Maven builds; ADR 0027).
+**Status:** Phase 10 (Rust and PHP; ADR 0028).
 - **Pulse:** paste a URL, or check a project environment, and get `live`, `degraded`,
   `down` or `unverified`, with evidence-backed issues and a fix prompt for each.
 - **Scan:** upload a zip or point at a public repository (TypeScript, JavaScript, Python,
-  Go, Ruby or Java). You get:
+  Go, Ruby, Java, Rust or PHP). You get:
   - a code map;
   - install, build and tests run in a sandbox;
   - dependency advisories and committed secrets;

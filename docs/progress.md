@@ -1,5 +1,75 @@
 # Progress
 
+## Phase 10 — Rust and PHP (2026-10-29)
+
+The user chose Rust and PHP (ADR 0028).
+
+### Built
+
+- **Parsers** for Rust and PHP, with the same facts as the other languages: imports,
+  symbols, routes, env reads, URL literals and env-built URL templates, error messages,
+  tests and their skips, TODO markers, and not-implemented stubs. The single-file CLI
+  embeds both grammars.
+  - Rust routes: axum, Actix and Rocket.
+  - PHP routes: Laravel, Slim/Lumen and Symfony `#[Route]`.
+- **Map and graph:**
+  - Rust `mod`/`use` resolve to module files within each Cargo crate.
+  - PHP `use` resolves through composer.json's PSR-4 maps, and `require` against the file.
+  - Cargo.toml and composer.json are read as manifests. Axum, Actix Web, Rocket, Laravel,
+    Slim and Symfony are detected, and the claim verifier knows their names.
+  - Link traces into Rust and PHP routes, and Rocket's `<id>` segments match.
+- **Dependency audit:** Cargo.lock (crates.io) and composer.lock (Packagist) against OSV.
+- **Probes in the sandbox:**
+  - **Rust:** `cargo fetch --locked` from crates.io only, then offline build, Clippy and
+    `cargo test`.
+  - **PHP:** our script downloads each locked commit zip from GitHub, and Composer does not
+    run during the download. Then, offline: the autoloader, `php -l`, and PHPUnit or Pest.
+- **Sandbox image:** adds Rust 1.99.0 with Clippy, PHP 8.4.27 and Composer 2.10.3, plus
+  the C toolchain Rust links with. It is built without any package mirror.
+- **Fixtures:**
+  - `rs-notes-api` (axum; smallvec 1.6.0, GHSA-43w2-9j62-hq99) runs in the sandbox: build
+    and Clippy pass, tests 2 pass, 1 fail, 1 ignored.
+  - `php-notes-api` (Slim; guzzlehttp/psr7 2.4.4, GHSA-wxmh-65f7-jcvw).
+
+### Defects found and fixed
+
+- **A skipped PHPUnit test would have counted as failing.** PHPUnit numbers skipped tests
+  the same way as failures (`1) Class::method`), so failing names are now read from the
+  failure and error sections only. A test covers it.
+- **Outdated Ruby gap reason.** It said the sandbox has no C compiler. It now has one (for
+  Rust), so the reason names what is still missing: make and the Ruby headers.
+
+### Verified here, and what only CI verifies
+
+- This session's egress policy refuses GitHub archive downloads (codeload.github.com,
+  api.github.com) and Debian's mirrors.
+- Verified here:
+  - the Rust fixture end to end in the sandbox;
+  - the PHP offline steps (`composer dump-autoload`, `php -l` with a planted syntax
+    error);
+  - the PHP unpacker against crafted zips (an entry escaping `vendor/`, a symlink, a
+    checksum mismatch);
+  - every PHP finding that does not need the test run.
+- CI only: the PHP download, and so the PHPUnit run and its TESTS_FAILING finding.
+
+### Still open (needs the user)
+
+Unchanged: the real-GitHub gate, deployment, a real report-model run, gVisor, and npm
+publish (plus a license choice).
+
+### Deferred or partial
+
+- **Gradle** projects still do not build.
+- **PHP packages hosted outside GitHub** (GitLab, Bitbucket, private repositories) are
+  refused, so those projects get a gap.
+- **Route prefixes outside the syntax** are not applied: Laravel's `routes/api.php`
+  prefix, Rocket mounts, and axum routers nested from another function (ADR 0028).
+- **Native gems** still need make and Ruby headers. cgo stays off.
+
+### Gate result
+
+Running; replaced with the recorded output once the gate finishes.
+
 ## Phase 9 — Ruby and Maven builds without code in the download (2026-10-29)
 
 The user chose safe Ruby and Java builds (ADR 0027).

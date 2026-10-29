@@ -47,7 +47,6 @@ export interface ProjectView {
 
 const NPM_REGISTRY = "https://registry.npmjs.org/";
 const PYPI_INDEX = "https://pypi.org/simple";
-const ALLOWED_TARBALL_HOSTS = new Set(["registry.npmjs.org", "registry.yarnpkg.com"]);
 const MIN = 60_000;
 
 const skip = (
@@ -68,28 +67,6 @@ const step = (name: ProbeName, command: string[], timeoutMs: number): ProbeStep 
   timeoutMs,
 });
 const sh = (script: string) => ["sh", "-c", script];
-
-/**
- * Checks that every lockfile download URL points at the public registry. A lockfile can
- * name any URL (`"resolved": "http://169.254.169.254/..."`), and the package manager
- * would fetch it from the worker's network (ADR 0016), so anything else is refused.
- */
-export function checkNpmLockUrls(lockText: string, lockPath: string): string | null {
-  const p = parseLockfile(lockPath, lockText);
-  if (!p) return `${lockPath} could not be parsed`;
-  for (const pkg of p.packages) {
-    if (!pkg.resolved) continue;
-    let u: URL;
-    try {
-      u = new URL(pkg.resolved);
-    } catch {
-      return `${pkg.name} resolves to a non-URL source (${pkg.resolved.slice(0, 80)})`;
-    }
-    if (u.protocol !== "https:" || !ALLOWED_TARBALL_HOSTS.has(u.hostname))
-      return `${pkg.name} would be downloaded from ${u.protocol}//${u.hostname}, not the public npm registry`;
-  }
-  return null;
-}
 
 /**
  * Rewrites a requirements file to plain requirement lines: pip options (`--index-url`,
@@ -144,7 +121,6 @@ function nodePlan(view: ProjectView): ProbePlan {
   if (view.files.has("package-lock.json") || view.files.has("npm-shrinkwrap.json")) {
     plan.packageManager = "npm";
     const lock = view.files.has("package-lock.json") ? "package-lock.json" : "npm-shrinkwrap.json";
-    plan.refused = checkNpmLockUrls(view.read(lock) ?? "", lock);
     plan.fetch = {
       command: [
         "npm",

@@ -1,8 +1,9 @@
-import { chmod, cp, lstat, mkdir, readdir, rename, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { RunResult, Sandbox } from "@codesentra/sandbox";
 import { type ErrorLine, parseErrorLines, parseTestOutput, type TestSummary } from "./parse.js";
 import { PROBES, type ProbeName, type ProbePlan } from "./plan.js";
+import { checkLockSources, LOCKFILES_BY_MANAGER } from "./sources/index.js";
 
 export type ProbeStatus = "pass" | "fail" | "timeout" | "not_applicable" | "skipped";
 
@@ -82,6 +83,21 @@ interface ProbeOptions {
   budgetMs?: number;
 }
 
+/**
+ * Checks the lockfile the download will use before anything is fetched (ADR 0030). A
+ * source outside the allowed registries is refused, naming the dependency.
+ */
+async function lockSourceRefusal(sourceDir: string, plan: ProbePlan): Promise<string | null> {
+  for (const name of LOCKFILES_BY_MANAGER[plan.packageManager ?? ""] ?? []) {
+    const path = join(sourceDir, name);
+    const st = await lstat(path).catch(() => null);
+    if (!st?.isFile()) continue;
+    const why = checkLockSources(name, await readFile(path, "utf8"));
+    if (why) return `not downloaded: ${why}`;
+  }
+  return null;
+}
+
 async function probe(opts: ProbeOptions): Promise<ProbeRun> {
   const { sandbox, image, plan } = opts;
   const budget = opts.budgetMs ?? PROBE_BUDGET_MS;
@@ -121,10 +137,12 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
 
   const fetch: ProbeRun["fetch"] = { status: "none", durationMs: 0, reason: null, excerpt: "" };
   let blocked: string | null = null;
-  if (plan.refused) {
+  const refused =
+    plan.refused ?? (plan.fetch ? await lockSourceRefusal(opts.sourceDir, plan) : null);
+  if (refused) {
     fetch.status = "refused";
-    fetch.reason = plan.refused;
-    blocked = `dependencies were not installed: ${plan.refused}`;
+    fetch.reason = refused;
+    blocked = `dependencies were not installed: ${refused}`;
   } else if (plan.fetch) {
     const r = await sandbox.run({
       image,

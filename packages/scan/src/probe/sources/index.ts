@@ -8,6 +8,14 @@ import { checkYarnClassicLock } from "./yarn-classic.js";
 export { COMPOSER_HOSTS } from "./composer.js";
 export { NPM_HOSTS, PYPI_HOSTS, urlProblem } from "./policy.js";
 
+/** The lockfile each package manager downloads from, at the project root. */
+export const LOCKFILES_BY_MANAGER: Readonly<Record<string, readonly string[]>> = {
+  npm: ["package-lock.json", "npm-shrinkwrap.json"],
+  pnpm: ["pnpm-lock.yaml"],
+  yarn: ["yarn.lock"],
+  composer: ["composer.lock"],
+};
+
 /** Whether a yarn.lock was written by Yarn 2+ (Berry), which keeps a `__metadata` block. */
 export const isBerryLock = (text: string) => /^__metadata:\s*$/m.test(text);
 

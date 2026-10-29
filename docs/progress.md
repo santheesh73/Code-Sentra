@@ -1,5 +1,78 @@
 # Progress
 
+## Phase 11 — Closing the build gaps (2026-10-29)
+
+The user chose to close the build gaps left by Phases 9 and 10 (ADR 0029).
+
+### Built
+
+- **Maven parent POMs are checked before Maven starts.**
+  - Our script walks each external parent's chain on Maven Central (sha1-checked) and
+    refuses when the build would load a build extension.
+  - Extensions are now judged as Maven loads them, so a parent that merely manages one, as
+    Spring Boot's does for `native-maven-plugin`, is not a reason. `java-shop-api` checks
+    2 parent POMs, then builds and tests as before.
+- **Download scripts can refuse at run time.** The probe reports "not downloaded" with
+  the reason, not a failed download.
+- **Native gems build offline.**
+  - The sandbox image adds make, Ruby's headers and the `libruby.so` link name.
+  - `rb-notes-api` now locks bcrypt 3.1.22 (a C extension), which compiles in the
+    sandbox. Its tests are unchanged: 2 pass, 1 fail, 1 pending.
+- **PHP packages from GitLab.com** are downloaded the same way as GitHub ones, as a zip
+  pinned to the locked commit. Other hosts get a reason that names the host and what is
+  accepted.
+- **Phase 10 follow-up:** PR #11's CI ran the PHP download and PHPUnit, and passed. This
+  session's egress policy had blocked both.
+
+### Defects found and fixed
+
+- **Over-broad Maven refusal.** The Phase 9 check refused any POM containing
+  `<extensions>true</extensions>`, even in `pluginManagement` or an inactive profile, where
+  Maven loads nothing. It now follows Maven's rules.
+- **Native extensions could not link.** The image had `libruby.so.3.4` but not
+  `libruby.so`, so linking failed (`cannot find -lruby`) even with a compiler present.
+- **Rate limiting at Central.** Central answers bursts with 429, including to Maven itself
+  during the gate.
+  - The parent check backs off and retries.
+  - It places the POMs it verified into Maven's local repository, so Maven does not fetch
+    them again.
+  - Maven retries 429s six times, 10 s apart.
+
+### Still open (needs the user)
+
+Unchanged: the real-GitHub gate, deployment, a real report-model run, gVisor, and npm
+publish (plus a license choice).
+
+### Deferred or partial
+
+- **Gradle** still does not build (ADR 0027).
+- **Private PHP repositories** and hosts other than GitHub and GitLab.com are refused.
+- **cgo** stays off for Go.
+- **Maven profile activation** is not evaluated: any `<activation>` counts as active.
+
+### Gate result
+
+Run on this machine on 2026-10-29 (sandbox runtime `runc`; sandbox image with make, the
+Ruby headers and `libruby.so` added).
+
+```
+pnpm lint          Checked 768 files. No fixes applied.
+pnpm typecheck     exit 0
+pnpm build         exit 0
+pnpm test          20 packages, 714 tests: 708 passed, 6 failed
+  @codesentra/scan             144 of 150 passed
+    php-notes-api              5 failed: this session cannot reach GitHub archives (as in
+                               Phase 10; CI runs them, and PR #11's CI passed them)
+    java-shop-api probes       1 failed: Maven got 429 from Central fetching the parent POM.
+                               Fixed (verified POMs reused, Maven retries 429s); rerun:
+                               java-shop-api and rb-notes-api sandbox probes pass
+  every other package passed (api 64, db 30, parsers 37, link 26, fixture-harness 76, …)
+pnpm e2e           17 of 18 passed (8.7m); php-notes-api failed, for the same reason
+```
+
+`rb-notes-api` compiles bcrypt's native extension offline in every run that passed above.
+`java-shop-api` checks 2 parent POMs, then builds and tests (1 pass, 1 fail, 1 skipped).
+
 ## Phase 10 — Rust and PHP (2026-10-29)
 
 The user chose Rust and PHP (ADR 0028).

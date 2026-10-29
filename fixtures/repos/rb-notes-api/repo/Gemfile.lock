@@ -1,6 +1,7 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    bcrypt (3.1.22)
     diff-lcs (1.6.2)
     mustermann (2.0.2)
       ruby2_keywords (~> 0.0.1)
@@ -35,12 +36,14 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
+  bcrypt (= 3.1.22)
   rack (= 2.2.3)
   rack-test (~> 1.1)
   rspec (~> 3.11)
   sinatra (~> 2.2)
 
 CHECKSUMS
+  bcrypt (3.1.22) sha256=1f0072e88c2d705d94aff7f2c5cb02eb3f1ec4b8368671e19112527489f29032
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
   mustermann (2.0.2) sha256=cbe651b6c039e4cefa635b8087398ff59d74f83591064926cc62d37ac4c7e054
   rack (2.2.3) sha256=2638e7eb6689a5725c7e16f30cc4aa4e31694dc3ca30d790952526781bd0bb44

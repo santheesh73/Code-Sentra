@@ -1,6 +1,6 @@
 {
   "name": "rb-notes-api",
-  "description": "Sinatra notes API. Verified by hand in the sandbox image (Ruby 3.4.10): the 13 gems Gemfile.lock pins download from rubygems.org and match its CHECKSUMS, bundle install --local passes offline, and rspec gives 2 pass, 1 fail (search ignores note bodies), 1 pending. rack 2.2.3 is affected by GHSA-hxqx-xwvh-44m2 / CVE-2022-30122 (fixed in 2.2.3.1).",
+  "description": "Sinatra notes API. Verified by hand in the sandbox image (Ruby 3.4.10): the 14 gems Gemfile.lock pins download from rubygems.org and match its CHECKSUMS, bundle install --local passes offline (building bcrypt's native extension with the sandbox's make and gcc), and rspec gives 2 pass, 1 fail (search ignores note bodies), 1 pending. rack 2.2.3 is affected by GHSA-hxqx-xwvh-44m2 / CVE-2022-30122 (fixed in 2.2.3.1).",
   "snapshot": {
     "kind": "zip",
     "hasHistory": false
@@ -149,7 +149,7 @@
     },
     {
       "code": "VULNERABLE_DEPENDENCY",
-      "locator": "Gemfile.lock:7",
+      "locator": "Gemfile.lock:8",
       "lineContains": "rack (2.2.3)",
       "ecosystem": "RubyGems",
       "package": "rack",

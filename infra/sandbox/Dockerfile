@@ -19,8 +19,8 @@ FROM composer:2.10.3 AS composer
 
 # Debian packages taken from those images (same Debian release as the base) without a
 # network: every file `dpkg -L` lists for them, docs left out. The C compiler and linker that
-# Rust links through, from the rust image; the shared libraries PHP was built against, from
-# the php image.
+# Rust links through (and native gems build with), from the rust image; the shared libraries
+# PHP was built against, and make, from the php image.
 FROM rust AS cc
 RUN mkdir /out && dpkg -L binutils binutils-common binutils-x86-64-linux-gnu cpp cpp-12 gcc gcc-12 \
       libasan8 libatomic1 libbinutils libc-dev-bin libc6-dev libcc1-0 libcrypt-dev libctf-nobfd0 \
@@ -30,7 +30,7 @@ RUN mkdir /out && dpkg -L binutils binutils-common binutils-x86-64-linux-gnu cpp
     | grep -v '^/usr/share/\(doc\|man\|info\|locale\|lintian\|bug\)/' | tar -cf - -T - | tar -xf - -C /out
 FROM php AS phplibs
 RUN mkdir /out && dpkg -L libargon2-1 libbrotli1 libcurl4 libicu72 libldap-2.5-0 libnghttp2-14 \
-      libonig5 libpsl5 librtmp1 libsasl2-2 libsasl2-modules-db libsodium23 libssh2-1 libxml2 \
+      libonig5 libpsl5 librtmp1 libsasl2-2 libsasl2-modules-db libsodium23 libssh2-1 libxml2 make \
     | while read -r f; do if [ -f "$f" ] || [ -L "$f" ]; then echo "$f"; fi; done \
     | grep -v '^/usr/share/\(doc\|man\|info\|locale\|lintian\|bug\)/' | tar -cf - -T - | tar -xf - -C /out
 
@@ -40,6 +40,8 @@ COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 COPY --from=go /usr/local/go /usr/local/go
 # Ruby: the interpreter, its library tree and the one shared library the Python base lacks.
 COPY --from=ruby /usr/local/lib/ruby /usr/local/lib/ruby
+# Ruby's headers, so gems with native extensions build offline (with make and gcc, below).
+COPY --from=ruby /usr/local/include/ruby-3.4.0 /usr/local/include/ruby-3.4.0
 COPY --from=ruby /usr/local/lib/libruby.so.3.4.10 /usr/local/lib/libruby.so.3.4.10
 COPY --from=ruby /usr/lib/x86_64-linux-gnu/libyaml-0.so.2.0.9 /usr/lib/x86_64-linux-gnu/libyaml-0.so.2.0.9
 COPY --from=ruby /usr/local/bin/ruby /usr/local/bin/gem /usr/local/bin/bundle /usr/local/bin/bundler /usr/local/bin/rake /usr/local/bin/
@@ -58,6 +60,7 @@ COPY --from=cc /out /
 COPY --from=phplibs /out /
 RUN ln -s gcc /usr/bin/cc \
  && ln -s libruby.so.3.4.10 /usr/local/lib/libruby.so.3.4 \
+ && ln -s libruby.so.3.4.10 /usr/local/lib/libruby.so \
  && ln -s libyaml-0.so.2.0.9 /usr/lib/x86_64-linux-gnu/libyaml-0.so.2 \
  && ldconfig \
  && ln -s /usr/share/maven/bin/mvn /usr/local/bin/mvn \

@@ -137,7 +137,13 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
     fetch.excerpt = tail(r);
     fetch.reason = plan.fetch.reason;
     fetch.status = r.timedOut ? "timeout" : r.exitCode === 0 ? "pass" : "fail";
-    if (fetch.status !== "pass")
+    // Our download scripts can refuse once they see what the lockfile or POMs resolve to.
+    const refusal = /^codesentra-refused: (.+)$/m.exec(r.stdout)?.[1];
+    if (fetch.status === "fail" && refusal) {
+      fetch.status = "refused";
+      fetch.reason = `not downloaded: ${refusal}`;
+      blocked = `dependencies were not installed: ${fetch.reason}`;
+    } else if (fetch.status !== "pass")
       blocked = `dependency download ${fetch.status === "timeout" ? "timed out" : "failed"}`;
   }
 

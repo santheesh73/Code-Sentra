@@ -113,3 +113,19 @@ test runs on every push and pull request (`.github/workflows/ci.yml`).
 - **Image build without package mirrors.** The C toolchain and PHP's libraries are copied
   from the official rust and php images' Debian packages (same release as the base).
   Nothing comes from apt at build time.
+
+## Added in Phase 11 (ADR 0029)
+
+- **Maven parent POMs are checked for build extensions before Maven starts.**
+  - CodeSentra's own script, run with `python -I`, walks each external parent's chain on
+    Maven Central, checking every POM against Central's sha1.
+  - It refuses when the project's POMs and the chain together would load an extension:
+    `<build><extensions>`, a build plugin marked as an extension, a managed one that a POM
+    uses, or one in a profile with an `<activation>`.
+  - This closes the residual risk in ADR 0027.
+  - Tested in `probe.test.ts` ("Maven: …"), against a stand-in for Central.
+- **Download scripts can refuse at run time** (`codesentra-refused:`). The step is then
+  reported as not downloaded, with the reason, and nothing after it runs.
+- **Native gem extensions compile offline** in the sandbox, with its usual limits.
+- **PHP downloads also accept GitLab.com commit archives**, pinned to a commit, with
+  redirects refused.

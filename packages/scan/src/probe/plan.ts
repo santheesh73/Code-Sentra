@@ -11,7 +11,7 @@ export interface ProbeStep {
   skip: { kind: "not_applicable" | "gap"; reason: string } | null;
   timeoutMs: number;
   /**
-   * Failures that are the sandbox's limit, not the project's (no make or C headers, a pinned
+   * Failures that are the sandbox's limit, not the project's (a missing system library, a pinned
    * runtime the sandbox lacks, an artifact the offline cache missed): when the output
    * matches, the step is reported as not run, with the reason, instead of failed.
    */
@@ -558,7 +558,7 @@ function rubyPlan(view: ProjectView): ProbePlan {
       pattern:
         /Failed to build gem native extension|make: not found|You have to install development tools/,
       reason:
-        "a gem has a native extension, and the sandbox cannot build it (no make, no Ruby headers)",
+        "a gem's native extension did not build in the sandbox; the output names what it needs (often a system library the sandbox does not have)",
     },
     {
       pattern: /Your Ruby version is [\d.]+, but your Gemfile specified/,
@@ -613,6 +613,8 @@ const MAVEN_CENTRAL = "https://repo.maven.apache.org/maven2";
  */
 const MAVEN_FETCH_SH = `set -eu
 M2=/work/.cs-m2
+# Parent POMs from Central can declare build extensions too: check the chain before Maven starts.
+python -I $M2/parents.py
 proxy=""
 if [ -n "\${HTTPS_PROXY:-}" ]; then
   hp=\${HTTPS_PROXY#*://}; hp=\${hp%%/*}; host=\${hp%:*}; port=\${hp##*:}
@@ -626,7 +628,8 @@ if [ -f /etc/codesentra-ca.pem ]; then
   keytool -importcert -noprompt -alias egress -file /etc/codesentra-ca.pem -keystore $M2/cacerts -storepass changeit >/dev/null
   export MAVEN_OPTS="-Djavax.net.ssl.trustStore=$M2/cacerts -Djavax.net.ssl.trustStorePassword=changeit"
 fi
-mvn() { command mvn -B -q -s $M2/settings.xml -C "$@"; }
+# Central rate-limits bursts (429): retry those patiently.
+mvn() { command mvn -B -q -s $M2/settings.xml -C -Daether.transport.http.retryHandler.count=6 -Daether.transport.http.retryHandler.interval=10000 "$@"; }
 mvn ${DEPENDENCY_PLUGIN}:go-offline
 for plugin in maven-surefire-plugin maven-failsafe-plugin; do
   for dir in $M2/repository/org/apache/maven/plugins/$plugin/*/; do
@@ -640,6 +643,168 @@ for dir in $M2/repository/org/junit/platform/junit-platform-commons/*/; do
   [ -d "$dir" ] || continue
   mvn ${DEPENDENCY_PLUGIN}:get -Dtransitive=true -Dartifact=org.junit.platform:junit-platform-launcher:$(basename "$dir") || true
 done
+`;
+
+const stripComments = (xml: string) => xml.replace(/<!--[\s\S]*?-->/g, "");
+const MAVEN_COORD = /^[A-Za-z0-9_.-]+$/;
+
+/**
+ * The parent POMs the project's POMs name that are not in the tree (those come from Maven
+ * Central), as `groupId artifactId version`; or why they cannot be checked.
+ */
+export function externalParents(view: ProjectView): { parents: string[] } | { refused: string } {
+  const tag = (xml: string, name: string) =>
+    new RegExp(`<${name}>\\s*([^<]*?)\\s*</${name}>`).exec(xml)?.[1] ?? null;
+  const own = new Set<string>();
+  const wanted: { pom: string; coord: string }[] = [];
+  for (const pom of [...view.files].filter((f) => /(^|\/)pom\.xml$/.test(f)).sort()) {
+    const text = stripComments(view.read(pom) ?? "");
+    const parentXml = /<parent>([\s\S]*?)<\/parent>/.exec(text)?.[1] ?? null;
+    const top = text
+      .replace(/<parent>[\s\S]*?<\/parent>/g, "")
+      .replace(/<(dependencies|dependencyManagement|build|profiles|reporting)>[\s\S]*?<\/\1>/g, "");
+    const parent = parentXml
+      ? [tag(parentXml, "groupId"), tag(parentXml, "artifactId"), tag(parentXml, "version")]
+      : null;
+    const g = tag(top, "groupId") ?? parent?.[0];
+    const a = tag(top, "artifactId");
+    const v = tag(top, "version") ?? parent?.[2];
+    if (g && a && v) own.add(`${g} ${a} ${v}`);
+    if (!parent) continue;
+    if (!parent.every((x) => x && MAVEN_COORD.test(x)))
+      return {
+        refused: `the parent of ${pom} is not named by a plain groupId, artifactId and version, so it cannot be checked for build extensions`,
+      };
+    wanted.push({ pom, coord: parent.join(" ") });
+  }
+  return { parents: [...new Set(wanted.map((w) => w.coord).filter((c) => !own.has(c)))] };
+}
+
+/**
+ * The build extensions Maven would load for these POMs (a project's own and its parents),
+ * as Maven decides it:
+ * - `<build><extensions>` entries, and build plugins marked `<extensions>true</extensions>`;
+ * - a `pluginManagement` entry marked so, only when some POM's build uses that plugin;
+ * - inside a profile, only when the profile has an `<activation>` (we never pass `-P`).
+ * Returns the POM that declares one, or null. The parent check script applies the same rules.
+ */
+export function pomExtensions(poms: { name: string; xml: string }[]): string | null {
+  const used = new Set<string>();
+  const managed = new Map<string, string>();
+  const pluginKey = (p: string) =>
+    `${/<groupId>\s*([^<]*?)\s*<\/groupId>/.exec(p)?.[1] ?? "org.apache.maven.plugins"}:${
+      /<artifactId>\s*([^<]*?)\s*<\/artifactId>/.exec(p)?.[1] ?? ""
+    }`;
+  const isExt = (p: string) => /<extensions>\s*true\s*<\/extensions>/.test(p);
+  for (const { name, xml } of poms) {
+    const text = stripComments(xml);
+    const profiles = /<profiles>[\s\S]*<\/profiles>/.exec(text)?.[0] ?? "";
+    const scopes = [text.replace(/<profiles>[\s\S]*<\/profiles>/, "")];
+    for (const m of profiles.matchAll(/<profile>([\s\S]*?)<\/profile>/g))
+      if (/<activation>/.test(m[1] as string)) scopes.push(m[1] as string);
+    for (const scope of scopes) {
+      const build = /<build>([\s\S]*?)<\/build>/.exec(scope)?.[1] ?? "";
+      const management = /<pluginManagement>([\s\S]*?)<\/pluginManagement>/.exec(build)?.[1] ?? "";
+      const direct = build.replace(/<pluginManagement>[\s\S]*?<\/pluginManagement>/, "");
+      if (/<extensions>\s*<extension>/.test(direct)) return name;
+      for (const m of direct.matchAll(/<plugin>([\s\S]*?)<\/plugin>/g)) {
+        if (isExt(m[1] as string)) return name;
+        used.add(pluginKey(m[1] as string));
+      }
+      for (const m of management.matchAll(/<plugin>([\s\S]*?)<\/plugin>/g))
+        if (isExt(m[1] as string)) managed.set(pluginKey(m[1] as string), name);
+    }
+  }
+  for (const key of used) if (managed.has(key)) return managed.get(key) as string;
+  return null;
+}
+
+/**
+ * Walks each external parent POM's chain on Maven Central (ours, run with `python -I`):
+ * downloads the POM, checks it against Central's sha1, and refuses (printing the
+ * `codesentra-refused:` line the runner reads) if any declares build extensions.
+ */
+const MAVEN_PARENTS_PY = `import hashlib, os, re, sys, time, urllib.error, urllib.request
+CENTRAL = "${MAVEN_CENTRAL}"
+COORD = re.compile(r"^[A-Za-z0-9_.-]+$")
+def strip(xml):
+    return re.sub(r"<!--.*?-->", "", xml, flags=re.S)
+def extensions(poms):
+    # The same rules as pomExtensions in plan.ts.
+    used, managed = set(), {}
+    key = lambda p: "%s:%s" % (tag(p, "groupId") or "org.apache.maven.plugins", tag(p, "artifactId") or "")
+    is_ext = lambda p: re.search(r"<extensions>\\s*true\\s*</extensions>", p)
+    for name, xml in poms:
+        profiles = re.search(r"<profiles>.*</profiles>", xml, re.S)
+        scopes = [re.sub(r"<profiles>.*</profiles>", "", xml, count=1, flags=re.S)]
+        if profiles:
+            scopes += [p for p in re.findall(r"<profile>(.*?)</profile>", profiles.group(0), re.S) if "<activation>" in p]
+        for scope in scopes:
+            b = re.search(r"<build>(.*?)</build>", scope, re.S)
+            build = b.group(1) if b else ""
+            m = re.search(r"<pluginManagement>(.*?)</pluginManagement>", build, re.S)
+            direct = re.sub(r"<pluginManagement>.*?</pluginManagement>", "", build, count=1, flags=re.S)
+            if re.search(r"<extensions>\\s*<extension>", direct):
+                return name
+            for p in re.findall(r"<plugin>(.*?)</plugin>", direct, re.S):
+                if is_ext(p):
+                    return name
+                used.add(key(p))
+            for p in re.findall(r"<plugin>(.*?)</plugin>", m.group(1) if m else "", re.S):
+                if is_ext(p):
+                    managed[key(p)] = name
+    for k in used:
+        if k in managed:
+            return managed[k]
+    return None
+def refuse(msg):
+    print("codesentra-refused: " + msg)
+    sys.exit(3)
+def get(url):
+    # Central rate-limits bursts (429): back off and retry, as Maven does.
+    for attempt in range(6):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "codesentra-scan (parent POM check)"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.read(5 * 1024 * 1024)
+        except urllib.error.HTTPError as e:
+            if e.code not in (429, 500, 502, 503, 504) or attempt == 5:
+                raise
+            wait = e.headers.get("Retry-After", "")
+            time.sleep(min(int(wait), 60) if wait.isdigit() else 2 ** (attempt + 1))
+def tag(xml, name):
+    m = re.search(r"<%s>\\s*([^<]*?)\\s*</%s>" % (name, name), xml)
+    return m.group(1) if m else None
+queue = [l.split() for l in open(".cs-m2/parents.txt") if l.strip()]
+poms = [(l.strip(), strip(open(l.strip(), encoding="utf-8", errors="replace").read())) for l in open(".cs-m2/poms.txt") if l.strip()]
+seen = set()
+while queue:
+    g, a, v = queue.pop()
+    if (g, a, v) in seen:
+        continue
+    seen.add((g, a, v))
+    if len(seen) > 30:
+        refuse("the parent POM chain is longer than 30")
+    url = "%s/%s/%s/%s/%s-%s.pom" % (CENTRAL, g.replace(".", "/"), a, v, a, v)
+    data = get(url)
+    if hashlib.sha1(data).hexdigest() != get(url + ".sha1").decode().split()[0].strip():
+        sys.exit("%s:%s:%s does not match its checksum on Maven Central" % (g, a, v))
+    # Maven reads the checked POM from its local repository instead of fetching it again.
+    local = ".cs-m2/repository/%s/%s/%s/%s-%s.pom" % (g.replace(".", "/"), a, v, a, v)
+    os.makedirs(os.path.dirname(local), exist_ok=True)
+    open(local, "wb").write(data)
+    xml = strip(data.decode("utf-8", "replace"))
+    poms.append(("the parent POM %s:%s:%s" % (g, a, v), xml))
+    parent = re.search(r"<parent>(.*?)</parent>", xml, re.S)
+    if parent:
+        p = [tag(parent.group(1), n) for n in ("groupId", "artifactId", "version")]
+        if not all(x and COORD.match(x) for x in p):
+            refuse("the parent of %s:%s:%s is not a plain groupId, artifactId and version" % (g, a, v))
+        queue.append(p)
+found = extensions(poms)
+if found:
+    refuse("%s declares build extensions that this build would load, and Maven runs them when it starts" % found)
+print("checked", len(seen), "parent POMs: no build extensions")
 `;
 
 /**
@@ -657,23 +822,31 @@ function mavenPlan(view: ProjectView): ProbePlan {
     refused: null,
   };
   const poms = [...view.files].filter((f) => /(^|\/)pom\.xml$/.test(f));
-  const withExtensions = poms.find((f) =>
-    /<extensions>\s*true\s*<\/extensions>|<extensions>\s*<extension>/.test(
-      (view.read(f) ?? "").replace(/<!--[\s\S]*?-->/g, ""),
-    ),
-  );
+  const withExtensions = pomExtensions(poms.map((f) => ({ name: f, xml: view.read(f) ?? "" })));
+  const parents = externalParents(view);
   if (view.files.has(".mvn/extensions.xml"))
     plan.refused =
       "not downloaded: .mvn/extensions.xml declares Maven core extensions, which run when Maven starts";
   else if (withExtensions)
     plan.refused = `not downloaded: ${withExtensions} declares build extensions, which Maven loads and runs when it starts`;
+  else if ("refused" in parents) plan.refused = `not downloaded: ${parents.refused}`;
   // .mvn/jvm.config and .mvn/maven.config would add JVM and Maven options to every run.
   for (const f of [...view.files].filter((x) => x.startsWith(".mvn/")))
     plan.prepare.push({ rename: [f, `${f}.codesentra-disabled`] });
-  plan.prepare.push({ write: [".cs-m2/fetch.sh", MAVEN_FETCH_SH] });
+  const external = "parents" in parents ? parents.parents : [];
+  plan.prepare.push(
+    { write: [".cs-m2/fetch.sh", MAVEN_FETCH_SH] },
+    { write: [".cs-m2/parents.py", MAVEN_PARENTS_PY] },
+    { write: [".cs-m2/parents.txt", external.map((c) => `${c}\n`).join("")] },
+    { write: [".cs-m2/poms.txt", poms.map((f) => `${f}\n`).join("")] },
+  );
   plan.fetch = {
     command: ["sh", ".cs-m2/fetch.sh"],
-    reason: `the project's dependencies and plugins from Maven Central only (every repository mirrored to it, checksums enforced), with Maven's pinned dependency plugin; no project code runs`,
+    reason: `the project's dependencies and plugins from Maven Central only (every repository mirrored to it, checksums enforced), with Maven's pinned dependency plugin, after checking ${
+      external.length
+        ? `the parent POM chain of ${external.map((c) => c.split(" ").join(":")).join(", ")}`
+        : "that no parent POM comes from Central"
+    } for build extensions; no project code runs`,
   };
   const mvn = (args: string) => sh(`mvn -B -o -s .cs-m2/settings.xml ${args}`);
   const sandboxLimits = [
@@ -797,7 +970,7 @@ const COMPOSER_NAME = /^[a-z0-9]([_.-]?[a-z0-9]+)*\/[a-z0-9](([_.]|-{1,2})?[a-z0
 
 export interface LockedComposerPackage {
   name: string;
-  /** Always codeload.github.com: the zip of the locked commit. */
+  /** The zip of the locked commit, from codeload.github.com or gitlab.com. */
   url: string;
   sha1: string | null;
   /** The lock entry, as `vendor/composer/installed.json` lists it. */
@@ -806,10 +979,11 @@ export interface LockedComposerPackage {
 }
 
 /**
- * The packages a composer.lock pins, for a download that runs no code. Each must be a zip
- * of a commit on GitHub (Packagist's default for public packages): the URL is rewritten to
- * codeload.github.com, which serves it without the API's rate limit. Anything else (other
- * hosts, path or VCS-only packages) is refused with the reason.
+ * The packages a composer.lock pins, for a download that runs no code. Each must be the zip
+ * of a locked commit on GitHub or GitLab.com (Packagist's form for public packages). GitHub
+ * URLs are rewritten to codeload.github.com, which serves them without the API's rate limit.
+ * Anything else (other hosts, private repositories, path or VCS-only packages) is refused
+ * with the reason.
  */
 export function lockedComposer(
   text: string,
@@ -840,21 +1014,31 @@ export function lockedComposer(
       } catch {
         return { refused: `${name} has a download that is not a URL` };
       }
-      const api = /^\/repos\/([\w.-]+)\/([\w.-]+)\/zipball\/([0-9a-f]{40})$/.exec(u.pathname);
-      const direct = /^\/([\w.-]+)\/([\w.-]+)\/(?:legacy\.)?zip\/([0-9a-f]{40})$/.exec(u.pathname);
-      const m =
-        u.protocol === "https:" && u.hostname === "api.github.com"
-          ? api
-          : u.protocol === "https:" && u.hostname === "codeload.github.com"
-            ? direct
-            : null;
-      if (!m)
+      const https = u.protocol === "https:";
+      const api =
+        https && u.hostname === "api.github.com"
+          ? /^\/repos\/([\w.-]+)\/([\w.-]+)\/zipball\/([0-9a-f]{40})$/.exec(u.pathname)
+          : null;
+      const codeload =
+        https && u.hostname === "codeload.github.com"
+          ? /^\/([\w.-]+)\/([\w.-]+)\/(?:legacy\.)?zip\/([0-9a-f]{40})$/.exec(u.pathname)
+          : null;
+      const github = api ?? codeload;
+      // gitlab.com/api/v4/projects/<group%2Fproject or id>/repository/archive.zip?sha=<commit>
+      const gitlab =
+        https &&
+        u.hostname === "gitlab.com" &&
+        /^\/api\/v4\/projects\/[\w.%-]+\/repository\/archive\.zip$/.test(u.pathname) &&
+        /^\?sha=[0-9a-f]{40}$/.test(u.search);
+      if (!github && !gitlab)
         return {
-          refused: `${name} would be downloaded from ${u.protocol}//${u.hostname}, not a GitHub commit zip`,
+          refused: `${name} would be downloaded from ${u.protocol}//${u.hostname}; only zips of a locked commit from GitHub or GitLab.com are downloaded (other hosts and private repositories are not)`,
         };
       out.push({
         name,
-        url: `https://codeload.github.com/${m[1]}/${m[2]}/legacy.zip/${m[3]}`,
+        url: github
+          ? `https://codeload.github.com/${github[1]}/${github[2]}/legacy.zip/${github[3]}`
+          : `https://gitlab.com${u.pathname}${u.search}`,
         sha1: /^[0-9a-f]{40}$/.test(dist.shasum ?? "") ? (dist.shasum as string) : null,
         entry: { ...pkg, "install-path": `../${name}` },
         dev: key === "packages-dev",
@@ -866,7 +1050,7 @@ export function lockedComposer(
 
 /**
  * The Composer download script (ours, never the project's): each locked zip from
- * codeload.github.com, with redirects refused, checked against the lockfile's sha1 where there
+ * codeload.github.com or gitlab.com, with redirects refused, checked against the lockfile's sha1 where there
  * is one, unpacked into vendor/ (paths that would leave it are refused). Composer itself does
  * not run during the download. Run with `python -I`, so nothing in the tree loads.
  */
@@ -960,7 +1144,7 @@ function phpPlan(view: ProjectView): ProbePlan {
     );
     plan.fetch = {
       command: ["python", "-I", ".cs-composer/fetch.py"],
-      reason: `the ${locked.length} package zips composer.lock pins, each the zip of a locked commit from codeload.github.com (${
+      reason: `the ${locked.length} package zips composer.lock pins, each the zip of a locked commit from codeload.github.com or gitlab.com (${
         verified === locked.length
           ? "every one checked against the lockfile's sha1"
           : verified

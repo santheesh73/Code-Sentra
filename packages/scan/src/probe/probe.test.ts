@@ -1,5 +1,15 @@
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { execFile, execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,10 +20,12 @@ import { scanSecrets } from "../secrets.js";
 import { parseErrorLines, parseTestOutput } from "./parse.js";
 import {
   checkNpmLockUrls,
+  externalParents,
   lockedComposer,
   lockedGems,
   type ProjectView,
   planProbes,
+  pomExtensions,
   SANDBOX_COMPOSER_VERSION,
   SANDBOX_GO_VERSION,
   SANDBOX_JAVA_VERSION,
@@ -379,7 +391,8 @@ describe("probe planning for Go, Ruby and JVM projects", () => {
       planProbes(
         memView({
           "pom.xml": "<project/>",
-          "svc/pom.xml": "<plugin><extensions>true</extensions></plugin>",
+          "svc/pom.xml":
+            "<project><build><plugins><plugin><artifactId>x</artifactId><extensions>true</extensions></plugin></plugins></build></project>",
         }),
       ).refused,
     ).toMatch(/svc\/pom\.xml/);
@@ -392,6 +405,165 @@ describe("probe planning for Go, Ruby and JVM projects", () => {
         ),
         f,
       ).toBe(true);
+  });
+  it("Maven: build extensions count as Maven loads them (used plugins, activated profiles)", () => {
+    const managed =
+      "<project><build><pluginManagement><plugins><plugin><groupId>org.graalvm.buildtools</groupId><artifactId>native-maven-plugin</artifactId><extensions>true</extensions></plugin></plugins></pluginManagement></build></project>";
+    const uses =
+      "<project><build><plugins><plugin><groupId>org.graalvm.buildtools</groupId><artifactId>native-maven-plugin</artifactId></plugin></plugins></build></project>";
+    // Spring Boot's parent manages one; it loads only where a build uses the plugin.
+    expect(pomExtensions([{ name: "parent", xml: managed }])).toBeNull();
+    expect(
+      pomExtensions([
+        { name: "parent", xml: managed },
+        { name: "pom.xml", xml: uses },
+      ]),
+    ).toBe("parent");
+    const inProfile = (activation: string) =>
+      `<project><profiles><profile><id>p</id>${activation}<build><extensions><extension><groupId>x</groupId></extension></extensions></build></profile></profiles></project>`;
+    // We never pass -P: only a profile that can activate on its own counts.
+    expect(pomExtensions([{ name: "a", xml: inProfile("") }])).toBeNull();
+    expect(
+      pomExtensions([{ name: "a", xml: inProfile("<activation><jdk>[17,)</jdk></activation>") }]),
+    ).toBe("a");
+  });
+  it("Maven: parent POMs from Central are checked for build extensions before Maven starts", async () => {
+    const root = `<project><parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>3.3.4</version></parent>
+      <groupId>com.x</groupId><artifactId>root</artifactId><version>1.0</version></project>`;
+    const svc = `<project><parent><groupId>com.x</groupId><artifactId>root</artifactId><version>1.0</version></parent><artifactId>svc</artifactId></project>`;
+    const view = memView({ "pom.xml": root, "svc/pom.xml": svc });
+    // The module's parent is in the tree; only the Spring Boot parent comes from Central.
+    expect(externalParents(view)).toEqual({
+      parents: ["org.springframework.boot spring-boot-starter-parent 3.3.4"],
+    });
+    const p = planProbes(view);
+    expect(p.refused).toBeNull();
+    expect(p.prepare).toContainEqual({
+      write: [".cs-m2/parents.txt", "org.springframework.boot spring-boot-starter-parent 3.3.4\n"],
+    });
+    const script = p.prepare.find((x) => x.write?.[0] === ".cs-m2/fetch.sh")?.write?.[1] ?? "";
+    expect(script.indexOf("python -I $M2/parents.py")).toBeLessThan(script.indexOf("mvn "));
+    expect(p.fetch?.reason).toMatch(
+      /after checking the parent POM chain of org.springframework.boot:spring-boot-starter-parent:3.3.4/,
+    );
+    expect(
+      planProbes(
+        memView({
+          "pom.xml":
+            "<project><parent><groupId>g</groupId><artifactId>p</artifactId><version>${revision}</version></parent></project>",
+        }),
+      ).refused,
+    ).toMatch(/parent of pom.xml is not named by a plain groupId/);
+
+    // The check itself, against a stand-in for Maven Central.
+    const py = p.prepare.find((x) => x.write?.[0] === ".cs-m2/parents.py")?.write?.[1] ?? "";
+    const poms: Record<string, string> = {
+      "a/b/p1/1/p1-1.pom":
+        "<project><parent><groupId>a.b</groupId><artifactId>p2</artifactId><version>2</version></parent></project>",
+      "a/b/p2/2/p2-2.pom": "<project><!-- <extensions>true</extensions> --></project>",
+      "a/b/bad/1/bad-1.pom":
+        "<project><parent><groupId>a.b</groupId><artifactId>ext</artifactId><version>1</version></parent></project>",
+      "a/b/ext/1/ext-1.pom":
+        "<project><build><plugins><plugin><extensions>true</extensions></plugin></plugins></build></project>",
+      "a/b/tampered/1/tampered-1.pom": "<project/>",
+      "a/b/managed/1/managed-1.pom":
+        "<project><build><pluginManagement><plugins><plugin><groupId>g</groupId><artifactId>uses</artifactId><extensions>true</extensions></plugin></plugins></pluginManagement></build></project>",
+    };
+    const server = createServer((req, res) => {
+      const path = (req.url ?? "").replace(/^\/maven2\//, "");
+      const pom = poms[path.replace(/\.sha1$/, "")];
+      if (pom === undefined) return res.writeHead(404).end();
+      const sum = path.includes("tampered")
+        ? "0".repeat(40)
+        : createHash("sha1").update(pom).digest("hex");
+      res.end(path.endsWith(".sha1") ? sum : pom);
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+    const port = (server.address() as { port: number }).port;
+    // The project's own POM uses the plugin that a.b:managed:1 marks as an extension.
+    const uses =
+      "<project><build><plugins><plugin><groupId>g</groupId><artifactId>uses</artifactId></plugin></plugins></build></project>";
+    const run = (parents: string) => {
+      const dir = mkdtempSync(join(tmpdir(), "cs-parents-"));
+      mkdirSync(join(dir, ".cs-m2"));
+      writeFileSync(join(dir, ".cs-m2/parents.txt"), parents);
+      writeFileSync(join(dir, "pom.xml"), uses);
+      writeFileSync(join(dir, ".cs-m2/poms.txt"), "pom.xml\n");
+      writeFileSync(
+        join(dir, ".cs-m2/parents.py"),
+        py.replace("https://repo.maven.apache.org/maven2", `http://127.0.0.1:${port}/maven2`),
+      );
+      return new Promise<{ code: number | null; out: string }>((resolve) => {
+        execFile("python3", ["-I", ".cs-m2/parents.py"], { cwd: dir }, (err, stdout, stderr) =>
+          resolve({
+            code: err ? ((err as { code?: number }).code ?? 1) : 0,
+            out: `${stdout}${stderr}`,
+          }),
+        );
+      });
+    };
+    try {
+      expect(await run("a.b p1 1\n")).toMatchObject({
+        code: 0,
+        out: expect.stringMatching(/checked 2 parent POMs/),
+      });
+      const bad = await run("a.b bad 1\n");
+      expect(bad.code).toBe(3);
+      expect(bad.out).toMatch(
+        /^codesentra-refused: the parent POM a.b:ext:1 declares build extensions/m,
+      );
+      const managedUsed = await run("a.b managed 1\n");
+      expect(managedUsed.code).toBe(3);
+      expect(managedUsed.out).toMatch(/codesentra-refused: the parent POM a.b:managed:1 declares/);
+      const tampered = await run("a.b tampered 1\n");
+      expect(tampered.code).not.toBe(0);
+      expect(tampered.out).toMatch(/does not match its checksum/);
+      expect(tampered.out).not.toMatch(/codesentra-refused/);
+    } finally {
+      server.close();
+    }
+  });
+  it("a download script's refusal is reported as not downloaded, not as a failure", async () => {
+    const calls: string[] = [];
+    const sandbox: Sandbox = {
+      runtime: "runc",
+      async run(o) {
+        calls.push(o.network ?? "none");
+        return {
+          exitCode: 3,
+          stdout: "codesentra-refused: the parent POM a:b:1 declares build extensions\n",
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+          truncated: false,
+          runtime: "runc",
+          network: "fetch",
+        };
+      },
+    };
+    const dir = mkdtempSync(join(tmpdir(), "cs-refuse-"));
+    const src = join(dir, "src");
+    mkdirSync(src);
+    writeFileSync(join(src, "pom.xml"), "<project/>");
+    const run = await runProbes({
+      sandbox,
+      image: "x",
+      sourceDir: src,
+      scratchDir: dir,
+      plan: planProbes(memView({ "pom.xml": "<project/>" })),
+    });
+    rmSync(dir, { recursive: true, force: true });
+    // Nothing ran after the refusal but the cleanup that opens up the scratch copy.
+    expect(calls).toEqual(["fetch", "none"]);
+    expect(run.fetch).toMatchObject({
+      status: "refused",
+      reason: "not downloaded: the parent POM a:b:1 declares build extensions",
+    });
+    expect(run.results.find((r) => r.name === "install")).toMatchObject({
+      status: "skipped",
+      reason:
+        "dependencies were not installed: not downloaded: the parent POM a:b:1 declares build extensions",
+    });
   });
   it("Maven Surefire output and javac diagnostics", () => {
     const out = [
@@ -596,13 +768,21 @@ describe("probe planning for Rust and PHP projects", () => {
       return "refused" in r ? r.refused : null;
     };
     expect(refused([pkg("acme/x", "https://packages.internal/acme/x.zip")])).toBe(
-      "acme/x would be downloaded from https://packages.internal, not a GitHub commit zip",
+      "acme/x would be downloaded from https://packages.internal; only zips of a locked commit from GitHub or GitLab.com are downloaded (other hosts and private repositories are not)",
     );
     expect(
       refused([pkg("acme/x", `http://api.github.com/repos/a/x/zipball/${"a".repeat(40)}`)]),
     ).toMatch(/would be downloaded from http:\/\/api.github.com/);
     expect(refused([pkg("acme/x", "https://api.github.com/repos/a/x/zipball/main")])).toMatch(
-      /not a GitHub commit zip/,
+      /only zips of a locked commit/,
+    );
+    // GitLab.com archives pinned to a commit are downloaded as they are; a branch is not.
+    const gl = `https://gitlab.com/api/v4/projects/jdslv%2Fatoum-report-cobertura/repository/archive.zip?sha=${"2".repeat(40)}`;
+    const locked = lockedComposer(composerLock([pkg("jdslv/atoum-report-cobertura", gl)]));
+    expect("packages" in locked && locked.packages[0]?.url).toBe(gl);
+    expect(refused([pkg("acme/x", gl.replace(/sha=2+/, "sha=main"))])).toMatch(/only zips/);
+    expect(refused([pkg("acme/x", gl.replace("gitlab.com", "gitlab.example.com"))])).toMatch(
+      /from https:\/\/gitlab.example.com;/,
     );
     expect(refused([{ name: "acme/x", version: "1.0", source: { type: "git" } }])).toBe(
       "acme/x has no zip download in composer.lock (source only)",

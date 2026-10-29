@@ -277,3 +277,22 @@ describe("adversarial suite: every fabricated claim is dropped", () => {
     expect(v).toMatchObject({ verified: false, reason: "outcome_unverified" });
   });
 });
+
+describe("feature matching is by cited evidence, not loose word overlap (F-10)", () => {
+  it("keeps a plainly-worded claim about a complete feature it cites", () => {
+    const v = verifyClaim(
+      { text: "Users can create tasks with `POST /tasks`.", evidence_ids: [E.routeCreate.id] },
+      ctx,
+    );
+    expect(v).toEqual({ verified: true });
+  });
+  it("does not impose a feature's status on a claim that does not cite its evidence", () => {
+    // "Export tasks to CSV" is partial, but this claim cites an unrelated route, not the
+    // feature's evidence, so it is not dropped as a status contradiction.
+    const v = verifyClaim(
+      { text: "The service exports tasks on request.", evidence_ids: [E.routeCreate.id] },
+      ctx,
+    );
+    expect(v.verified).toBe(true);
+  });
+});

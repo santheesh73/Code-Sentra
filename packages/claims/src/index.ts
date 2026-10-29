@@ -377,17 +377,17 @@ const words = (s: string) =>
     .map(stem) ?? [];
 
 /** Features the claim talks about: shared evidence, or most of the feature name's words. */
+/**
+ * The features a claim is about: only those whose evidence the claim cites, and that share a
+ * word with the claim (so a claim citing a feature's route but describing something else is
+ * not caught). A claim that does not cite a feature's evidence is never forced into that
+ * feature's status by loose word overlap, which produced false drops (audit F-10).
+ */
 function featuresIn(claim: ClaimDraft, ctx: VerifierContext) {
   const cw = new Set(words(claim.text));
   return ctx.features.filter((f) => {
-    if (f.evidenceIds.some((id) => claim.evidence_ids.includes(id))) {
-      const fw = words(f.name);
-      return fw.some((w) => cw.has(w));
-    }
-    const fw = words(f.name);
-    if (!fw.length) return false;
-    const hit = fw.filter((w) => cw.has(w)).length;
-    return hit / fw.length >= 0.5 && hit >= Math.min(2, fw.length);
+    if (!f.evidenceIds.some((id) => claim.evidence_ids.includes(id))) return false;
+    return words(f.name).some((w) => cw.has(w));
   });
 }
 

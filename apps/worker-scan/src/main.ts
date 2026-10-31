@@ -2,7 +2,7 @@ import { loadConfig } from "@codesentra/config";
 import { createDatabase } from "@codesentra/db";
 import { GithubApp } from "@codesentra/github";
 import { startQueueClient, startWorker } from "@codesentra/queue";
-import { createSandbox, detectRuntime, dockerAvailable } from "@codesentra/sandbox";
+import { createSandbox, dockerAvailable, isIsolating, verifyRuntime } from "@codesentra/sandbox";
 import { anthropicModel, apiSource, offlineSource, type ReportModel } from "@codesentra/scan";
 import { scanHandler } from "@codesentra/scan/job";
 import { defaultPolicy, type FetchPolicy, testPolicy } from "@codesentra/ssrf";
@@ -34,15 +34,25 @@ if (config.PULSE_TEST_ALLOW_HOSTS) {
   log.warn({ hosts }, "TEST ONLY: SSRF address check disabled for these hosts (git)");
 }
 
-/** The sandbox, or why it is unavailable (probes are then recorded as gaps). */
+/**
+ * The sandbox, or why it is unavailable (probes are then recorded as gaps, never failures —
+ * ADR 0032). The runtime is confirmed by actually running a throwaway container, so a Docker
+ * daemon that died since startup degrades to a gap rather than a crash or a false result.
+ * Production refuses a runtime that shares the host kernel.
+ */
 async function sandbox() {
-  const missing = await dockerAvailable();
-  if (missing) return { sandbox: null, reason: missing } as const;
-  const runtime = await detectRuntime();
-  if (config.SANDBOX_RUNTIME === "runsc" && runtime !== "runsc")
+  const check = await verifyRuntime(config.SANDBOX_IMAGE);
+  if (!check.ok) return { sandbox: null, reason: check.reason } as const;
+  if (config.NODE_ENV === "production" && !check.isolating)
     return {
       sandbox: null,
-      reason: "SANDBOX_RUNTIME=runsc but Docker has no runsc (gVisor) runtime",
+      reason: `the sandbox ran under ${check.runtime}, which shares the host kernel; production needs an isolating runtime (runsc/gVisor, kata or firecracker)`,
+    } as const;
+  // A configured isolating runtime that Docker did not actually use is refused, not downgraded.
+  if (isIsolating(config.SANDBOX_RUNTIME) && check.runtime !== config.SANDBOX_RUNTIME)
+    return {
+      sandbox: null,
+      reason: `SANDBOX_RUNTIME=${config.SANDBOX_RUNTIME} but Docker ran the container under ${check.runtime}`,
     } as const;
   return {
     sandbox: await createSandbox({

@@ -1,7 +1,16 @@
 import { execFile, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 
-export type SandboxRuntime = "runsc" | "runc";
+export type SandboxRuntime = "runsc" | "kata" | "kata-runtime" | "firecracker" | "runc";
+
+/** Runtimes that isolate untrusted code from the host kernel (ADR 0032). */
+export const ISOLATING_RUNTIMES: readonly SandboxRuntime[] = [
+  "runsc",
+  "kata",
+  "kata-runtime",
+  "firecracker",
+];
+export const isIsolating = (r: SandboxRuntime) => ISOLATING_RUNTIMES.includes(r);
 
 export interface SandboxLimits {
   cpus: number;
@@ -63,23 +72,70 @@ function exec(
   cmd: string,
   args: string[],
   timeoutMs = 30_000,
-): Promise<{ stdout: string; code: number }> {
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((ok) =>
     execFile(
       cmd,
       args,
       { timeout: timeoutMs, env: { PATH: process.env.PATH ?? "/usr/bin:/bin" } },
-      (err, stdout) =>
-        ok({ stdout: String(stdout), code: err ? ((err as { code?: number }).code ?? 1) : 0 }),
+      (err, stdout, stderr) =>
+        ok({
+          stdout: String(stdout),
+          stderr: String(stderr),
+          code: err ? ((err as { code?: number }).code ?? 1) : 0,
+        }),
     ),
   );
 }
 
-/** gVisor when Docker has the `runsc` runtime, else runc; the choice is recorded per run. */
+/**
+ * The isolating runtime Docker offers, preferring gVisor, then Kata, then Firecracker; runc
+ * when none is present. The choice is recorded per run.
+ */
 export async function detectRuntime(): Promise<SandboxRuntime> {
   const { stdout, code } = await exec("docker", ["info", "--format", "{{json .Runtimes}}"]);
   if (code !== 0) throw new Error("docker is not available");
-  return /"runsc"/.test(stdout) ? "runsc" : "runc";
+  for (const r of ["runsc", "kata", "kata-runtime", "firecracker"] as const)
+    if (new RegExp(`"${r}"`).test(stdout)) return r;
+  return "runc";
+}
+
+export type RuntimeCheck =
+  | { ok: true; runtime: SandboxRuntime; isolating: boolean }
+  | { ok: false; reason: string };
+
+/**
+ * Confirms the runtime by actually running a throwaway container with it (ADR 0032): parsing
+ * `docker info` is not proof the runtime works. Returns the runtime that ran, and whether it
+ * isolates untrusted code from the host kernel. A Docker that is down or cannot start the
+ * container is reported as not-ok (a coverage gap, never a product failure).
+ */
+export async function verifyRuntime(image: string): Promise<RuntimeCheck> {
+  let runtime: SandboxRuntime;
+  try {
+    runtime = await detectRuntime();
+  } catch (e) {
+    return { ok: false, reason: (e as Error).message };
+  }
+  const name = `cs-rtcheck-${randomBytes(6).toString("hex")}`;
+  const { code, stdout, stderr } = await exec("docker", [
+    "run",
+    "--rm",
+    "--name",
+    name,
+    "--runtime",
+    runtime,
+    "--network",
+    "none",
+    image,
+    "true",
+  ]);
+  if (code !== 0)
+    return {
+      ok: false,
+      reason: `the sandbox runtime ${runtime} could not start a container: ${(stderr || stdout || "").trim().slice(-400)}`,
+    };
+  return { ok: true, runtime, isolating: isIsolating(runtime) };
 }
 
 export async function dockerAvailable(): Promise<string | null> {

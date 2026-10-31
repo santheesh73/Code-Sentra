@@ -217,6 +217,30 @@ describe("integrations (ADR 0007)", () => {
     expect(cfg.API_PORT).toBe(4000);
     expect(cfg.EMAIL_TRANSPORT).toBe("resend");
   });
+
+  it("refuses the host-kernel runtime (runc) in production, allows the isolating ones", () => {
+    // runc shares the host kernel: not allowed to run untrusted code in production (F-08).
+    expect(() =>
+      loadConfig("worker-scan", { ...validEnv(), NODE_ENV: "production", SANDBOX_RUNTIME: "runc" }),
+    ).toThrow(/runc.*not allowed in production|not allowed in production.*runc/);
+    for (const r of ["runsc", "kata", "firecracker"]) {
+      expect(() =>
+        loadConfig("worker-scan", {
+          ...validEnv(),
+          NODE_ENV: "production",
+          SANDBOX_RUNTIME: r,
+        }),
+      ).not.toThrow();
+    }
+    // runc stays fine outside production (development and tests).
+    expect(() =>
+      loadConfig("worker-scan", {
+        ...validEnv(),
+        NODE_ENV: "development",
+        SANDBOX_RUNTIME: "runc",
+      }),
+    ).not.toThrow();
+  });
 });
 
 describe("Pulse test-only settings", () => {

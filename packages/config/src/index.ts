@@ -114,7 +114,10 @@ export const EnvSchema = z.object({
   EMAIL_PROVIDER_API_KEY: secret(8),
   SLACK_CLIENT_ID: secret(1),
   SLACK_CLIENT_SECRET: secret(8),
-  SANDBOX_RUNTIME: z.enum(["runsc", "runc"]),
+  // runc is the default Docker runtime (shared kernel); runsc (gVisor), kata and firecracker
+  // isolate untrusted code in their own kernel/VM. Production requires one of the isolating
+  // runtimes (ADR 0032); runc is for development and tests only.
+  SANDBOX_RUNTIME: z.enum(["runsc", "kata", "firecracker", "runc"]),
   /** Image the probes run in (infra/sandbox). */
   SANDBOX_IMAGE: z.string().min(1).default("codesentra/sandbox:latest"),
   /** Docker network for dependency downloads only (ADR 0016); "host" where egress needs a host proxy. */
@@ -318,6 +321,18 @@ export function loadConfig<S extends Service>(
   const outbox = env.EMAIL_TRANSPORT === "outbox";
   if (production && outbox && spec.settings.includes("EMAIL_TRANSPORT")) {
     problems.push({ key: "EMAIL_TRANSPORT", message: "outbox is not allowed in production" });
+  }
+  // Untrusted project code must not share the host kernel in production (ADR 0032, audit F-08).
+  if (
+    production &&
+    env.SANDBOX_RUNTIME === "runc" &&
+    (spec.required.includes("SANDBOX_RUNTIME") || spec.settings.includes("SANDBOX_RUNTIME"))
+  ) {
+    problems.push({
+      key: "SANDBOX_RUNTIME",
+      message:
+        "runc shares the host kernel and is not allowed in production; use an isolating runtime (runsc/gVisor, kata or firecracker)",
+    });
   }
 
   for (const name of spec.integrations) {

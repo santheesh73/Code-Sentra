@@ -10,6 +10,7 @@ import {
   isSlackWebhookUrl,
   outboxTransport,
   resendTransport,
+  smtpTransport,
 } from "@codesentra/notify";
 import { runDueSchedules, startQueueClient, startWorker } from "@codesentra/queue";
 import { initTelemetry } from "@codesentra/telemetry/init";
@@ -44,7 +45,13 @@ const github =
     : null;
 
 let email: EmailTransport | null = null;
-if (config.EMAIL_TRANSPORT === "outbox" && config.NODE_ENV !== "production")
+if (config.EMAIL_TRANSPORT === "smtp" && config.NODE_ENV !== "production")
+  email = smtpTransport(
+    config.SMTP_HOST,
+    config.SMTP_PORT,
+    config.EMAIL_FROM ?? "codesentra@localhost",
+  );
+else if (config.EMAIL_TRANSPORT === "outbox" && config.NODE_ENV !== "production")
   email = outboxTransport(config.EMAIL_OUTBOX_DIR);
 else if (config.integrations.email && config.EMAIL_PROVIDER_API_KEY && config.EMAIL_FROM)
   email = resendTransport(config.EMAIL_PROVIDER_API_KEY, config.EMAIL_FROM);

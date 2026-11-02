@@ -5,5 +5,6 @@ export {
   memoryTransport,
   outboxTransport,
   resendTransport,
+  smtpTransport,
 } from "./email.js";
 export { isSlackWebhookUrl, postSlack, SLACK_WEBHOOK_HOST, slackOauthExchange } from "./slack.js";

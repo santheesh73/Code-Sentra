@@ -212,6 +212,12 @@ describe("integrations (ADR 0007)", () => {
     ).toThrow(/outbox is not allowed in production/);
   });
 
+  it("refuses the smtp (Mailpit) transport in production", () => {
+    expect(() =>
+      loadConfig("api", { ...validEnv(), NODE_ENV: "production", EMAIL_TRANSPORT: "smtp" }),
+    ).toThrow(/smtp is not allowed in production/);
+  });
+
   it("applies defaults to non-secret settings", () => {
     const cfg = loadConfig("api", core());
     expect(cfg.API_PORT).toBe(4000);

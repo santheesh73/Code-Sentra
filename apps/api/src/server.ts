@@ -1,7 +1,12 @@
 import { loadConfig } from "@codesentra/config";
 import { createDatabase } from "@codesentra/db";
 import { GithubApp } from "@codesentra/github";
-import { type EmailTransport, outboxTransport, resendTransport } from "@codesentra/notify";
+import {
+  type EmailTransport,
+  outboxTransport,
+  resendTransport,
+  smtpTransport,
+} from "@codesentra/notify";
 import { createRunEventListener, startQueueClient } from "@codesentra/queue";
 import { objectStoreFromEnv } from "@codesentra/storage";
 import { initTelemetry } from "@codesentra/telemetry/init";
@@ -35,7 +40,13 @@ const events = await createRunEventListener(config.DATABASE_URL, {
 });
 
 let email: EmailTransport | null = null;
-if (config.EMAIL_TRANSPORT === "outbox" && config.NODE_ENV !== "production") {
+if (config.EMAIL_TRANSPORT === "smtp" && config.NODE_ENV !== "production") {
+  email = smtpTransport(
+    config.SMTP_HOST,
+    config.SMTP_PORT,
+    config.EMAIL_FROM ?? "codesentra@localhost",
+  );
+} else if (config.EMAIL_TRANSPORT === "outbox" && config.NODE_ENV !== "production") {
   email = outboxTransport(config.EMAIL_OUTBOX_DIR);
   log.warn(
     { dir: config.EMAIL_OUTBOX_DIR },

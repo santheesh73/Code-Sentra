@@ -10,7 +10,7 @@ export interface EmailMessage {
 }
 
 export interface EmailTransport {
-  readonly kind: "resend" | "outbox";
+  readonly kind: "resend" | "outbox" | "smtp";
   send(message: EmailMessage): Promise<void>;
 }
 
@@ -55,6 +55,72 @@ export function outboxTransport(dir: string): EmailTransport {
           mode: 0o600,
         },
       );
+    },
+  };
+}
+
+/**
+ * Development transport: hands each message to a local SMTP server (Mailpit) so a developer
+ * can read sign-in mail in a web inbox, and e2e can read it over Mailpit's API. Plain SMTP on
+ * localhost, no auth, no TLS — for a trusted local server only; packages/config refuses it in
+ * production. A tiny client, so there is no mail dependency in the tree.
+ */
+export function smtpTransport(host: string, port: number, from: string): EmailTransport {
+  return {
+    kind: "smtp",
+    async send(m) {
+      const { createConnection } = await import("node:net");
+      const socket = createConnection({ host, port });
+      socket.setEncoding("utf8");
+      socket.setTimeout(10_000);
+      const boundary = `cs_${randomBytes(8).toString("hex")}`;
+      // SMTP uses CRLF line endings throughout; normalize the parts' own newlines first.
+      const crlf = (s: string) => s.replace(/\r?\n/g, "\r\n");
+      const body = [
+        `From: ${from}`,
+        `To: ${m.to}`,
+        `Subject: ${m.subject}`,
+        "MIME-Version: 1.0",
+        `Content-Type: multipart/alternative; boundary="${boundary}"`,
+        "",
+        `--${boundary}`,
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        crlf(m.text),
+        `--${boundary}`,
+        "Content-Type: text/html; charset=utf-8",
+        "",
+        crlf(m.html),
+        `--${boundary}--`,
+        "",
+      ].join("\r\n");
+      // SMTP forbids a bare "." line in the body; dot-stuff it (RFC 5321 §4.5.2).
+      const dotStuffed = body.replace(/\r\n\./g, "\r\n..");
+      const steps = [
+        `EHLO codesentra\r\n`,
+        `MAIL FROM:<${from}>\r\n`,
+        `RCPT TO:<${m.to}>\r\n`,
+        "DATA\r\n",
+        `${dotStuffed}\r\n.\r\n`,
+        "QUIT\r\n",
+      ];
+      await new Promise<void>((resolve, reject) => {
+        let i = -1; // -1: awaiting the 220 greeting
+        const fail = (e: Error) => {
+          socket.destroy();
+          reject(e);
+        };
+        socket.on("timeout", () => fail(new Error("smtp timeout")));
+        socket.on("error", fail);
+        socket.on("data", (chunk: string) => {
+          const code = Number(chunk.slice(0, 3));
+          if (code >= 400)
+            return fail(new Error(`smtp server replied ${chunk.trim().slice(0, 80)}`));
+          i += 1;
+          if (i < steps.length) socket.write(steps[i] as string);
+          else resolve();
+        });
+      });
     },
   };
 }

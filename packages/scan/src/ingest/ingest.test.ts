@@ -216,6 +216,56 @@ describe("zip safety suite (Section 8.1)", () => {
     expect(checkEntryName("src/./a.ts")).toBe("src/a.ts");
     expect(() => checkEntryName("..")).toThrow(ZipRejected);
   });
+
+  it("rejects control, DEL, C1, bidi and zero-width characters in names (F-09)", () => {
+    const bad = [
+      "a\x07b.txt", // BEL (C0)
+      "a\x7fb.txt", // DEL
+      "a\x9bb.txt", // C1 (CSI)
+      "invoice‮pdf.exe", // right-to-left override: disguises the extension
+      "a​b.txt", // zero-width space
+      "a⁦b⁩.txt", // left-to-right isolate
+      "﻿a.txt", // byte-order mark
+      "a‏b.txt", // right-to-left mark
+    ];
+    for (const n of bad) {
+      const e = (() => {
+        try {
+          checkEntryName(n);
+          return null;
+        } catch (err) {
+          return err as ZipRejected;
+        }
+      })();
+      expect(e, JSON.stringify(n)).toBeInstanceOf(ZipRejected);
+      expect(e?.code).toBe("bad_name");
+    }
+  });
+
+  it("stores names in NFC and treats NFC/NFD variants of a name as the same", async () => {
+    // "é" composed (NFC) vs decomposed (e + combining acute, NFD): the same file.
+    const nfc = "café.txt";
+    const nfd = "café.txt";
+    expect(checkEntryName(nfd)).toBe(nfc);
+    const e = await rejectionOf(
+      extractZip(
+        await zipFile([
+          { name: `repo/${nfc}`, data: Buffer.from("1") },
+          { name: `repo/${nfd}`, data: Buffer.from("2") },
+        ]),
+        join(await scratch(), "o"),
+      ),
+    );
+    expect(e.code).toBe("duplicate_path");
+  });
+
+  it("extracts a legitimate decomposed (NFD) unicode name once, as NFC", async () => {
+    const r = await extractZip(
+      await zipFile([{ name: "repo/café.txt", data: Buffer.from("x") }]),
+      join(await scratch(), "o"),
+    );
+    expect(r.files).toEqual([{ path: "café.txt", size: 1 }]);
+  });
 });
 
 describe("tree listing and hash", () => {

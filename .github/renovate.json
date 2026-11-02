@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard"],
+  "timezone": "Etc/UTC",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "GitHub Actions stay pinned to a SHA; Renovate keeps the comment's version in step.",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true,
+      "groupName": "github-actions"
+    },
+    {
+      "description": "Group non-major npm updates into one weekly PR.",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm (minor & patch)"
+    }
+  ],
+  "vulnerabilityAlerts": { "labels": ["security"] },
+  "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on monday"] }
+}

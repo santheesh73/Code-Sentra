@@ -221,7 +221,11 @@ export function scanToText(s: LocalScan, fixPrompt: boolean): string {
   }
   lines.push(
     "",
-    s.issues.length ? `Issues (${s.issues.length}):` : "No issues found by the checks that ran.",
+    s.issues.length
+      ? `Issues (${s.issues.length}):`
+      : r.gaps.length
+        ? "No issues found among the checks that ran (some did not run; see Not checked above)."
+        : "No issues found.",
   );
   for (const i of s.issues) {
     lines.push(`  ${i.severity.toUpperCase().padEnd(7)} ${i.title}  [${i.code}]`);

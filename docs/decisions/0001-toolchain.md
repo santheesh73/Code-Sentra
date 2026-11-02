@@ -22,4 +22,6 @@ compiler API** (`require("typescript")` fails). Next.js 16 calls that API during
 
 ## Consequences
 
-Two TypeScript majors live in one lockfile. Revisit once Next.js supports TS 7.
+Two TypeScript majors live in one lockfile. Revisited in ADR 0034: Next 16.3+ supports TS 7
+in `next build` only behind an experimental flag with a silent-skip risk, so the split stays
+for now.

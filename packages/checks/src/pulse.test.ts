@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { launchPulseBrowser } from "./browser.js";
 import { detectPlatform } from "./platforms/index.js";
 import { runPulse } from "./pulse.js";
-import { isLoopbackHost, undefinedTokenIn } from "./render.js";
+import { isDefaultIconRequest, isLoopbackHost, undefinedTokenIn } from "./render.js";
 import { linksFromHtml } from "./routes-hygiene.js";
 import type { FindingDraft, PulseResult } from "./types.js";
 
@@ -309,6 +309,22 @@ describe("helpers", () => {
       "https://shop.dev/about",
       "https://shop.dev/pricing",
     ]);
+  });
+  it("treats a default site-icon request as a favicon case, not a broken endpoint (F-12)", () => {
+    for (const p of [
+      "/favicon.ico",
+      "/favicon.png",
+      "/apple-touch-icon.png",
+      "/apple-touch-icon-precomposed.png",
+    ]) {
+      expect(isDefaultIconRequest(p, "other"), p).toBe(true);
+      expect(isDefaultIconRequest(p, "image"), p).toBe(true);
+    }
+    // A referenced resource at a non-default path stays a same-origin failure.
+    expect(isDefaultIconRequest("/static/icon-32.png", "image")).toBe(false);
+    expect(isDefaultIconRequest("/api/items", "fetch")).toBe(false);
+    // The icon path requested as a document (navigation) is not the auto-probe case.
+    expect(isDefaultIconRequest("/favicon.ico", "document")).toBe(false);
   });
 });
 

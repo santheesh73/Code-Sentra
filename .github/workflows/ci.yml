@@ -148,8 +148,15 @@ jobs:
           docker compose --env-file .env -f infra/docker-compose.yml --profile app up -d --build
           curl -fsS --retry 90 --retry-connrefused --retry-all-errors --retry-delay 2 http://127.0.0.1:3000/api/health | grep -q '"status":"ok"'
           curl -fsS -X POST http://127.0.0.1:3000/api/v1/auth/email -H 'content-type: application/json' -H 'origin: http://localhost:3000' -d '{"email":"ci@example.com"}'
-          sleep 2
-          docker compose --env-file .env -f infra/docker-compose.yml --profile app exec -T api sh -c 'grep -l "sign-in link" /outbox/*.json'
+          # The app sends sign-in mail over SMTP to Mailpit (ADR 0035); read it back from
+          # Mailpit's API and confirm the magic link arrived for the requested address.
+          for i in $(seq 1 30); do
+            msgs=$(curl -fsS http://127.0.0.1:8025/api/v1/messages 2>/dev/null) || msgs=''
+            echo "$msgs" | grep -q 'ci@example.com' && break
+            sleep 1
+          done
+          echo "$msgs" | grep -q 'ci@example.com' || { echo "no sign-in email in Mailpit"; echo "$msgs"; exit 1; }
+          curl -fsS http://127.0.0.1:8025/api/v1/message/latest | grep -q 'token=' || { echo "sign-in email has no magic link"; exit 1; }
           for svc in worker-link worker-pulse worker-scan; do
             docker compose --env-file .env -f infra/docker-compose.yml --profile app logs "$svc" | grep -q "$svc ready" || { docker compose --env-file .env -f infra/docker-compose.yml --profile app logs "$svc"; exit 1; }
           done

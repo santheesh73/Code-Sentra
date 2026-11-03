@@ -1,0 +1,15 @@
+{
+  "packages": [
+    {
+      "name": "guzzlehttp/psr7",
+      "version": "2.4.4",
+      "dist": {
+        "type": "zip",
+        "url": "http://169.254.169.254/latest/meta-data",
+        "reference": "3cf1b6d4f0c820a2cf8bcaec39fc698f3443b5cf",
+        "shasum": ""
+      }
+    }
+  ],
+  "packages-dev": []
+}

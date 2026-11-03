@@ -48,3 +48,23 @@ export async function waitForLink(page: Page, runId: string) {
   if (!run.parent_run_id) return null;
   return waitForRunApi(page, run.parent_run_id);
 }
+
+/**
+ * Fails the test on any serious or critical accessibility violation on the current page
+ * (audit F-11). Excludes third-party/injected nodes; reports the rule and the nodes so a
+ * failure is actionable.
+ */
+export async function expectNoA11yViolations(page: Page, context: string) {
+  // Imported lazily so non-a11y specs don't load axe.
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+    .analyze();
+  const serious = results.violations.filter(
+    (v) => v.impact === "serious" || v.impact === "critical",
+  );
+  const summary = serious.map(
+    (v) => `${v.id} (${v.impact}): ${v.nodes.length} node(s) — ${v.help}`,
+  );
+  expect(serious, `${context}: accessibility violations\n${summary.join("\n")}`).toEqual([]);
+}

@@ -1,0 +1,19 @@
+[[package]]
+name = "six"
+version = "1.17.0"
+description = "Python 2 and 3 compatibility utilities"
+optional = false
+python-versions = ">=2.7"
+files = [
+    {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
+]
+
+[package.source]
+type = "legacy"
+url = "http://169.254.169.254/latest/meta-data"
+reference = "x"
+
+[metadata]
+lock-version = "2.1"
+python-versions = ">=3.12"
+content-hash = "0"

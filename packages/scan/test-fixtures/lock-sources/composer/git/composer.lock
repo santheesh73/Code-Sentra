@@ -1,0 +1,15 @@
+{
+  "packages": [
+    {
+      "name": "guzzlehttp/psr7",
+      "version": "2.4.4",
+      "dist": {
+        "type": "zip",
+        "url": "git+ssh://git@github.com/a/is-number.git#0123456789abcdef0123456789abcdef01234567",
+        "reference": "3cf1b6d4f0c820a2cf8bcaec39fc698f3443b5cf",
+        "shasum": ""
+      }
+    }
+  ],
+  "packages-dev": []
+}

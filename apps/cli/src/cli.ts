@@ -173,7 +173,13 @@ export function toText(r: PulseResult, issues: IssueDraftOut[], fixPrompt: boole
   }
   lines.push(
     "",
-    issues.length ? `Issues (${issues.length}):` : "No issues found by the checks that ran.",
+    issues.length
+      ? `Issues (${issues.length}):`
+      : r.status === "unverified" || r.status === "down"
+        ? "No issues to report — the checks could not run (see Not checked above); this is not a clean result."
+        : r.gaps.length
+          ? "No issues found among the checks that ran (some did not run; see Not checked above)."
+          : "No issues found.",
   );
   for (const i of issues) {
     lines.push(`  ${i.severity.toUpperCase().padEnd(7)} ${i.title}  [${i.code}]`);

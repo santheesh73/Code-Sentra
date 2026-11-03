@@ -108,13 +108,19 @@ export const EnvSchema = z.object({
   GITHUB_APP_CLIENT_SECRET: secret(8),
   GITHUB_APP_PRIVATE_KEY: pemKey(),
   GITHUB_WEBHOOK_SECRET: secret(16),
-  EMAIL_TRANSPORT: z.enum(["resend", "outbox"]).default("resend"),
+  EMAIL_TRANSPORT: z.enum(["resend", "outbox", "smtp"]).default("resend"),
   EMAIL_OUTBOX_DIR: z.string().min(1).default(".outbox"),
+  /** SMTP server for the dev "smtp" transport (Mailpit). Host:port, local and unauthenticated. */
+  SMTP_HOST: z.string().min(1).default("localhost"),
+  SMTP_PORT: z.coerce.number().int().positive().default(1025),
   EMAIL_FROM: z.email(),
   EMAIL_PROVIDER_API_KEY: secret(8),
   SLACK_CLIENT_ID: secret(1),
   SLACK_CLIENT_SECRET: secret(8),
-  SANDBOX_RUNTIME: z.enum(["runsc", "runc"]),
+  // runc is the default Docker runtime (shared kernel); runsc (gVisor), kata and firecracker
+  // isolate untrusted code in their own kernel/VM. Production requires one of the isolating
+  // runtimes (ADR 0032); runc is for development and tests only.
+  SANDBOX_RUNTIME: z.enum(["runsc", "kata", "firecracker", "runc"]),
   /** Image the probes run in (infra/sandbox). */
   SANDBOX_IMAGE: z.string().min(1).default("codesentra/sandbox:latest"),
   /** Docker network for dependency downloads only (ADR 0016); "host" where egress needs a host proxy. */
@@ -200,6 +206,8 @@ export const SERVICE_ENV = {
       "SLACK_API_BASE_URL",
       "EMAIL_TRANSPORT",
       "EMAIL_OUTBOX_DIR",
+      "SMTP_HOST",
+      "SMTP_PORT",
       "PULSE_TEST_ALLOW_HOSTS",
       "SCAN_MAX_UPLOAD_BYTES",
       "S3_PUBLIC_ENDPOINT",
@@ -244,6 +252,8 @@ export const SERVICE_ENV = {
     settings: [
       "EMAIL_TRANSPORT",
       "EMAIL_OUTBOX_DIR",
+      "SMTP_HOST",
+      "SMTP_PORT",
       "GITHUB_API_BASE_URL",
       "PULSE_TEST_ALLOW_HOSTS",
       "SCHEDULER_INTERVAL_SECONDS",
@@ -316,14 +326,30 @@ export function loadConfig<S extends Service>(
     });
   }
   const outbox = env.EMAIL_TRANSPORT === "outbox";
-  if (production && outbox && spec.settings.includes("EMAIL_TRANSPORT")) {
-    problems.push({ key: "EMAIL_TRANSPORT", message: "outbox is not allowed in production" });
+  const localMail = outbox || env.EMAIL_TRANSPORT === "smtp";
+  if (production && localMail && spec.settings.includes("EMAIL_TRANSPORT")) {
+    problems.push({
+      key: "EMAIL_TRANSPORT",
+      message: `${env.EMAIL_TRANSPORT} is not allowed in production`,
+    });
+  }
+  // Untrusted project code must not share the host kernel in production (ADR 0032, audit F-08).
+  if (
+    production &&
+    env.SANDBOX_RUNTIME === "runc" &&
+    (spec.required.includes("SANDBOX_RUNTIME") || spec.settings.includes("SANDBOX_RUNTIME"))
+  ) {
+    problems.push({
+      key: "SANDBOX_RUNTIME",
+      message:
+        "runc shares the host kernel and is not allowed in production; use an isolating runtime (runsc/gVisor, kata or firecracker)",
+    });
   }
 
   for (const name of spec.integrations) {
     const groupKeys: readonly EnvKey[] = INTEGRATIONS[name];
     // The outbox transport needs no provider key; email is then "configured" locally.
-    if (name === "email" && outbox && !production) {
+    if (name === "email" && localMail && !production) {
       integrations.email = true;
       if (present(env, "EMAIL_FROM")) keys.add("EMAIL_FROM");
       continue;

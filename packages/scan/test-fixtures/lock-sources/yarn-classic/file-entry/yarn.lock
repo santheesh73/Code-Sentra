@@ -1,0 +1,5 @@
+# yarn lockfile v1
+
+
+"is-number@file:./vendor/is-number":
+  version "7.0.0"

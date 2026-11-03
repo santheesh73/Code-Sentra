@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
     "@codesentra/api": "workspace:*",
     "@codesentra/db": "workspace:*",
     "@codesentra/fixture-harness": "workspace:*",

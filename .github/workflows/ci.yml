@@ -19,10 +19,11 @@ env:
 jobs:
   lint:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -31,10 +32,11 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -44,10 +46,11 @@ jobs:
   # Unit + integration tests and the Phase 0 fixture gate (harness + real-browser fixture self-test).
   test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -89,10 +92,11 @@ jobs:
   # loopback, driven in Chromium.
   e2e:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -109,7 +113,7 @@ jobs:
         env:
           SANDBOX_IMAGE: codesentra/sandbox:ci
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: e2e-results
           path: |
@@ -121,8 +125,9 @@ jobs:
   # and web; a sign-in email goes through the web proxy, the API and the outbox.
   compose:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Write throwaway .env
         run: |
           {
@@ -143,8 +148,15 @@ jobs:
           docker compose --env-file .env -f infra/docker-compose.yml --profile app up -d --build
           curl -fsS --retry 90 --retry-connrefused --retry-all-errors --retry-delay 2 http://127.0.0.1:3000/api/health | grep -q '"status":"ok"'
           curl -fsS -X POST http://127.0.0.1:3000/api/v1/auth/email -H 'content-type: application/json' -H 'origin: http://localhost:3000' -d '{"email":"ci@example.com"}'
-          sleep 2
-          docker compose --env-file .env -f infra/docker-compose.yml --profile app exec -T api sh -c 'grep -l "sign-in link" /outbox/*.json'
+          # The app sends sign-in mail over SMTP to Mailpit (ADR 0035); read it back from
+          # Mailpit's API and confirm the magic link arrived for the requested address.
+          for i in $(seq 1 30); do
+            msgs=$(curl -fsS http://127.0.0.1:8025/api/v1/messages 2>/dev/null) || msgs=''
+            echo "$msgs" | grep -q 'ci@example.com' && break
+            sleep 1
+          done
+          echo "$msgs" | grep -q 'ci@example.com' || { echo "no sign-in email in Mailpit"; echo "$msgs"; exit 1; }
+          curl -fsS http://127.0.0.1:8025/api/v1/message/latest | grep -q 'token=' || { echo "sign-in email has no magic link"; exit 1; }
           for svc in worker-link worker-pulse worker-scan; do
             docker compose --env-file .env -f infra/docker-compose.yml --profile app logs "$svc" | grep -q "$svc ready" || { docker compose --env-file .env -f infra/docker-compose.yml --profile app logs "$svc"; exit 1; }
           done
@@ -156,10 +168,11 @@ jobs:
   # HIGH ones are listed for review (docs/security.md).
   images:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     env:
       TRIVY: ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Build
         run: |
           docker build -f infra/node/Dockerfile --build-arg SERVICE=api -t codesentra/api:ci .
@@ -202,10 +215,11 @@ jobs:
   # dependencies fail the build. Accepted exceptions live in pnpm-workspace.yaml with a reason.
   deps:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -214,8 +228,9 @@ jobs:
 
   secrets:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
       - name: gitleaks

@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createSandbox, dockerAvailable, type Sandbox } from "./index.js";
+import {
+  createSandbox,
+  dockerAvailable,
+  ISOLATING_RUNTIMES,
+  isIsolating,
+  type Sandbox,
+  verifyRuntime,
+} from "./index.js";
 
 /**
  * Sandbox safety suite (Phase 3 gate). Runs real containers from infra/sandbox. Docker
@@ -124,4 +131,25 @@ describe("sandbox safety suite", () => {
     const spawned = Number(/spawned (\d+)/.exec(r.stdout)?.[1] ?? "0");
     expect(spawned).toBeLessThan(40);
   });
+});
+
+describe("runtime verification (ADR 0032, F-08)", () => {
+  it("confirms the runtime by running a container and reports whether it isolates", async () => {
+    const check = await verifyRuntime(IMAGE);
+    expect(check.ok, JSON.stringify(check)).toBe(true);
+    if (check.ok) {
+      expect(ISOLATING_RUNTIMES).toContain(check.runtime === "runc" ? "runsc" : check.runtime); // sanity: the set is non-empty
+      // In this environment the runtime is runc (gVisor absent), which does not isolate.
+      expect(check.isolating).toBe(isIsolating(check.runtime));
+      expect(isIsolating("runsc")).toBe(true);
+      expect(isIsolating("runc")).toBe(false);
+    }
+  }, 60_000);
+
+  it("reports a gap, not a throw, when the image cannot start", async () => {
+    const check = await verifyRuntime("codesentra/does-not-exist:nope");
+    expect(check.ok).toBe(false);
+    if (!check.ok)
+      expect(check.reason).toMatch(/could not start|not available|No such image|not found|pull/i);
+  }, 60_000);
 });

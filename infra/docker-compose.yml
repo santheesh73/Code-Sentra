@@ -22,10 +22,30 @@ x-app-env: &app-env
   # Browsers upload zips straight to MinIO (ADR 0024): the address they reach.
   S3_PUBLIC_ENDPOINT: http://localhost:9000
   PUBLIC_APP_URL: http://localhost:3000
-  EMAIL_TRANSPORT: outbox
+  # Dev email goes to Mailpit over SMTP; read it at http://localhost:8025 (ADR 0035).
+  # Unit tests keep the outbox/memory transports; production uses Resend.
+  EMAIL_TRANSPORT: smtp
   EMAIL_OUTBOX_DIR: /outbox
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
 
 services:
+  # Dev mail sink: the app sends over SMTP (1025); read messages in the web inbox (8025)
+  # or over Mailpit's HTTP API. Not for production (ADR 0035).
+  mailpit:
+    image: axllent/mailpit:v1.21.3
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   postgres:
     image: postgres:16.15-alpine
     environment:
@@ -185,6 +205,20 @@ services:
     volumes: ["/tmp/codesentra-scratch:/tmp/codesentra-scratch"]
     restart: "no"
 
+  # The dependency-download egress allowlist (ADR 0030). In production the Scan worker
+  # attaches each fetch container to an internal network whose only way out is this proxy,
+  # which forwards HTTPS CONNECT to the package registries alone. Start it with the "egress"
+  # profile and point the worker at it with SANDBOX_FETCH_NETWORK / SANDBOX_FETCH_PROXY; see
+  # infra/egress-proxy/README.md. (Local dev keeps the no-proxy bridge under runc.)
+  egress-proxy:
+    profiles: ["egress"]
+    image: ubuntu/squid:latest
+    volumes:
+      - ./egress-proxy/squid.conf:/etc/squid/squid.conf:ro
+      - ./egress-proxy/allowed-hosts.txt:/etc/squid/allowed-hosts.txt:ro
+    networks: [egress, default]
+    restart: unless-stopped
+
   web:
     profiles: ["app"]
     build: { context: .., dockerfile: infra/web/Dockerfile }
@@ -200,3 +234,9 @@ volumes:
   postgres-data:
   minio-data:
   outbox:
+
+networks:
+  # No route to the internet or the other services: a fetch container joined here reaches
+  # the outside only through egress-proxy (ADR 0030).
+  egress:
+    internal: true

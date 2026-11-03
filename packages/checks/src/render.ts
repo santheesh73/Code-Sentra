@@ -60,6 +60,18 @@ export function isLoopbackHost(hostname: string): boolean {
 const fulfillHeaders = (h: Record<string, string>) =>
   Object.fromEntries(Object.entries(h).filter(([k]) => !DROP_RESPONSE_HEADERS.has(k)));
 
+/** The site-icon paths a browser probes on its own, without a `<link>` (audit F-12). */
+const DEFAULT_ICON_PATHS = new Set([
+  "/favicon.ico",
+  "/favicon.png",
+  "/apple-touch-icon.png",
+  "/apple-touch-icon-precomposed.png",
+]);
+/** A request for a default site icon (cosmetic if it 404s), not a referenced resource. */
+export const isDefaultIconRequest = (pathname: string, resourceType: string) =>
+  DEFAULT_ICON_PATHS.has(pathname.toLowerCase()) &&
+  (resourceType === "other" || resourceType === "image");
+
 const LOAD_BUDGET_MS = 15_000;
 const IDLE_QUIET_MS = 500;
 
@@ -274,12 +286,22 @@ export async function checkRender(
         r.status >= 400 &&
         !r.mainDocument
       ) {
-        rec.addFinding(
-          "SAME_ORIGIN_FAILURE",
-          key,
-          r.url,
-          `Same-origin ${r.method} ${u.pathname} returned HTTP ${r.status}.`,
-        );
+        // A browser auto-requests /favicon.ico; a 404 for a default icon the page never
+        // referenced is cosmetic, not a broken endpoint (audit F-12): info, not an error.
+        if (isDefaultIconRequest(u.pathname, r.resourceType))
+          rec.addFinding(
+            "MISSING_FAVICON",
+            key,
+            r.url,
+            `No site icon: ${u.pathname} returned HTTP ${r.status}.`,
+          );
+        else
+          rec.addFinding(
+            "SAME_ORIGIN_FAILURE",
+            key,
+            r.url,
+            `Same-origin ${r.method} ${u.pathname} returned HTTP ${r.status}.`,
+          );
       }
       if (finalPage.protocol === "https:" && u.protocol === "http:") {
         rec.addFinding(

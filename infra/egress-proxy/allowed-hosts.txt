@@ -1,0 +1,18 @@
+# Package registries the dependency download may reach (ADR 0030). One host per line; a
+# leading dot matches the domain and its subdomains. Nothing else is reachable from the
+# download network. Keep in step with the registries the probe planner downloads from.
+registry.npmjs.org
+registry.yarnpkg.com
+pypi.org
+files.pythonhosted.org
+repo.packagist.org
+codeload.github.com
+api.github.com
+gitlab.com
+proxy.golang.org
+sum.golang.org
+rubygems.org
+repo.maven.apache.org
+static.crates.io
+crates.io
+index.crates.io

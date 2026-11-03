@@ -28,6 +28,10 @@ export const ClaimDropReason = z.enum([
   "number_mismatch",
   "status_contradiction",
   "skipped_check_asserted",
+  // A sentence asserts a check succeeded that did not, by any wording (WS-2, F-02).
+  "outcome_unverified",
+  // A sentence makes an unfalsifiable quality boast no check can establish (WS-2, F-02).
+  "unverifiable_quality",
 ]);
 export type ClaimDropReason = z.infer<typeof ClaimDropReason>;
 

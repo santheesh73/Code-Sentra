@@ -40,6 +40,8 @@ const DROP_REASONS: Record<string, string> = {
   number_mismatch: "stated a number its evidence does not contain",
   status_contradiction: "contradicted the evidence-based feature status",
   skipped_check_asserted: "asserted the result of a check that did not run",
+  outcome_unverified: "asserted a check succeeded that did not",
+  unverifiable_quality: "made a quality claim no check can establish",
 };
 
 function Cites({ ids, onOpen }: { ids: string[]; onOpen: (id: string) => Promise<void> }) {

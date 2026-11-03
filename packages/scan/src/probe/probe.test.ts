@@ -19,7 +19,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { scanSecrets } from "../secrets.js";
 import { parseErrorLines, parseTestOutput } from "./parse.js";
 import {
-  checkNpmLockUrls,
   externalParents,
   lockedComposer,
   lockedGems,
@@ -36,6 +35,7 @@ import {
   sanitizeRequirements,
 } from "./plan.js";
 import { runProbes } from "./run.js";
+import { checkLockSources } from "./sources/index.js";
 
 const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../..");
 const repoDir = (name: string) => join(ROOT, "fixtures/repos", name, "repo");
@@ -154,10 +154,12 @@ describe("test output parsing", () => {
 });
 
 describe("probe planning", () => {
-  it("ts-taskboard: npm ci with scripts off, then rebuild, build, tsc, no lint, npm test", () => {
+  it("ts-taskboard: manifest-only npm download with scripts off, then offline install, build, tsc, no lint, test", () => {
     const p = planProbes(viewOf(repoDir("ts-taskboard")));
     expect(p.packageManager).toBe("npm");
     expect(p.refused).toBeNull();
+    // The download runs in a manifest-only directory with scripts off (ADR 0030).
+    expect(p.fetch?.manifestOnly).toBe(true);
     expect(p.fetch?.command).toContain("--ignore-scripts");
     expect(
       p.steps.map(
@@ -165,7 +167,7 @@ describe("probe planning", () => {
           `${s.name}:${s.command ? s.command.join(" ") : `[${s.skip?.kind}] ${s.skip?.reason}`}`,
       ),
     ).toEqual([
-      "install:npm rebuild",
+      "install:npm ci --offline --no-audit --no-fund --cache=/work/.cs-pm-cache",
       "build:npm run --silent build",
       "typecheck:npx --no-install tsc --noEmit -p tsconfig.json",
       "lint:[gap] no lint script in package.json",
@@ -183,31 +185,56 @@ describe("probe planning", () => {
       "tests:run",
     ]);
   });
-  it("refuses lockfile URLs outside the public registry", () => {
+  it("refuses lockfile URLs outside the public registry", async () => {
     const lock = (resolved: string) =>
       JSON.stringify({
         lockfileVersion: 3,
         packages: { "": {}, "node_modules/x": { version: "1.0.0", resolved } },
       });
-    expect(
-      checkNpmLockUrls(lock("https://registry.npmjs.org/x/-/x-1.0.0.tgz"), "package-lock.json"),
-    ).toBeNull();
-    expect(
-      checkNpmLockUrls(lock("http://169.254.169.254/latest/meta-data"), "package-lock.json"),
-    ).toMatch(/169\.254\.169\.254/);
-    expect(checkNpmLockUrls(lock("https://internal.corp/x.tgz"), "package-lock.json")).toMatch(
-      /internal\.corp/,
-    );
-    expect(checkNpmLockUrls(lock("git+ssh://git@github.com/x/y.git"), "package-lock.json")).toMatch(
-      /not the public npm registry/,
-    );
-    const p = planProbes(
-      memView({
-        "package.json": '{"dependencies":{"x":"1"}}',
-        "package-lock.json": lock("http://10.0.0.1/x.tgz"),
-      }),
-    );
-    expect(p.refused).toMatch(/10\.0\.0\.1/);
+    const check = (u: string) => checkLockSources("package-lock.json", lock(u));
+    expect(check("https://registry.npmjs.org/x/-/x-1.0.0.tgz")).toBeNull();
+    expect(check("http://169.254.169.254/latest/meta-data")).toMatch(/169\.254\.169\.254/);
+    expect(check("https://internal.corp/x.tgz")).toMatch(/internal\.corp/);
+    expect(check("git+ssh://git@github.com/x/y.git")).toMatch(/git\+ssh/);
+    // The runner checks the lockfile before any container starts: nothing runs with the
+    // network, and install is a gap naming the dependency.
+    const calls: string[] = [];
+    const sandbox: Sandbox = {
+      runtime: "runc",
+      async run(o) {
+        calls.push(o.network ?? "none");
+        return {
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+          truncated: false,
+          runtime: "runc",
+          network: o.network ?? "none",
+        };
+      },
+    };
+    const files = {
+      "package.json": '{"dependencies":{"x":"1"}}',
+      "package-lock.json": lock("http://10.0.0.1/x.tgz"),
+    };
+    const dir = mkdtempSync(join(tmpdir(), "cs-lockurl-"));
+    const src = join(dir, "src");
+    mkdirSync(src);
+    for (const [p, t] of Object.entries(files)) writeFileSync(join(src, p), t);
+    const run = await runProbes({
+      sandbox,
+      image: "x",
+      sourceDir: src,
+      scratchDir: dir,
+      plan: planProbes(memView(files)),
+    });
+    rmSync(dir, { recursive: true, force: true });
+    expect(calls.filter((c) => c !== "none")).toEqual([]);
+    expect(run.fetch.status).toBe("refused");
+    expect(run.fetch.reason).toMatch(/^not downloaded: x in package-lock\.json: .*10\.0\.0\.1/);
+    expect(run.results.find((r) => r.name === "install")).toMatchObject({ status: "skipped" });
   });
   it("drops pip options and direct URLs from requirements", () => {
     const s = sanitizeRequirements(

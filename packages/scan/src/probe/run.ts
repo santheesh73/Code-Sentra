@@ -1,8 +1,30 @@
-import { chmod, cp, lstat, mkdir, readdir, rename, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { chmod, cp, lstat, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { RunResult, Sandbox } from "@codesentra/sandbox";
+import { classifyFetchFailure } from "./classify.js";
+import { materializeFetchDir, planFetchDir } from "./fetch-dir.js";
 import { type ErrorLine, parseErrorLines, parseTestOutput, type TestSummary } from "./parse.js";
 import { PROBES, type ProbeName, type ProbePlan } from "./plan.js";
+import { checkLockSources, LOCKFILES_BY_MANAGER } from "./sources/index.js";
+
+/** The download cache inside the work tree, copied from the manifest-only fetch (ADR 0030). */
+const NODE_CACHE_DIR = ".cs-pm-cache";
+
+/** Snapshot paths, relative, for building the manifest-only download directory. */
+async function listFiles(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  const walk = async (d: string, rel: string) => {
+    for (const e of await readdir(d, { withFileTypes: true })) {
+      if (e.name === ".git") continue;
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) await walk(join(d, e.name), r);
+      else if (e.isFile()) out.push(r);
+    }
+  };
+  await walk(dir, "");
+  return out;
+}
 
 export type ProbeStatus = "pass" | "fail" | "timeout" | "not_applicable" | "skipped";
 
@@ -60,16 +82,21 @@ export async function runProbes(opts: ProbeOptions): Promise<ProbeRun> {
     return await probe(opts);
   } finally {
     // Files the sandbox wrote belong to its uid (10001). Opening them up from inside lets
-    // a non-root worker delete the scratch copy afterwards.
-    await opts.sandbox
-      .run({
-        image: opts.image,
-        workdir: join(opts.scratchDir, "work"),
-        command: ["sh", "-c", "chmod -R a+rwX /work 2>/dev/null; true"],
-        network: "none",
-        limits: { timeoutMs: 60_000 },
-      })
-      .catch(() => {});
+    // a non-root worker delete the scratch copy afterwards. Both the work tree and the
+    // manifest-only download directory (which the fetch container fills with a cache owned by
+    // the sandbox uid, ADR 0030) are opened up.
+    for (const dir of ["work", "fetch"]) {
+      if (!existsSync(join(opts.scratchDir, dir))) continue;
+      await opts.sandbox
+        .run({
+          image: opts.image,
+          workdir: join(opts.scratchDir, dir),
+          command: ["sh", "-c", "chmod -R a+rwX /work 2>/dev/null; true"],
+          network: "none",
+          limits: { timeoutMs: 60_000 },
+        })
+        .catch(() => {});
+    }
   }
 }
 
@@ -80,6 +107,21 @@ interface ProbeOptions {
   scratchDir: string;
   plan: ProbePlan;
   budgetMs?: number;
+}
+
+/**
+ * Checks the lockfile the download will use before anything is fetched (ADR 0030). A
+ * source outside the allowed registries is refused, naming the dependency.
+ */
+async function lockSourceRefusal(sourceDir: string, plan: ProbePlan): Promise<string | null> {
+  for (const name of LOCKFILES_BY_MANAGER[plan.packageManager ?? ""] ?? []) {
+    const path = join(sourceDir, name);
+    const st = await lstat(path).catch(() => null);
+    if (!st?.isFile()) continue;
+    const why = checkLockSources(name, await readFile(path, "utf8"));
+    if (why) return `not downloaded: ${why}`;
+  }
+  return null;
 }
 
 async function probe(opts: ProbeOptions): Promise<ProbeRun> {
@@ -121,18 +163,41 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
 
   const fetch: ProbeRun["fetch"] = { status: "none", durationMs: 0, reason: null, excerpt: "" };
   let blocked: string | null = null;
-  if (plan.refused) {
+  // Whether the block is a coverage gap (network/environment, or our refusal) rather than a
+  // failure of the project: a gap reports the install as skipped, not failed (ADR 0030, F-05).
+  let blockedIsGap = false;
+  const refused =
+    plan.refused ?? (plan.fetch ? await lockSourceRefusal(opts.sourceDir, plan) : null);
+  if (refused) {
     fetch.status = "refused";
-    fetch.reason = plan.refused;
-    blocked = `dependencies were not installed: ${plan.refused}`;
+    fetch.reason = refused;
+    blocked = `dependencies were not installed: ${refused}`;
+    blockedIsGap = true;
   } else if (plan.fetch) {
+    // A manifest-only download runs in a directory holding only the dependency manifests and
+    // lockfiles (ADR 0030): no project script or hook is present, so none can run with the
+    // network. Its cache is then copied into the work tree for the offline install.
+    let fetchWorkdir = work;
+    if (plan.fetch.manifestOnly) {
+      fetchWorkdir = join(opts.scratchDir, "fetch");
+      const paths = await listFiles(opts.sourceDir);
+      await materializeFetchDir(opts.sourceDir, fetchWorkdir, planFetchDir(paths));
+      await openUp(fetchWorkdir);
+    }
     const r = await sandbox.run({
       image,
-      workdir: work,
+      workdir: fetchWorkdir,
       command: plan.fetch.command,
       network: "fetch",
+      env: plan.fetch.env,
       limits: { timeoutMs: 10 * 60_000 },
     });
+    if (plan.fetch.manifestOnly && r.exitCode === 0) {
+      await cp(join(fetchWorkdir, NODE_CACHE_DIR), join(work, NODE_CACHE_DIR), {
+        recursive: true,
+      }).catch(() => {});
+      await openUp(work);
+    }
     fetch.durationMs = r.durationMs;
     fetch.excerpt = tail(r);
     fetch.reason = plan.fetch.reason;
@@ -143,8 +208,15 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
       fetch.status = "refused";
       fetch.reason = `not downloaded: ${refusal}`;
       blocked = `dependencies were not installed: ${fetch.reason}`;
-    } else if (fetch.status !== "pass")
-      blocked = `dependency download ${fetch.status === "timeout" ? "timed out" : "failed"}`;
+      blockedIsGap = true;
+    } else if (fetch.status !== "pass") {
+      // Classify the failure: a network/environment failure is a coverage gap (Unverified),
+      // not a finding against the project; a manifest error is a real install failure (F-05).
+      const verdict = classifyFetchFailure(`${r.stdout}\n${r.stderr}`, r.exitCode, r.timedOut);
+      fetch.reason = verdict.reason;
+      blocked = `dependencies were not installed: ${verdict.reason}`;
+      blockedIsGap = verdict.kind === "infra";
+    }
   }
 
   for (const s of plan.steps) {
@@ -161,10 +233,10 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
     if (blocked) {
       if (s.name === "install") {
         results.push({
-          ...skipped(s.name, blocked, fetch.status === "refused" ? "skipped" : "fail"),
+          ...skipped(s.name, blocked, blockedIsGap ? "skipped" : "fail"),
           excerpt: fetch.excerpt,
         });
-        if (fetch.status !== "refused") blocked = "install failed";
+        if (!blockedIsGap) blocked = "install failed";
       } else results.push(skipped(s.name, blocked));
       continue;
     }
@@ -178,6 +250,7 @@ async function probe(opts: ProbeOptions): Promise<ProbeRun> {
       workdir: work,
       command: s.command as string[],
       network: "none",
+      env: s.env,
       limits: { timeoutMs: Math.min(s.timeoutMs, left) },
     });
     const out = `${r.stdout}\n${r.stderr}`;

@@ -99,11 +99,53 @@ function readEntries(zip: ZipFile): Promise<Entry[]> {
   });
 }
 
+/**
+ * Characters never allowed in an entry name (ADR 0033, audit F-09): C0 and C1 control
+ * characters and DEL; Unicode bidirectional controls (marks, embeddings, overrides, isolates,
+ * and the Arabic letter mark), which can make a name display as something other than it is; and
+ * zero-width and byte-order characters, which hide text. Rejecting them at ingest means no
+ * downstream view (web, prompts, check summaries, CLI) ever renders a disguised name.
+ */
+const DISALLOWED_NAME_CODEPOINTS = new Set<number>([
+  0x200b, // zero-width space
+  0x200c, // zero-width non-joiner
+  0x200d, // zero-width joiner
+  0x200e, // left-to-right mark
+  0x200f, // right-to-left mark
+  0x202a, // left-to-right embedding
+  0x202b, // right-to-left embedding
+  0x202c, // pop directional formatting
+  0x202d, // left-to-right override
+  0x202e, // right-to-left override
+  0x2066, // left-to-right isolate
+  0x2067, // right-to-left isolate
+  0x2068, // first strong isolate
+  0x2069, // pop directional isolate
+  0x061c, // Arabic letter mark
+  0xfeff, // byte-order mark / zero-width no-break space
+]);
+/** Whether a name has a control (C0/C1), DEL, bidirectional or zero-width character. */
+function hasDisallowedChar(name: string): boolean {
+  for (const ch of name) {
+    const c = ch.codePointAt(0) as number;
+    if (c <= 0x1f || (c >= 0x7f && c <= 0x9f) || DISALLOWED_NAME_CODEPOINTS.has(c)) return true;
+  }
+  return false;
+}
+
+/** A normalization key for an entry: NFC-folded and lower-cased, so NFC/NFD and case variants of
+ * the same name collide (ADR 0033). */
+export const entryKey = (path: string) => path.normalize("NFC").toLowerCase();
+
 /** Validates one entry name and returns its normalized repo-relative path. */
 export function checkEntryName(name: string): string {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting control characters is the point
-  if (!name || /[\u0000-\u001f]/.test(name))
-    throw new ZipRejected("bad_name", "entry name has control characters", name);
+  if (!name) throw new ZipRejected("bad_name", "empty entry name", name);
+  if (hasDisallowedChar(name))
+    throw new ZipRejected(
+      "bad_name",
+      "entry name has a control, bidirectional or zero-width character",
+      name,
+    );
   if (name.includes("\\"))
     throw new ZipRejected("bad_name", "entry name contains a backslash", name);
   if (name.startsWith("/") || /^[a-zA-Z]:/.test(name))
@@ -111,7 +153,8 @@ export function checkEntryName(name: string): string {
   const segs = name.split("/");
   if (segs.some((s) => s === ".."))
     throw new ZipRejected("path_traversal", `".." segment in archive: ${name}`, name);
-  return posix.normalize(name).replace(/\/$/, "");
+  // Store the name in NFC so the same file cannot appear twice in different normal forms.
+  return posix.normalize(name).replace(/\/$/, "").normalize("NFC");
 }
 
 /**
@@ -186,7 +229,7 @@ export async function extractZip(
     const out: ExtractResult["files"] = [];
     for (const f of files) {
       const rel = unwrapped ? f.path.slice(unwrapped.length + 1) : f.path;
-      const key = rel.toLowerCase();
+      const key = entryKey(rel);
       if (seen.has(key))
         throw new ZipRejected("duplicate_path", `duplicate path: ${rel}`, f.entry.fileName);
       seen.add(key);

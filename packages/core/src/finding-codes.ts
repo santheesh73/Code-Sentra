@@ -42,6 +42,7 @@ export const PULSE_CODES = [
   "ROUTE_MISSING",
   "MIXED_CONTENT",
   "MISSING_SECURITY_HEADER",
+  "MISSING_FAVICON",
 ] as const;
 
 export const ScanCode = z.enum(SCAN_CODES);
@@ -371,6 +372,15 @@ const PULSE_DECLS: Record<PulseCode, Decl> = {
     "Missing security header",
     "the response from {locator} sets {discriminator}",
     50,
+  ),
+  // A missing site icon is cosmetic, not a broken endpoint (audit F-12): info, not an error.
+  MISSING_FAVICON: pulse(
+    "render",
+    "info",
+    "code_fix",
+    "No site icon",
+    "{locator} serves a site icon",
+    30,
   ),
 };
 

@@ -847,6 +847,10 @@ importers:
       '@sentry/node':
         specifier: 10.76.0
         version: 10.76.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/exporter-trace-otlp-http@0.222.0(@opentelemetry/api@1.9.1))
+    devDependencies:
+      testcontainers:
+        specifier: 12.2.1
+        version: 12.2.1
 
 packages:
 

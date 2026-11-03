@@ -106,6 +106,25 @@ jobs:
       - run: pnpm build
       - run: pnpm coverage
 
+  # Runs the README quickstart's documented commands so they cannot rot: every pnpm script,
+  # CLI subcommand, docker build dir and docs link it names must still resolve, and the
+  # documented `pulse … --fix-prompt` invocation must report a verdict against a fixture app.
+  walkthrough:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Chromium for the documented pulse render
+        run: pnpm --filter @codesentra/fixture-harness exec playwright-core install --with-deps chromium
+      - run: pnpm build
+      - run: pnpm walkthrough
+
   # Phase 1–4 gates: real Postgres + MinIO (Testcontainers), API, worker-pulse (real
   # Chromium), worker-scan (sandbox, gitleaks, offline OSV), worker-link, web and the fixture harness on
   # loopback, driven in Chromium.

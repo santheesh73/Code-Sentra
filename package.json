@@ -28,7 +28,8 @@
     "openapi": "pnpm --filter @codesentra/api openapi",
     "stack:up": "docker compose --env-file .env -f infra/docker-compose.yml --profile app up -d --build && curl -fsS --retry 90 --retry-connrefused --retry-all-errors --retry-delay 2 -o /dev/null http://127.0.0.1:3000/api/health",
     "stack:down": "docker compose --env-file .env -f infra/docker-compose.yml --profile app down",
-    "coverage": "turbo run coverage"
+    "coverage": "turbo run coverage",
+    "walkthrough": "node scripts/readme-walkthrough.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",

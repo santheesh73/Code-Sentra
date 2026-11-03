@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { chmod, cp, lstat, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { RunResult, Sandbox } from "@codesentra/sandbox";
@@ -81,16 +82,21 @@ export async function runProbes(opts: ProbeOptions): Promise<ProbeRun> {
     return await probe(opts);
   } finally {
     // Files the sandbox wrote belong to its uid (10001). Opening them up from inside lets
-    // a non-root worker delete the scratch copy afterwards.
-    await opts.sandbox
-      .run({
-        image: opts.image,
-        workdir: join(opts.scratchDir, "work"),
-        command: ["sh", "-c", "chmod -R a+rwX /work 2>/dev/null; true"],
-        network: "none",
-        limits: { timeoutMs: 60_000 },
-      })
-      .catch(() => {});
+    // a non-root worker delete the scratch copy afterwards. Both the work tree and the
+    // manifest-only download directory (which the fetch container fills with a cache owned by
+    // the sandbox uid, ADR 0030) are opened up.
+    for (const dir of ["work", "fetch"]) {
+      if (!existsSync(join(opts.scratchDir, dir))) continue;
+      await opts.sandbox
+        .run({
+          image: opts.image,
+          workdir: join(opts.scratchDir, dir),
+          command: ["sh", "-c", "chmod -R a+rwX /work 2>/dev/null; true"],
+          network: "none",
+          limits: { timeoutMs: 60_000 },
+        })
+        .catch(() => {});
+    }
   }
 }
 

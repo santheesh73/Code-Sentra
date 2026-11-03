@@ -1,15 +1,21 @@
 # CodeSentra Remediation Report
 
-Remediation of the independent audit (`audit/AUDIT_REPORT.md`). All work is on branch
-`claude/keen-gauss-9qsty6` (PR #13), 20 commits.
+Remediation of the independent audit (`audit/AUDIT_REPORT.md`). **Merged to `main` as `ae1e3c7`
+(PR #13, squash), all CI jobs green.** ADRs 0030–0036.
 
 ## 1. Verdict
 
-**Every audit finding (F-01…F-18) and all six follow-ups are fixed, with tests.** The Critical
-(untrusted code running with the network during dependency download) is closed and proven by a
-regression suite that went from 8 failing to 12 passing. Lint, typecheck and build are green;
-the unit suite is green except the `php-notes-api` fixture, which needs GitHub egress this
-development environment blocks (CI-only, pre-existing per ADR 0028).
+**Every audit finding (F-01…F-18) and all six follow-ups are fixed, with tests, and merged to
+`main`.** The Critical (untrusted code running with the network during dependency download) is
+closed and proven by a regression suite that went from 8 failing to 12 passing. At merge, all
+eight CI jobs were green — lint, typecheck, test (the full suite, including the `php-notes-api`
+fixture, which passes in CI where GitHub egress is available), e2e, deps, secrets, compose and
+images. Locally the `php-notes-api` fixture still needs egress this development environment
+blocks (CI-only, accepted — ADR 0028, ADR 0030).
+
+The audit remediation is complete. The broader Section 3 (close every UNVERIFIED item) and
+Section 4 (production hardening) program, and the independent re-audit, are tracked separately
+and continue after this merge.
 
 **Not yet production-ready by the remediation prompt's full Definition of Done.** The audit
 findings are remediated, but the prompt's Section 3 (close every UNVERIFIED item) and Section 4

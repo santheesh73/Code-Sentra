@@ -125,6 +125,23 @@ jobs:
       - run: pnpm build
       - run: pnpm walkthrough
 
+  # Performance budgets for the CPU-bound hot paths (claim tokenization, source parsing).
+  # Fails on a regression past the committed ceilings in scripts/bench-budgets.json; the
+  # 2x scaling ratio is the machine-independent guard against accidental super-linear work.
+  bench:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm bench
+
   # Phase 1–4 gates: real Postgres + MinIO (Testcontainers), API, worker-pulse (real
   # Chromium), worker-scan (sandbox, gitleaks, offline OSV), worker-link, web and the fixture harness on
   # loopback, driven in Chromium.

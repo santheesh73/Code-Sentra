@@ -1,0 +1,18 @@
+{
+  "note": "Performance budgets for the CPU-bound hot paths. Each ceiling is a REGRESSION ALARM with generous headroom over the observed local median (≈3–6×), not a performance target — CI runners are slower and noisier than a dev box. The scaling ratio is machine-independent and is the primary signal: it catches an accidental O(n^2) regardless of hardware. Raise a ceiling only deliberately, with justification in the commit; investigate a breach before relaxing it.",
+  "iterations": { "warmup": 5, "measured": 15 },
+  "budgets": {
+    "claims.verify_corpus_pass_ms": {
+      "ceiling": 15,
+      "what": "Median wall time to tokenize every claim in the 316-entry corpus once (concreteTokens)."
+    },
+    "parsers.per_file_ms": {
+      "ceiling": 25,
+      "what": "Median wall time to parse one representative ~120-line TypeScript file (parseFile, embedded WASM)."
+    },
+    "parsers.scaling_ratio_2x": {
+      "ceiling": 2.6,
+      "what": "Median(parse 2N files) / Median(parse N files). Linear parsing ≈ 2.0; a breach signals super-linear work."
+    }
+  }
+}

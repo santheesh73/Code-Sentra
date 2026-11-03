@@ -74,3 +74,13 @@ network is on.**
   and Composer, whose existing scripts already run no project code (ADR 0016, 0026–0029) and
   need the whole tree; their lockfile sources are checked by the same validator where a
   lockfile URL applies.
+
+## PHP fixture: CI-only accepted
+
+The `php-notes-api` fixture's dependency download fetches package zips from GitHub
+(codeload) at probe time, so it runs end-to-end only where GitHub egress is available. CI
+provides that egress and the fixture passes there; the development sandbox blocks it, so the
+fixture is skipped-by-failure locally. **This CI-only coverage is accepted for now** (as in
+ADR 0028): a fully offline, hermetic PHP fixture — a committed, checksum-verified package
+cache populated by an egress-capable refresh — is deferred and tracked as remaining work. No
+other ecosystem's fixture depends on egress.

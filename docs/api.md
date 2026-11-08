@@ -9,6 +9,7 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | Method | Path | Summary | Responses |
 |---|---|---|---|
 | GET | `/health` | Liveness plus database and queue checks | 200, 503 |
+| GET | `/ready` | Readiness: database, queue and object storage are reachable | 200, 503 |
 | POST | `/v1/auth/email` | Send a sign-in link by email | 202, 501 |
 | POST | `/v1/auth/email/verify` | Exchange a sign-in link token for a session | 200, 400 |
 | GET | `/v1/auth/github` | Start GitHub sign-in | 302, 501 |

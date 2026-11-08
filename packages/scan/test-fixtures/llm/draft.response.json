@@ -1,0 +1,19 @@
+{
+  "id": "msg_recorded_draft_01",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-4-5-20250929",
+  "stop_reason": "end_turn",
+  "stop_details": null,
+  "usage": { "input_tokens": 981, "output_tokens": 203 },
+  "content": [
+    { "type": "text", "text": "{\"summary\":[{\"text\":\"A small Fastify service.\",\"evidence_ids\":[\"manifest:1\"]}],\"value\":[{\"text\":\"Lets a user sign in.\",\"evidence_ids\":[\"doc:1\"]}],\"features\":[{\"text\":\"User login is complete.\",\"evidence_ids\":[\"route:1\",\"test:1\"]}],\"issues\":[{\"text\":\"The reset route has no implementation.\",\"evidence_ids\":[\"doc:2\"]}],\"remaining\":[{\"text\":\"Implement password reset.\",\"evidence_ids\":[\"doc:2\"]}]}" }
+  ],
+  "parsed_output": {
+    "summary": [{ "text": "A small Fastify service.", "evidence_ids": ["manifest:1"] }],
+    "value": [{ "text": "Lets a user sign in.", "evidence_ids": ["doc:1"] }],
+    "features": [{ "text": "User login is complete.", "evidence_ids": ["route:1", "test:1"] }],
+    "issues": [{ "text": "The reset route has no implementation.", "evidence_ids": ["doc:2"] }],
+    "remaining": [{ "text": "Implement password reset.", "evidence_ids": ["doc:2"] }]
+  }
+}

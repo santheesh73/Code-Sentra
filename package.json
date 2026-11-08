@@ -27,11 +27,15 @@
     "e2e": "pnpm --filter @codesentra/e2e e2e",
     "openapi": "pnpm --filter @codesentra/api openapi",
     "stack:up": "docker compose --env-file .env -f infra/docker-compose.yml --profile app up -d --build && curl -fsS --retry 90 --retry-connrefused --retry-all-errors --retry-delay 2 -o /dev/null http://127.0.0.1:3000/api/health",
-    "stack:down": "docker compose --env-file .env -f infra/docker-compose.yml --profile app down"
+    "stack:down": "docker compose --env-file .env -f infra/docker-compose.yml --profile app down",
+    "coverage": "turbo run coverage",
+    "walkthrough": "node scripts/readme-walkthrough.mjs",
+    "bench": "node scripts/bench.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",
     "@types/node": "22.20.5",
+    "@vitest/coverage-v8": "5.0.5",
     "turbo": "2.11.10",
     "typescript": "7.0.2",
     "vitest": "5.0.5"

@@ -41,6 +41,19 @@
     },
     "@fixtures/localhost-leak#typecheck": {
       "dependsOn": ["^build", "build"]
+    },
+    "coverage": {
+      "dependsOn": ["^build"],
+      "passThroughEnv": [
+        "SANDBOX_*",
+        "DOCKER_HOST",
+        "TESTCONTAINERS_*",
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "NO_PROXY",
+        "PLAYWRIGHT_BROWSERS_PATH",
+        "CHROMIUM_EXECUTABLE"
+      ]
     }
   }
 }

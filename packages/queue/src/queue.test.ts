@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type QueueClient, startQueueClient } from "./client.js";
 import { DIAGNOSTIC_STEPS, diagnosticHandler } from "./diagnostic.js";
 import { createRunEventListener, type RunEvent, type RunEventListener } from "./events.js";
-import { startWorker, type Worker } from "./worker.js";
+import { type JobContext, startWorker, type Worker, type WorkerOptions } from "./worker.js";
 
 let t: TestDatabase;
 let queue: QueueClient;
@@ -187,4 +187,130 @@ describe("sweep", () => {
     expect(final?.steps[0]?.status).toBe("skipped");
     await worker.stop();
   });
+});
+
+/**
+ * Production runs several worker replicas against one Postgres-backed queue. These tests
+ * stand up independent pg-boss clients (each one is a separate "process" with its own pool)
+ * competing for the same queue, and assert the guarantees a horizontally scaled fleet must
+ * keep: each run is handled exactly once (pg-boss SELECT … FOR UPDATE SKIP LOCKED hands a
+ * job to a single replica), nothing is dropped, work spreads across replicas, and a transient
+ * failure is retried — by whichever replica next claims it — without finalizing the run twice.
+ */
+describe("multiple worker replicas against one queue", () => {
+  async function fleet(
+    size: number,
+    handlers: WorkerOptions["handlers"],
+  ): Promise<{ clients: QueueClient[]; workers: Worker[]; stop(): Promise<void> }> {
+    const clients: QueueClient[] = [];
+    const workers: Worker[] = [];
+    for (let i = 0; i < size; i++) {
+      // ensureQueues:false — the shared client created the queues in beforeAll; replicas only
+      // join. Separate clients ⇒ separate pools ⇒ a faithful multi-process fleet.
+      const client = await startQueueClient(t.url, {
+        retryDelaySeconds: 1,
+        ensureQueues: false,
+      });
+      clients.push(client);
+      workers.push(await startWorker({ db: t.db, queue: client, concurrency: 2, handlers }));
+    }
+    return {
+      clients,
+      workers,
+      async stop() {
+        await Promise.all(workers.map((w) => w.stop()));
+        await Promise.all(clients.map((c) => c.stop()));
+      },
+    };
+  }
+
+  const okSteps = async (ctx: { step: JobContext["step"] }) => {
+    await ctx.step("database", async () => ({ status: "done" as const }));
+    await ctx.step("queue", async () => ({ status: "done" as const }));
+    await ctx.step("object_storage", async () => ({ status: "done" as const }));
+  };
+
+  it("processes each run exactly once across replicas, with no loss", async () => {
+    const REPLICAS = 3;
+    const RUNS = 12;
+    const handledPerRun = new Map<string, number>();
+    const handledPerReplica = new Map<number, number>();
+
+    const clients: QueueClient[] = [];
+    const workers: Worker[] = [];
+    for (let i = 0; i < REPLICAS; i++) {
+      const client = await startQueueClient(t.url, { retryDelaySeconds: 1, ensureQueues: false });
+      clients.push(client);
+      workers.push(
+        await startWorker({
+          db: t.db,
+          queue: client,
+          concurrency: 2,
+          handlers: {
+            "system.diagnostic": async (ctx) => {
+              handledPerRun.set(ctx.payload.runId, (handledPerRun.get(ctx.payload.runId) ?? 0) + 1);
+              handledPerReplica.set(i, (handledPerReplica.get(i) ?? 0) + 1);
+              await okSteps(ctx);
+            },
+          },
+        }),
+      );
+    }
+
+    const runs = await Promise.all(Array.from({ length: RUNS }, () => newRun()));
+    const dones = runs.map((r) => collect(r.run.id, 60_000));
+    for (const { run } of runs) {
+      expect(await queue.enqueue("system.diagnostic", { runId: run.id, orgId })).toBe(true);
+    }
+    const results = await Promise.all(dones);
+
+    // No loss: every run reached a terminal success event.
+    for (const events of results) expect(summary(events).at(-1)).toBe("run:succeeded");
+    // Exactly once: each run's handler body ran a single time, and every run is accounted for.
+    expect(handledPerRun.size).toBe(RUNS);
+    for (const [runId, count] of handledPerRun) expect(count, `run ${runId}`).toBe(1);
+    expect([...handledPerRun.values()].reduce((a, b) => a + b, 0)).toBe(RUNS);
+    // Horizontally scaled: the work did not all land on one replica.
+    const replicasThatWorked = [...handledPerReplica.values()].filter((n) => n > 0).length;
+    expect(replicasThatWorked).toBeGreaterThanOrEqual(2);
+    // The database agrees each run succeeded.
+    for (const { run } of runs) {
+      const final = await t.db.withOrg(orgId, (tx) => getRunWithSteps(tx, run.id));
+      expect(final?.run.status).toBe("succeeded");
+    }
+
+    await Promise.all(workers.map((w) => w.stop()));
+    await Promise.all(clients.map((c) => c.stop()));
+  }, 120_000);
+
+  it("retries a transient failure on the fleet without finalizing the run twice", async () => {
+    const attempts = new Map<string, number>();
+    const completions = new Map<string, number>();
+    const f = await fleet(2, {
+      "system.diagnostic": async (ctx) => {
+        attempts.set(ctx.payload.runId, (attempts.get(ctx.payload.runId) ?? 0) + 1);
+        await ctx.step("database", async () => ({ status: "done" }));
+        // First claim fails after partial work, as if the replica were lost mid-job.
+        if (ctx.attempt === 1) throw new Error("transient: replica lost the job");
+        await ctx.step("queue", async () => ({ status: "done" }));
+        await ctx.step("object_storage", async () => ({ status: "done" }));
+        completions.set(ctx.payload.runId, (completions.get(ctx.payload.runId) ?? 0) + 1);
+      },
+    });
+
+    const { run } = await newRun();
+    const done = collect(run.id, 60_000);
+    await queue.enqueue("system.diagnostic", { runId: run.id, orgId });
+    expect(summary(await done).at(-1)).toBe("run:succeeded");
+
+    // Retried exactly once (attempt 1 failed, attempt 2 succeeded), finalized exactly once —
+    // the second claim may be served by either replica, but the run completes a single time.
+    expect(attempts.get(run.id)).toBe(2);
+    expect(completions.get(run.id)).toBe(1);
+    const final = await t.db.withOrg(orgId, (tx) => getRunWithSteps(tx, run.id));
+    expect(final?.run.status).toBe("succeeded");
+    expect(final?.steps.map((x) => x.status)).toEqual(["done", "done", "done"]);
+
+    await f.stop();
+  }, 120_000);
 });

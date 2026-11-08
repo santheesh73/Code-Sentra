@@ -6,3 +6,12 @@ useDefault = true
 [[allowlists]]
 description = "Planted fake secrets in Scan fixture repos"
 paths = ['''^fixtures/repos/''']
+
+[[allowlists]]
+# The GitHub App setup self-test (scripts/github-app/setup.mjs) once embedded obvious
+# placeholder "secrets" to prove verifyAppEnv's length checks. The current file builds them
+# from repeated characters, but they remain in history at commit 18f2553; this allowlist is
+# scoped to that one file AND those exact fake values so it cannot mask a real leak elsewhere.
+description = "Placeholder values in the GitHub App setup self-test"
+paths = ['''^scripts/github-app/setup\.mjs$''']
+regexes = ['''0123456789abcdef0?''']

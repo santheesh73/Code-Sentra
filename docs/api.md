@@ -32,6 +32,7 @@ Machine-readable spec: [`openapi.json`](openapi.json) (also served at `GET /v1/o
 | POST | `/v1/orgs/{id}/tokens` | Create an API token | 201, 400, 401, 403, 404 |
 | DELETE | `/v1/orgs/{id}/tokens/{tokenId}` | Revoke an API token | 204, 401, 403, 404 |
 | DELETE | `/v1/orgs/{orgId}` | Delete an organization (owner) | 204, 400, 401, 403, 404 |
+| GET | `/v1/orgs/{orgId}/dead-letters` | Queue dead letters: jobs that exhausted their retries | 200, 401, 403, 404 |
 | GET | `/v1/orgs/{orgId}/members` | Members of an organization | 200, 401, 404 |
 | POST | `/v1/orgs/{orgId}/members` | Add a member by email (admin or owner) | 201, 401, 403, 404, 409 |
 | PATCH | `/v1/orgs/{orgId}/members/{userId}` | Change a member's role (owner) | 200, 400, 401, 403, 404 |

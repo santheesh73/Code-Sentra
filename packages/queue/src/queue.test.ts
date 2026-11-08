@@ -4,6 +4,7 @@ import { createObjectStore, type ObjectStore } from "@codesentra/storage";
 import { GenericContainer, type StartedTestContainer, Wait } from "testcontainers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type QueueClient, startQueueClient } from "./client.js";
+import { deadLetterJobs } from "./dead-letters.js";
 import { DIAGNOSTIC_STEPS, diagnosticHandler } from "./diagnostic.js";
 import { createRunEventListener, type RunEvent, type RunEventListener } from "./events.js";
 import { type JobContext, startWorker, type Worker, type WorkerOptions } from "./worker.js";
@@ -197,6 +198,27 @@ describe("sweep", () => {
  * job to a single replica), nothing is dropped, work spreads across replicas, and a transient
  * failure is retried — by whichever replica next claims it — without finalizing the run twice.
  */
+describe("dead letters", () => {
+  it("lists jobs that exhausted their retries, scoped to the org", async () => {
+    const { run } = await newRun(["a"]);
+    await queue.boss.send("pulse.run", { runId: run.id, orgId }, { id: run.id, retryLimit: 0 });
+    const [job] = await queue.boss.fetch("pulse.run");
+    expect(job?.id).toBe(run.id);
+    await queue.boss.fail("pulse.run", run.id, { message: "handler exploded" });
+
+    const mine = (await deadLetterJobs(t.db, { orgId })).find((d) => d.runId === run.id);
+    expect(mine).toBeTruthy();
+    expect(mine?.type).toBe("pulse.run");
+    expect(mine?.orgId).toBe(orgId);
+    expect(mine?.attempts).toBe(1);
+    expect(mine?.reason).toMatch(/handler exploded/);
+
+    // Another org never sees our dead letters (tenancy).
+    const other = await deadLetterJobs(t.db, { orgId: "00000000-0000-0000-0000-000000000000" });
+    expect(other.some((d) => d.runId === run.id)).toBe(false);
+  });
+});
+
 describe("multiple worker replicas against one queue", () => {
   async function fleet(
     size: number,

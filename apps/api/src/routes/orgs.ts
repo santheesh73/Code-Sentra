@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { MembershipRole } from "@codesentra/core";
 import { schema as s } from "@codesentra/db";
+import { deadLetterJobs } from "@codesentra/queue";
 import { and, asc, count, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -22,6 +23,18 @@ export async function listMyOrgs(ctx: AppContext, userId: string) {
 
 const OrgParams = z.object({ orgId: z.uuid() });
 const MemberParams = OrgParams.extend({ userId: z.uuid() });
+
+const DeadLetterDto = z
+  .object({
+    id: z.string(),
+    type: z.string(),
+    run_id: z.string().nullable(),
+    attempts: z.number().int(),
+    retry_limit: z.number().int(),
+    failed_at: z.string().nullable(),
+    reason: z.string().nullable(),
+  })
+  .meta({ id: "DeadLetter" });
 
 export function orgRoutes(ctx: AppContext): FastifyPluginAsyncZod {
   return async (app) => {
@@ -111,6 +124,34 @@ export function orgRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           user: userDto(r.u),
           role: r.m.role,
           joined_at: r.m.createdAt.toISOString(),
+        }));
+      },
+    );
+
+    app.get(
+      "/v1/orgs/:orgId/dead-letters",
+      {
+        schema: {
+          tags: ["orgs"],
+          summary: "Queue dead letters: jobs that exhausted their retries",
+          description:
+            "Jobs for this org that ended in the queue's failed state after exhausting retries. The stuck-job reaper marks the owning runs failed; this exposes the underlying jobs for an operator. Reflects the queue's retention window, not all history.",
+          params: OrgParams,
+          querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }),
+          response: { 200: z.array(DeadLetterDto), 401: Problem, 403: Problem, 404: Problem },
+        },
+      },
+      async (req) => {
+        const { orgId } = await ctx.authz.requireOrg(req, req.params.orgId, "admin");
+        const jobs = await deadLetterJobs(ctx.db, { orgId, limit: req.query.limit });
+        return jobs.map((j) => ({
+          id: j.id,
+          type: j.type,
+          run_id: j.runId,
+          attempts: j.attempts,
+          retry_limit: j.retryLimit,
+          failed_at: j.failedAt?.toISOString() ?? null,
+          reason: j.reason,
         }));
       },
     );

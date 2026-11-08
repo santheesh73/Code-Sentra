@@ -1,4 +1,5 @@
 import { loadConfig } from "@codesentra/config";
+import { installShutdown } from "@codesentra/core";
 import { createDatabase } from "@codesentra/db";
 import { GithubApp } from "@codesentra/github";
 import { startQueueClient, startWorker } from "@codesentra/queue";
@@ -137,13 +138,12 @@ const worker = await startWorker({
 });
 log.info({ osv: osv.source.description, model: model.model?.name ?? null }, "worker-scan ready");
 
-const shutdown = async (signal: string) => {
-  log.info({ signal }, "shutting down");
-  await worker.stop();
-  await queue.stop();
-  await db.close();
-  await telemetry.shutdown();
-  process.exit(0);
-};
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT", () => void shutdown("SIGINT"));
+installShutdown({
+  log,
+  drain: async () => {
+    await worker.stop();
+    await queue.stop();
+    await db.close();
+    await telemetry.shutdown();
+  },
+});

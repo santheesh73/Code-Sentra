@@ -1,6 +1,6 @@
 import { PULSE_GROUPS } from "@codesentra/checks";
 import { loadConfig } from "@codesentra/config";
-import { ScanStage } from "@codesentra/core";
+import { installShutdown, ScanStage } from "@codesentra/core";
 import { keyring } from "@codesentra/core/crypto";
 import { createDatabase } from "@codesentra/db";
 import { GithubApp } from "@codesentra/github";
@@ -114,14 +114,13 @@ log.info(
   "worker-link ready",
 );
 
-const shutdown = async (signal: string) => {
-  log.info({ signal }, "shutting down");
-  if (scheduler) clearInterval(scheduler);
-  await worker.stop();
-  await queue.stop();
-  await db.close();
-  await telemetry.shutdown();
-  process.exit(0);
-};
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT", () => void shutdown("SIGINT"));
+installShutdown({
+  log,
+  drain: async () => {
+    if (scheduler) clearInterval(scheduler);
+    await worker.stop();
+    await queue.stop();
+    await db.close();
+    await telemetry.shutdown();
+  },
+});

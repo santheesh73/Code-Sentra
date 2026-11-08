@@ -1,0 +1,152 @@
+# CodeSentra app tier for a self-hosted deployment (Section 20). Runs the stateless
+# services from pushed images against your own Postgres and S3-compatible storage:
+# a one-shot migrate job, the API, worker-pulse, worker-link and the web app.
+#
+# worker-scan is NOT here: untrusted code runs only inside the sandbox on a dedicated
+# gVisor VM — see infra/deploy/worker-scan.compose.yml. Postgres and object storage are
+# managed services you provide. Front the API and web with your own TLS-terminating proxy.
+#
+#   docker compose --env-file /etc/codesentra/app.env -f app.compose.yml run --rm migrate
+#   docker compose --env-file /etc/codesentra/app.env -f app.compose.yml up -d
+#
+# Env template: ../../.env.production.example. Each service receives only the variables it
+# needs (packages/config SERVICE_ENV): the Pulse worker never sees the Anthropic key, the
+# API never sees it either, and the scan worker (elsewhere) never sees Slack.
+name: codesentra
+
+x-restart: &restart
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  # One-shot: apply idempotent migrations before api/workers start. Run it explicitly
+  # (see header) on each deploy; it exits 0 when the schema is current.
+  migrate:
+    image: ${API_IMAGE:?set API_IMAGE to the pushed codesentra-api tag}
+    entrypoint: ["node", "node_modules/@codesentra/db/dist/migrate-cli.js"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?}
+    restart: "no"
+
+  api:
+    <<: *restart
+    image: ${API_IMAGE:?set API_IMAGE to the pushed codesentra-api tag}
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      API_HOST: 0.0.0.0
+      API_PORT: "4000"
+      DATABASE_URL: ${DATABASE_URL:?}
+      SESSION_SECRET: ${SESSION_SECRET:?}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?}
+      ENCRYPTION_KEY_PREVIOUS: ${ENCRYPTION_KEY_PREVIOUS:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:?}
+      # s3
+      S3_ENDPOINT: ${S3_ENDPOINT:?}
+      S3_BUCKET: ${S3_BUCKET:?}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:?}
+      # github sign-in OAuth + GitHub App
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:?}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:?}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:?}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:?}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:?}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:?}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:?}
+      # email (Resend) + slack
+      EMAIL_TRANSPORT: ${EMAIL_TRANSPORT:-resend}
+      EMAIL_FROM: ${EMAIL_FROM:?}
+      EMAIL_PROVIDER_API_KEY: ${EMAIL_PROVIDER_API_KEY:?}
+      SLACK_CLIENT_ID: ${SLACK_CLIENT_ID:?}
+      SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET:?}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    ports: ["${API_PUBLISH:-127.0.0.1:4000}:4000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker-pulse:
+    <<: *restart
+    image: ${WORKER_PULSE_IMAGE:?set WORKER_PULSE_IMAGE to the pushed codesentra-worker-pulse tag}
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: ${DATABASE_URL:?}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?}
+      ENCRYPTION_KEY_PREVIOUS: ${ENCRYPTION_KEY_PREVIOUS:-}
+      # s3
+      S3_ENDPOINT: ${S3_ENDPOINT:?}
+      S3_BUCKET: ${S3_BUCKET:?}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  worker-link:
+    <<: *restart
+    image: ${WORKER_LINK_IMAGE:?set WORKER_LINK_IMAGE to the pushed codesentra-worker-link tag}
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: ${DATABASE_URL:?}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?}
+      ENCRYPTION_KEY_PREVIOUS: ${ENCRYPTION_KEY_PREVIOUS:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:?}
+      # anthropic + github app + email + slack
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:?}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:?}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:?}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:?}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:?}
+      EMAIL_TRANSPORT: ${EMAIL_TRANSPORT:-resend}
+      EMAIL_FROM: ${EMAIL_FROM:?}
+      EMAIL_PROVIDER_API_KEY: ${EMAIL_PROVIDER_API_KEY:?}
+      SLACK_CLIENT_ID: ${SLACK_CLIENT_ID:?}
+      SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET:?}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    <<: *restart
+    image: ${WEB_IMAGE:?set WEB_IMAGE to the pushed codesentra-web tag}
+    environment:
+      NODE_ENV: production
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:?}
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:4000}
+    ports: ["${WEB_PUBLISH:-127.0.0.1:3000}:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s

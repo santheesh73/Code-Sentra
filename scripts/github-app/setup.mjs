@@ -117,13 +117,16 @@ function selfTest() {
     "localhost allowed",
   );
 
-  // Verifier: a complete, well-formed env passes.
+  // Verifier: a complete, well-formed env passes. The placeholder "secrets" are built from
+  // repeated characters so no secret-shaped literal appears in source (keeps gitleaks quiet);
+  // they only need to satisfy the length checks verifyAppEnv enforces.
+  const pad = (prefix, n) => prefix + "x".repeat(n);
   const good = {
     GITHUB_APP_ID: "123456",
-    GITHUB_APP_PRIVATE_KEY: "-----BEGIN RSA PRIVATE KEY-----\\nabc\\n-----END RSA PRIVATE KEY-----",
-    GITHUB_WEBHOOK_SECRET: "0123456789abcdef0",
-    GITHUB_APP_CLIENT_ID: "Iv1.0123456789abcdef",
-    GITHUB_APP_CLIENT_SECRET: "0123456789abcdef",
+    GITHUB_APP_PRIVATE_KEY: `-----BEGIN RSA PRIVATE KEY-----\\n${pad("", 8)}\\n-----END RSA PRIVATE KEY-----`,
+    GITHUB_WEBHOOK_SECRET: pad("wh-", 16),
+    GITHUB_APP_CLIENT_ID: "Iv1.placeholder",
+    GITHUB_APP_CLIENT_SECRET: pad("cs-", 12),
     GITHUB_APP_SLUG: "codesentra",
   };
   assert(verifyAppEnv(good).ok, "good env should pass");

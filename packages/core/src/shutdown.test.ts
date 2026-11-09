@@ -61,4 +61,20 @@ describe("installShutdown", () => {
     await shutdown("SIGTERM");
     expect(exits).toEqual([1]);
   });
+
+  it("registers real process signal handlers and calls process.exit by default", async () => {
+    const onSpy = vi.spyOn(process, "on").mockReturnValue(process as never);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    try {
+      // No injected register/exit: exercise the production defaults.
+      const shutdown = installShutdown({ drain: async () => {} });
+      expect(onSpy).toHaveBeenCalledWith("SIGTERM", expect.any(Function));
+      expect(onSpy).toHaveBeenCalledWith("SIGINT", expect.any(Function));
+      await shutdown("SIGTERM");
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    } finally {
+      onSpy.mockRestore();
+      exitSpy.mockRestore();
+    }
+  });
 });

@@ -11,10 +11,12 @@ import {
 } from "./index.js";
 
 /**
- * Adversarial corpus for the claim verifier (WS-2, audit F-02). The false set — every wording
+ * Adversarial corpus for the claim verifier (WS-2, audit F-02). The false set — many wordings
  * of "the checks passed" when they did not, quality boasts, fabricated technologies and
  * numbers — must be dropped in full. The true set — the same outcome language when the checks
- * did pass, plus plain facts the evidence supports — must survive almost entirely.
+ * did pass, plus plain facts the evidence supports — must survive almost entirely. The corpus
+ * is a representative sample, not every possible phrasing: new paraphrases that slip through
+ * (e.g. the re-audit N-1 set) are added here and to outcome.test.ts as they are found.
  */
 const DIR = resolve(fileURLToPath(new URL(".", import.meta.url)), "../test-fixtures");
 const corpus = JSON.parse(readFileSync(join(DIR, "corpus.json"), "utf8")) as {

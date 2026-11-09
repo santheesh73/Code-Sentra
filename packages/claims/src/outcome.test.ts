@@ -71,4 +71,35 @@ describe("outcome-language detector (WS-2, F-02)", () => {
       outcomeClaims("All tests pass and the build is green."),
     );
   });
+
+  // Re-audit finding N-1: novel success paraphrases that slipped past the detector.
+  const REAUDIT_BYPASSES = [
+    "The full suite runs without a single failure.",
+    "Not one test is failing.",
+    "The unit tests all check out.",
+    "There are zero test failures.",
+    "Linting comes back spotless.",
+    "Biome reports no problems.",
+    "The build compiles without a hitch.",
+    "Dependencies install with no errors.",
+    "The dependency audit is clean.",
+    "Security scanning found nothing.",
+  ];
+  it("rejects novel success paraphrases when the checks did not pass (N-1)", () => {
+    const keptOnFail = REAUDIT_BYPASSES.filter((t) => checkOutcomeClaims(t, all("fail")).ok);
+    expect(keptOnFail, "kept on fail").toEqual([]);
+    const keptOnSkip = REAUDIT_BYPASSES.filter((t) => checkOutcomeClaims(t, all("skipped")).ok);
+    expect(keptOnSkip, "kept on skip").toEqual([]);
+  });
+  it("still accepts those paraphrases, and near-identical true claims, when the checks pass", () => {
+    for (const t of [
+      ...REAUDIT_BYPASSES,
+      // Discriminators: near-identical honest claims that must survive on a pass.
+      "The test suite runs green.",
+      "The suite of tests is passing.",
+      "Install completes successfully.",
+      "No lint warnings remain.",
+    ])
+      expect(checkOutcomeClaims(t, all("pass")).ok, t).toBe(true);
+  });
 });

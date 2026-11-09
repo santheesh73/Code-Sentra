@@ -35,11 +35,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: api, dockerfile: infra/node/Dockerfile, context: ".", build_args: "SERVICE=api" }
-          - { name: worker-link, dockerfile: infra/node/Dockerfile, context: ".", build_args: "SERVICE=worker-link" }
+          - {
+              name: api,
+              dockerfile: infra/node/Dockerfile,
+              context: ".",
+              build_args: "SERVICE=api",
+            }
+          - {
+              name: worker-link,
+              dockerfile: infra/node/Dockerfile,
+              context: ".",
+              build_args: "SERVICE=worker-link",
+            }
           - { name: worker-scan, dockerfile: infra/scan/Dockerfile, context: ".", build_args: "" }
           - { name: worker-pulse, dockerfile: infra/pulse/Dockerfile, context: ".", build_args: "" }
-          - { name: sandbox, dockerfile: infra/sandbox/Dockerfile, context: "infra/sandbox", build_args: "" }
+          - {
+              name: sandbox,
+              dockerfile: infra/sandbox/Dockerfile,
+              context: "infra/sandbox",
+              build_args: "",
+            }
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -109,3 +124,40 @@ jobs:
           name: sbom-${{ matrix.name }}
           path: sbom-${{ matrix.name }}.cdx.json
           if-no-files-found: error
+
+  # Publish the single-file CLI to npm with build provenance (a signed attestation linking the
+  # published tarball to this workflow run and commit). Needs an npm automation token in the
+  # NPM_TOKEN secret and id-token: write (already set at the workflow level). Skipped if
+  # NPM_TOKEN is absent, so the workflow still produces signed images without it.
+  cli:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @codesentra/cli... build
+      - name: Set version and publish with provenance
+        if: ${{ env.NPM_TOKEN != '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ "${{ github.event_name }}" = "workflow_dispatch" ] && VERSION="${{ github.event.inputs.ref }}" && VERSION="${VERSION#v}"
+          cd apps/cli
+          npm pkg delete private
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          npm publish --provenance --access public
+      - name: Note when skipped
+        if: ${{ env.NPM_TOKEN == '' }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: echo "NPM_TOKEN not set; built the CLI but did not publish." >&2

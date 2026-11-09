@@ -4,6 +4,7 @@ export {
   type QueueClientOptions,
   startQueueClient,
 } from "./client.js";
+export { type DeadLetterJob, deadLetterJobs } from "./dead-letters.js";
 export { DIAGNOSTIC_STEPS, diagnosticHandler } from "./diagnostic.js";
 export {
   createRunEventListener,

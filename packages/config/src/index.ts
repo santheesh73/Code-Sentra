@@ -130,10 +130,16 @@ export const EnvSchema = z.object({
   /** Directory with an OSV dump (osv-scanner offline format); unset uses the OSV API. */
   OSV_OFFLINE_DIR: z.string().optional(),
   SCAN_MAX_COMMITS: z.coerce.number().int().min(1).max(50_000).default(2000),
+  /** LLM cost cap: an org's input+output tokens per calendar month before Scan stops calling
+   * the model and records a gap instead of report prose. 0 disables the cap. */
+  LLM_MONTHLY_TOKEN_CAP: z.coerce.number().int().min(0).default(0),
   /** The object-storage endpoint browsers reach for direct uploads (default: S3_ENDPOINT). */
   S3_PUBLIC_ENDPOINT: url().optional(),
   /** How often worker-link looks for due schedules (Section 6 `schedules`); 0 turns it off. */
   SCHEDULER_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(3600).default(30),
+  /** Delete terminal, unreferenced runs (and their evidence) older than this many days.
+   * 0 keeps everything. worker-link runs the sweep every few hours. */
+  DATA_RETENTION_DAYS: z.coerce.number().int().min(0).max(36_500).default(0),
   /** Largest accepted zip upload (compressed), bytes. */
   SCAN_MAX_UPLOAD_BYTES: z.coerce
     .number()
@@ -234,6 +240,7 @@ export const SERVICE_ENV = {
       "GITHUB_API_BASE_URL",
       "GITHUB_GIT_BASE_URL",
       "SCAN_MAX_UPLOAD_BYTES",
+      "LLM_MONTHLY_TOKEN_CAP",
     ],
     integrations: ["s3", "github_app", "anthropic"],
   },
@@ -257,6 +264,7 @@ export const SERVICE_ENV = {
       "GITHUB_API_BASE_URL",
       "PULSE_TEST_ALLOW_HOSTS",
       "SCHEDULER_INTERVAL_SECONDS",
+      "DATA_RETENTION_DAYS",
       "ENCRYPTION_KEY_PREVIOUS",
     ],
     integrations: ["anthropic", "github_app", "email", "slack"],

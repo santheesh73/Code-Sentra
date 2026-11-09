@@ -25,6 +25,7 @@ import type { OsvSource } from "./audit/osv.js";
 import { cloneRepo, GitError, scratchDir } from "./ingest/git.js";
 import { listTree, type TreeEntry, treeHash } from "./ingest/tree.js";
 import { DEFAULT_ZIP_LIMITS, extractZip, ZipRejected } from "./ingest/zip.js";
+import { modelWithinBudget } from "./llm-budget.js";
 import type { ReportModel } from "./model.js";
 import { runScan, scanGroupsRan } from "./pipeline.js";
 
@@ -34,6 +35,9 @@ export interface ScanJobDeps {
   osv: { source: OsvSource } | { source: null; reason: string };
   secrets: { enabled: true } | { enabled: false; reason: string };
   model: { model: ReportModel } | { model: null; reason: string };
+  /** LLM cost cap: an org's input+output tokens per month before Scan stops calling the
+   * model and records a gap. 0 (the default) disables the cap. */
+  llmTokenCapPerMonth?: number;
   gitPolicy: FetchPolicy;
   /** Plain http git for test hosts only (the harness has no TLS for git). */
   allowHttpGit: boolean;
@@ -218,6 +222,13 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
       // --- Stages ----------------------------------------------------------------------------
       const sandbox = await deps.sandbox();
       await mkdir(join(scratch.path, "probe"), { recursive: true });
+      // LLM cost cap: downgrade to a gap when this org has spent its monthly token budget.
+      const model = await modelWithinBudget(
+        ctx.db,
+        orgId,
+        deps.model,
+        deps.llmTokenCapPerMonth ?? 0,
+      );
       const result = await runScan({
         root,
         tree: files,
@@ -226,7 +237,7 @@ export function scanHandler(deps: ScanJobDeps): JobHandler {
         sandbox,
         osv: deps.osv,
         secrets: deps.secrets,
-        model: deps.model,
+        model,
         maxCommits: deps.maxCommits,
         onStage: async (stage, state, detail) => {
           if (stage === "ingest") return;

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
@@ -428,5 +429,98 @@ describe("OpenAPI", () => {
     );
     expect(refs.size).toBeGreaterThan(10);
     expect([...refs].filter((r) => !doc.components.schemas?.[r as string])).toEqual([]);
+  });
+});
+
+describe("dead letters", () => {
+  it("shows an org admin its own exhausted jobs, and no one else's", async () => {
+    // Seed a terminally-failed queue job carrying this org id.
+    const runId = randomUUID();
+    await api.queue.boss.send("pulse.run", { runId, orgId }, { id: runId, retryLimit: 0 });
+    await api.queue.boss.fetch("pulse.run");
+    await api.queue.boss.fail("pulse.run", runId, { message: "boom in api test" });
+
+    const res = await api.app.inject({
+      method: "GET",
+      url: `/v1/orgs/${orgId}/dead-letters`,
+      headers: as(owner),
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    const mine = res.json().find((d: { run_id: string }) => d.run_id === runId);
+    expect(mine).toBeTruthy();
+    expect(mine).toMatchObject({ type: "pulse.run", attempts: 1 });
+    expect(mine.reason).toMatch(/boom in api test/);
+  });
+
+  it("is admin-only and tenant-scoped", async () => {
+    const memberCookie = await signIn(api, "dl-member@example.com");
+    await api.app.inject({
+      method: "POST",
+      url: `/v1/orgs/${orgId}/members`,
+      headers: as(owner),
+      payload: { email: "dl-member@example.com", role: "member" },
+    });
+    // A non-admin member of the org is forbidden.
+    const denied = await api.app.inject({
+      method: "GET",
+      url: `/v1/orgs/${orgId}/dead-letters`,
+      headers: as(memberCookie),
+    });
+    expect(denied.statusCode).toBe(403);
+
+    // A signed-in user who is not in the org cannot even see it exists.
+    const outsider = await signIn(api, "dl-outsider@example.com");
+    const hidden = await api.app.inject({
+      method: "GET",
+      url: `/v1/orgs/${orgId}/dead-letters`,
+      headers: as(outsider),
+    });
+    expect(hidden.statusCode).toBe(404);
+  });
+});
+
+describe("data export", () => {
+  it("exports the org's data to its owner", async () => {
+    await createProject();
+    const res = await api.app.inject({
+      method: "GET",
+      url: `/v1/orgs/${orgId}/export`,
+      headers: as(owner),
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    const body = res.json();
+    expect(body.format).toBe("codesentra.export.v1");
+    expect(body.org_id).toBe(orgId);
+    expect(Array.isArray(body.projects)).toBe(true);
+    expect(body.projects.length).toBeGreaterThan(0);
+    expect(Array.isArray(body.runs)).toBe(true);
+    expect(Array.isArray(body.issues)).toBe(true);
+    // No raw sealed secrets in the export.
+    expect(JSON.stringify(body)).not.toMatch(/ciphertext|sealed/i);
+  });
+
+  it("is owner-only and tenant-scoped", async () => {
+    const member = await signIn(api, "ex-member@example.com");
+    await api.app.inject({
+      method: "POST",
+      url: `/v1/orgs/${orgId}/members`,
+      headers: as(owner),
+      payload: { email: "ex-member@example.com", role: "admin" },
+    });
+    // An admin (not owner) cannot export.
+    const denied = await api.app.inject({
+      method: "GET",
+      url: `/v1/orgs/${orgId}/export`,
+      headers: as(member),
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const outsider = await signIn(api, "ex-outsider@example.com");
+    const hidden = await api.app.inject({
+      method: "GET",
+      url: `/v1/orgs/${orgId}/export`,
+      headers: as(outsider),
+    });
+    expect(hidden.statusCode).toBe(404);
   });
 });

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { launchPulseBrowser } from "@codesentra/checks";
 import { pulseHandler } from "@codesentra/checks/job";
 import { loadConfig } from "@codesentra/config";
+import { installShutdown } from "@codesentra/core";
 import { keyring } from "@codesentra/core/crypto";
 import { createDatabase } from "@codesentra/db";
 import { diagnosticHandler, startQueueClient, startWorker } from "@codesentra/queue";
@@ -88,14 +89,13 @@ const worker = await startWorker({
 });
 log.info("worker-pulse ready");
 
-const shutdown = async (signal: string) => {
-  log.info({ signal }, "shutting down");
-  await worker.stop();
-  await queue.stop();
-  await browser?.close().catch(() => {});
-  await db.close();
-  await telemetry.shutdown();
-  process.exit(0);
-};
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT", () => void shutdown("SIGINT"));
+installShutdown({
+  log,
+  drain: async () => {
+    await worker.stop();
+    await queue.stop();
+    await browser?.close().catch(() => {});
+    await db.close();
+    await telemetry.shutdown();
+  },
+});

@@ -1,4 +1,5 @@
 import { loadConfig } from "@codesentra/config";
+import { installShutdown } from "@codesentra/core";
 import { createDatabase } from "@codesentra/db";
 import { GithubApp } from "@codesentra/github";
 import {
@@ -97,15 +98,14 @@ purge.unref();
 
 await app.listen({ host: config.API_HOST, port: config.API_PORT });
 
-const shutdown = async (signal: string) => {
-  log.info({ signal }, "shutting down");
-  clearInterval(purge);
-  await app.close();
-  await events.close();
-  await queue.stop();
-  await db.close();
-  await telemetry.shutdown();
-  process.exit(0);
-};
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT", () => void shutdown("SIGINT"));
+installShutdown({
+  log,
+  drain: async () => {
+    clearInterval(purge);
+    await app.close();
+    await events.close();
+    await queue.stop();
+    await db.close();
+    await telemetry.shutdown();
+  },
+});

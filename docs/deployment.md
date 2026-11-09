@@ -107,6 +107,45 @@ for the runtime requirements (the worker refuses `runc` in production).
 To roll back, point the `*_IMAGE` tags at the previous build and `up -d` again; migrations are
 additive, so the older code runs against the newer schema.
 
+## Backups and migration safety
+
+**Migrations** are forward-only and idempotent (`node node_modules/@codesentra/db/dist/migrate-cli.js`,
+run as the pre-deploy step above). A CI gate (`packages/db` `migration-safety.test.ts`) proves
+on every change that they apply cleanly to an empty Postgres 16, re-run as a no-op, leave RLS
+enabled on the tenant tables, and introduce no unreviewed data-losing DDL (a deliberate one
+must carry a `-- migration-safety: allow-destructive <reason>` marker).
+
+**Database backups** use [`scripts/backup-restore.sh`](../scripts/backup-restore.sh) (Postgres
+custom-format archives):
+
+```sh
+# Nightly backup (cron): a timestamped archive to durable storage.
+scripts/backup-restore.sh backup "$DATABASE_URL" "backup-$(date +%F).dump"
+
+# Restore into an EMPTY database.
+scripts/backup-restore.sh restore "$TARGET_URL" backup-2026-01-01.dump
+
+# Rehearse restore: dump the source, restore into a throwaway DB on an admin connection,
+# and verify the table/row-count fingerprints match. Run this regularly — a backup you have
+# never restored is not a backup.
+scripts/backup-restore.sh rehearse "$DATABASE_URL" "$ADMIN_URL"
+```
+
+**Object storage** (uploaded zips, snapshots) is backed up by your bucket's own versioning or
+cross-region replication, not this script; enable it when you provision the bucket.
+
+## Data lifecycle: retention, deletion and export
+
+- **Retention** — set `DATA_RETENTION_DAYS` to prune terminal, unreferenced runs (and their
+  evidence/findings, which cascade) older than the window; worker-link sweeps every few hours.
+  Runs referenced by an issue or that have child runs are kept. 0 keeps everything. Object
+  artifacts expire via the bucket lifecycle policy above.
+- **Deletion** — an org owner deletes the whole organization at `DELETE /v1/orgs/:id` (confirm
+  with its slug): every tenant row cascades and its stored snapshots/screenshots are purged.
+- **Export** — an org owner downloads a portable JSON export at `GET /v1/orgs/:id/export`
+  (org, projects, environments, issues and bounded recent run summaries; no raw evidence
+  payloads or secrets).
+
 ## Verify end to end
 
 Run a full check on a test project (upload a zip, add a deploy URL). The run view should show

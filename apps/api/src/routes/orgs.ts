@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { MembershipRole } from "@codesentra/core";
 import { schema as s } from "@codesentra/db";
-import { and, asc, count, eq } from "drizzle-orm";
+import { deadLetterJobs } from "@codesentra/queue";
+import { and, asc, count, desc, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { normalizeEmail } from "../auth/service.js";
@@ -22,6 +23,18 @@ export async function listMyOrgs(ctx: AppContext, userId: string) {
 
 const OrgParams = z.object({ orgId: z.uuid() });
 const MemberParams = OrgParams.extend({ userId: z.uuid() });
+
+const DeadLetterDto = z
+  .object({
+    id: z.string(),
+    type: z.string(),
+    run_id: z.string().nullable(),
+    attempts: z.number().int(),
+    retry_limit: z.number().int(),
+    failed_at: z.string().nullable(),
+    reason: z.string().nullable(),
+  })
+  .meta({ id: "DeadLetter" });
 
 export function orgRoutes(ctx: AppContext): FastifyPluginAsyncZod {
   return async (app) => {
@@ -112,6 +125,89 @@ export function orgRoutes(ctx: AppContext): FastifyPluginAsyncZod {
           role: r.m.role,
           joined_at: r.m.createdAt.toISOString(),
         }));
+      },
+    );
+
+    app.get(
+      "/v1/orgs/:orgId/dead-letters",
+      {
+        schema: {
+          tags: ["orgs"],
+          summary: "Queue dead letters: jobs that exhausted their retries",
+          description:
+            "Jobs for this org that ended in the queue's failed state after exhausting retries. The stuck-job reaper marks the owning runs failed; this exposes the underlying jobs for an operator. Reflects the queue's retention window, not all history.",
+          params: OrgParams,
+          querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }),
+          response: { 200: z.array(DeadLetterDto), 401: Problem, 403: Problem, 404: Problem },
+        },
+      },
+      async (req) => {
+        const { orgId } = await ctx.authz.requireOrg(req, req.params.orgId, "admin");
+        const jobs = await deadLetterJobs(ctx.db, { orgId, limit: req.query.limit });
+        return jobs.map((j) => ({
+          id: j.id,
+          type: j.type,
+          run_id: j.runId,
+          attempts: j.attempts,
+          retry_limit: j.retryLimit,
+          failed_at: j.failedAt?.toISOString() ?? null,
+          reason: j.reason,
+        }));
+      },
+    );
+
+    app.get(
+      "/v1/orgs/:orgId/export",
+      {
+        schema: {
+          tags: ["orgs"],
+          summary: "Export an organization's data (owner)",
+          description:
+            "A JSON export of the organization's own data for portability: the org, its projects, environments, issues and a bounded set of recent run summaries (most recent first). Raw evidence payloads and any sealed secrets are not included. Owner only.",
+          params: OrgParams,
+          querystring: z.object({ runs: z.coerce.number().int().min(1).max(5000).optional() }),
+          response: { 200: z.looseObject({}), 401: Problem, 403: Problem, 404: Problem },
+        },
+      },
+      async (req, reply) => {
+        const { orgId } = await ctx.authz.requireOrg(req, req.params.orgId, "owner");
+        const runLimit = req.query.runs ?? 1000;
+        const data = await ctx.db.withOrg(orgId, async (tx) => {
+          const [org] = await tx
+            .select()
+            .from(s.organizations)
+            .where(eq(s.organizations.id, orgId));
+          const projects = await tx.select().from(s.projects).orderBy(asc(s.projects.createdAt));
+          const environments = await tx
+            .select()
+            .from(s.environments)
+            .orderBy(asc(s.environments.createdAt));
+          const issues = await tx.select().from(s.issues).orderBy(desc(s.issues.createdAt));
+          const runs = await tx
+            .select({
+              id: s.runs.id,
+              projectId: s.runs.projectId,
+              type: s.runs.type,
+              trigger: s.runs.trigger,
+              status: s.runs.status,
+              targetUrl: s.runs.targetUrl,
+              createdAt: s.runs.createdAt,
+              startedAt: s.runs.startedAt,
+              finishedAt: s.runs.finishedAt,
+              outcome: s.runs.outcome,
+            })
+            .from(s.runs)
+            .orderBy(desc(s.runs.createdAt))
+            .limit(runLimit);
+          return { org, projects, environments, issues, runs };
+        });
+        return reply.send({
+          exported_at: new Date().toISOString(),
+          format: "codesentra.export.v1",
+          org_id: orgId,
+          run_limit: runLimit,
+          ...data,
+        });
       },
     );
 

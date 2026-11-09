@@ -1,0 +1,103 @@
+# CodeSentra alerting rules (Prometheus format).
+#
+# These fire before the SLO error budgets in docs/slos.md are exhausted. Metric names assume
+# an OpenTelemetry Collector with a Prometheus exporter, fed by the app's OTLP spans and by the
+# standard exporters below; adjust the names to match your pipeline:
+#   - cs_ready_up            : 1 if GET /ready returned 200 on the last probe, else 0 (blackbox).
+#   - cs_http_request_...    : span metrics for `job api` HTTP requests (status, duration).
+#   - cs_job_...             : span metrics for queue jobs (codesentra.job, step_status).
+#   - pgboss_oldest_job_age_seconds : age of the oldest unstarted pg-boss job.
+#   - pgboss_dead_letters    : count of jobs in the failed state.
+#   - up{job="..."}          : scrape liveness per service.
+#
+# Validate with: promtool check rules infra/observability/alerts.yml
+groups:
+  - name: codesentra-availability
+    rules:
+      - alert: ApiReadinessDown
+        expr: cs_ready_up == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: "API /ready has been failing for 2m"
+          runbook: "docs/incident-runbook.md#api--ready-failing"
+
+      - alert: ApiHighErrorRate
+        expr: >
+          sum(rate(cs_http_requests_total{status=~"5.."}[5m]))
+          / sum(rate(cs_http_requests_total[5m])) > 0.05
+        for: 10m
+        labels: { severity: page }
+        annotations:
+          summary: "API 5xx rate above 5% for 10m"
+          runbook: "docs/incident-runbook.md#api-error-spike"
+
+      - alert: ApiLatencyHigh
+        expr: histogram_quantile(0.95, sum(rate(cs_http_request_duration_seconds_bucket[10m])) by (le)) > 0.5
+        for: 15m
+        labels: { severity: ticket }
+        annotations:
+          summary: "API p95 latency above 500ms for 15m"
+          runbook: "docs/incident-runbook.md#api-latency"
+
+  - name: codesentra-workers
+    rules:
+      - alert: WorkerDown
+        expr: up{job=~"worker-pulse|worker-scan|worker-link"} == 0
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "A CodeSentra worker ({{ $labels.job }}) is down"
+          runbook: "docs/incident-runbook.md#a-worker-is-down"
+
+      - alert: QueueBacklog
+        expr: pgboss_oldest_job_age_seconds > 300
+        for: 10m
+        labels: { severity: page }
+        annotations:
+          summary: "Oldest queued job older than 5m for 10m (backlog)"
+          runbook: "docs/incident-runbook.md#queue-backlog"
+
+      - alert: DeadLettersAppearing
+        expr: increase(pgboss_dead_letters[1h]) > 0
+        for: 5m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Jobs are landing in the dead-letter (failed) state"
+          runbook: "docs/incident-runbook.md#dead-letters"
+
+      - alert: ScanFailureRateHigh
+        expr: >
+          sum(rate(cs_job_total{job_type="scan.run",outcome="failed"}[30m]))
+          / sum(rate(cs_job_total{job_type="scan.run"}[30m])) > 0.02
+        for: 30m
+        labels: { severity: ticket }
+        annotations:
+          summary: "scan.run failure rate above 2% for 30m"
+          runbook: "docs/incident-runbook.md#scan-failures"
+
+  - name: codesentra-dependencies
+    rules:
+      - alert: SandboxRuntimeUnavailable
+        expr: increase(cs_job_total{job_type="scan.run",gap=~".*sandbox.*"}[15m]) > 0
+        for: 15m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Scans are recording sandbox-unavailable gaps (Docker/gVisor on the scan VM)"
+          runbook: "docs/incident-runbook.md#docker--sandbox-loss"
+
+      - alert: LlmErrorsOrBudget
+        expr: increase(cs_job_total{job_type="scan.run",gap=~".*(LLM|model|budget).*"}[1h]) > 0
+        for: 15m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Scans are recording LLM gaps (provider outage or monthly budget reached)"
+          runbook: "docs/incident-runbook.md#llm-outage-or-budget"
+
+      - alert: StorageErrors
+        expr: cs_ready_storage_up == 0
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "Object storage is unreachable (readiness storage check failing)"
+          runbook: "docs/incident-runbook.md#object-storage-outage"

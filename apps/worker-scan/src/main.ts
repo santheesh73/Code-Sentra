@@ -118,6 +118,7 @@ const scan = scanHandler({
   osv,
   secrets: docker ? { enabled: false, reason: docker } : { enabled: true },
   model,
+  llmTokenCapPerMonth: config.LLM_MONTHLY_TOKEN_CAP,
   gitPolicy,
   allowHttpGit: config.NODE_ENV === "test" && !!config.PULSE_TEST_ALLOW_HOSTS,
   maxCommits: config.SCAN_MAX_COMMITS,

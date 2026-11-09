@@ -1,0 +1,111 @@
+name: Release
+
+# Builds, scans, SBOM-attests and signs the production images on a version tag, and publishes
+# the CLI to npm with provenance. Nothing here deploys — it produces signed, attested artifacts
+# an operator then rolls out (see docs/deployment.md, docs/release.md).
+#
+# Only pinned actions are used: actions/checkout and actions/upload-artifact (SHA-pinned, as in
+# ci.yml). Trivy runs from its digest-pinned image for both the CycloneDX SBOM and the vuln
+# scan; cosign is installed at a pinned version. Image signing and SBOM attestation are keyless
+# (Sigstore/Fulcio) via the workflow's OIDC token.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag to release (e.g. v1.2.3)"
+        required: true
+
+permissions:
+  contents: read
+  packages: write # push images to GHCR
+  id-token: write # cosign keyless signing + npm provenance
+
+env:
+  REGISTRY: ghcr.io
+  TRIVY: ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+  COSIGN_VERSION: v2.4.3
+
+jobs:
+  images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: api, dockerfile: infra/node/Dockerfile, context: ".", build_args: "SERVICE=api" }
+          - { name: worker-link, dockerfile: infra/node/Dockerfile, context: ".", build_args: "SERVICE=worker-link" }
+          - { name: worker-scan, dockerfile: infra/scan/Dockerfile, context: ".", build_args: "" }
+          - { name: worker-pulse, dockerfile: infra/pulse/Dockerfile, context: ".", build_args: "" }
+          - { name: sandbox, dockerfile: infra/sandbox/Dockerfile, context: "infra/sandbox", build_args: "" }
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Resolve version and image name
+        id: meta
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          [ "${{ github.event_name }}" = "workflow_dispatch" ] && VERSION="${{ github.event.inputs.ref }}"
+          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "image=${REGISTRY}/${OWNER}/codesentra-${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Install cosign
+        run: |
+          go install github.com/sigstore/cosign/v2/cmd/cosign@${COSIGN_VERSION}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login "$REGISTRY" -u '${{ github.actor }}' --password-stdin
+
+      - name: Build image
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+        run: |
+          ARGS=""
+          [ -n "${{ matrix.build_args }}" ] && ARGS="--build-arg ${{ matrix.build_args }}"
+          docker build -f "${{ matrix.dockerfile }}" $ARGS -t "$IMAGE" "${{ matrix.context }}"
+
+      - name: Generate CycloneDX SBOM
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/out" "$TRIVY" \
+            image --format cyclonedx --output "/out/sbom-${{ matrix.name }}.cdx.json" "$IMAGE"
+
+      - name: Scan image (fail on CRITICAL)
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image \
+            --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --no-progress "$IMAGE"
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image \
+            --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --quiet "$IMAGE"
+
+      - name: Push and capture digest
+        id: push
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+        run: |
+          docker push "$IMAGE"
+          DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")"
+          echo "ref=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Sign image and attest SBOM (keyless)
+        env:
+          COSIGN_YES: "true"
+        run: |
+          cosign sign "${{ steps.push.outputs.ref }}"
+          cosign attest --predicate "sbom-${{ matrix.name }}.cdx.json" --type cyclonedx \
+            "${{ steps.push.outputs.ref }}"
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom-${{ matrix.name }}
+          path: sbom-${{ matrix.name }}.cdx.json
+          if-no-files-found: error

@@ -56,12 +56,12 @@ New ADRs: 0030 (two-phase dependency resolution), 0031 (outcome-language verific
 
 ## 3. Before / after
 
-| Area               | Audit                    | After remediation                                                                                            |
-| ------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| Security           | 5 (one Critical)         | Critical + both Highs fixed and tested; runtime isolation enforced in prod. Full re-score needs the re-audit |
-| Honesty / evidence | 6                        | Verifier rebuilt: 211-claim false corpus 100 % dropped, 105-claim true corpus ≥95 % kept                     |
-| Build & tooling    | 9                        | CI actions SHA-pinned, timeouts, Renovate; lint/typecheck/build green                                        |
-| Overall            | 6.0 (capped by Critical) | Critical cleared; a fresh overall score is for the re-audit (§6), not self-assessed here                     |
+| Area               | Audit                    | After remediation                                                                                                                                                                                                                                                                                                                        |
+| ------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Security           | 5 (one Critical)         | Critical + both Highs fixed and tested; runtime isolation enforced in prod. Full re-score needs the re-audit                                                                                                                                                                                                                             |
+| Honesty / evidence | 6                        | Verifier rebuilt: the committed false corpus 100 % dropped, true corpus ≥95 % kept. These figures are the corpus, not a proof of exhaustiveness — the independent re-audit found 9 further success paraphrases it missed (finding N-1); those are now caught, with a regression test, and the detector is extended as new ones are found |
+| Build & tooling    | 9                        | CI actions SHA-pinned, timeouts, Renovate; lint/typecheck/build green                                                                                                                                                                                                                                                                    |
+| Overall            | 6.0 (capped by Critical) | Critical cleared; a fresh overall score is for the re-audit (§6), not self-assessed here                                                                                                                                                                                                                                                 |
 
 Scores above the audit's are deliberately not self-assigned — Section 6 requires an independent
 re-audit to set them.

@@ -13,8 +13,13 @@ export type OutcomeClaim =
   | { kind: "check"; check: CheckName; polarity: "positive" | "negative" }
   | { kind: "quality"; phrase: string };
 
-/** Phrases that assert a check succeeded, by check. Matched case-insensitively on word runs. */
-const CHECK_PHRASES: { check: CheckName; re: RegExp }[] = [
+/**
+ * Phrases that assert a check succeeded, by check. Matched case-insensitively on word runs.
+ * `force: "positive"` marks a phrase that is *framed* as a negation of a bad outcome ("no
+ * failing tests", "not one test is failing") but asserts the good state, so the sentence-level
+ * negation flip must not turn it negative.
+ */
+const CHECK_PHRASES: { check: CheckName; re: RegExp; force?: "positive" }[] = [
   // tests
   {
     check: "tests",
@@ -32,6 +37,18 @@ const CHECK_PHRASES: { check: CheckName; re: RegExp }[] = [
     check: "tests",
     re: /\b(CI|the\s+(ci\s+)?pipeline|all\s+checks|every\s+check|the\s+checks)\b[\s\w]{0,12}\b(green|pass(es|ing)?|succeed(s|ed)?)\b/,
   },
+  { check: "tests", re: /\b(tests?|specs?|suite)\b[\s\w,]*\bcheck\s+out\b/ },
+  {
+    check: "tests",
+    re: /\bwithout\s+(a\s+single|any)\s+(test\s+)?(failures?|failing)\b/,
+    force: "positive",
+  },
+  {
+    check: "tests",
+    re: /\b(not\s+(one|a\s+single)|zero|no)\s+(unit\s+)?(tests?|specs?)\s+(is\s+|are\s+)?(failing|broken)\b/,
+    force: "positive",
+  },
+  { check: "tests", re: /\b(zero|no)\s+(test\s+)?failures?\b/, force: "positive" },
   // build
   {
     check: "build",
@@ -43,6 +60,10 @@ const CHECK_PHRASES: { check: CheckName; re: RegExp }[] = [
   },
   { check: "build", re: /\bcompiles?\s+(fine|cleanly|without\s+errors?|ok)\b/ },
   { check: "build", re: /\bcompilation\s+(succeed(s|ed)?|is\s+(clean|successful)|passes)\b/ },
+  {
+    check: "build",
+    re: /\b(builds?|compiles?|compilation)\b[\s\w,]*\bwithout\s+(a\s+)?(hitch|issue|issues|problems?)\b/,
+  },
   // typecheck
   {
     check: "typecheck",
@@ -59,10 +80,22 @@ const CHECK_PHRASES: { check: CheckName; re: RegExp }[] = [
   { check: "lint", re: /\blint(ing)?\s+is\s+clean\b/ },
   { check: "lint", re: /\bno\s+lint\s+(errors?|warnings?|issues?)\b/ },
   { check: "lint", re: /\bpasses\s+lint(ing)?\b/ },
+  {
+    check: "lint",
+    re: /\blint(s|ing)?\b[\s\w,]*\b(spotless|comes?\s+back\s+(clean|green|spotless)|reports?\s+(no\s+(problems?|issues?|errors?|warnings?)|nothing))\b/,
+  },
+  {
+    check: "lint",
+    re: /\b(biome|eslint|prettier|the\s+linter)\b[\s\w,]*\b((reports?|finds?)\s+)?(no\s+(problems?|issues?|errors?|warnings?)|is\s+(clean|happy|green)|clean|passes|green|spotless)\b/,
+  },
   // install
   {
     check: "install",
     re: /\b(installs?|dependencies\s+install|installation)\b[\s\w,]*\b(clean(ly)?|success(ful|fully)?|succeed(s|ed)?|complete(s|d)?|without\s+errors?|fine|ok)\b/,
+  },
+  {
+    check: "install",
+    re: /\b(installs?|dependencies\s+install|installation|install\s+step)\b[\s\w,]*\bwith\s+no\s+(errors?|issues?|problems?)\b/,
   },
   // dependency_audit
   {
@@ -74,6 +107,10 @@ const CHECK_PHRASES: { check: CheckName; re: RegExp }[] = [
     re: /\bdependencies\s+(are\s+)?(secure|safe|up[\s-]to[\s-]date\s+and\s+secure|free\s+of\s+(known\s+)?vulnerab\w+)\b/,
   },
   { check: "dependency_audit", re: /\b(free\s+(of|from)|no)\s+(known\s+)?vulnerab\w+\b/ },
+  {
+    check: "dependency_audit",
+    re: /\b(dependency|dependencies|security)\s+audit\b[\s\w,]*\b(is\s+)?(clean|passes|passed|green|came\s+back\s+clean|found\s+nothing)\b/,
+  },
   // secrets
   {
     check: "secrets",
@@ -82,6 +119,10 @@ const CHECK_PHRASES: { check: CheckName; re: RegExp }[] = [
   {
     check: "secrets",
     re: /\bno\s+(secrets?|credentials?)\s+(were\s+)?(found|detected|committed|leaked|exposed)\b/,
+  },
+  {
+    check: "secrets",
+    re: /\b(secret|credential|security)\s+scan(ning|ner|s)?\b[\s\w,]*\b(found\s+nothing|came\s+back\s+clean|is\s+clean|clean|passed|turned\s+up\s+nothing|no\s+(secrets?|findings?|issues?|hits?))\b/,
   },
 ];
 
@@ -101,7 +142,15 @@ const NEG =
  */
 function mixedResult(lower: string): boolean {
   if (/\b\d+\s+of\s+\d+\b/.test(lower) || /\b\d+\s*%\s+of\b/.test(lower)) return true;
-  const rest = lower.replace(/\bno\s+(failing|broken)\s+(tests?|specs?)\b/g, " ");
+  // Strip success framed as the negation of a bad outcome ("no failing tests", "not one test
+  // is failing", "zero failures", "without a single failure") before looking for a real
+  // failure report, so these success claims are not misread as partial/mixed results.
+  const rest = lower
+    .replace(/\bno\s+(failing|broken)\s+(tests?|specs?)\b/g, " ")
+    .replace(
+      /\b(no|not\s+(one|a\s+single|any)|zero|without\s+(a\s+single|any))\b[\s\w]{0,20}?\b(fail(s|ed|ing|ures?)?|broken|errors?)\b/g,
+      " ",
+    );
   return /\b(fails?|failed|failing|broken|errored?)\b/.test(rest);
 }
 
@@ -124,16 +173,20 @@ export function outcomeClaims(text: string): OutcomeClaim[] {
   const seen = new Set<string>();
   // A sentence reporting a partial or mixed result is honest, not a blanket success claim.
   const partial = mixedResult(lower);
-  for (const { check, re } of CHECK_PHRASES) {
+  for (const { check, re, force } of CHECK_PHRASES) {
     if (partial) continue;
     const m = new RegExp(re.source, "gi").exec(lower);
     if (!m) continue;
     // Each phrase asserts success (including the "no failing tests" forms, which claim the
     // good state). A negation before the phrase, or inside it ("build does not pass"), flips
     // it to a negative claim. Bare "no" is excluded: it heads the "no failing tests" success
-    // phrases.
+    // phrases. `force: "positive"` phrases are framed as a negation of a bad outcome but assert
+    // the good state, so the flip does not apply to them.
     const internalNeg = /\b(not|never|n't|cannot|do(es)?\s+not|fails?\s+to)\b/.test(m[0] as string);
-    const polarity = negatedBefore(lower, m.index) || internalNeg ? "negative" : "positive";
+    const polarity =
+      force === "positive" || !(negatedBefore(lower, m.index) || internalNeg)
+        ? "positive"
+        : "negative";
     const key = `${check}:${polarity}`;
     if (!seen.has(key)) {
       seen.add(key);

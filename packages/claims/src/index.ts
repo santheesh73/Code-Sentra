@@ -420,9 +420,11 @@ export function verifyClaim(claim: ClaimDraft, ctx: VerifierContext): Verdict {
     cited.push(e);
   }
 
-  // Outcome and quality language is default-deny (WS-2, F-02): a sentence that asserts a
-  // check succeeded needs that check to have passed, by any wording, and an unfalsifiable
-  // quality boast is always dropped. This does not trust the model's phrasing.
+  // Outcome and quality language is default-deny (WS-2, F-02): when a sentence is recognised
+  // as asserting that a check succeeded, that check must have passed, and an unfalsifiable
+  // quality boast is always dropped. This does not trust the model's phrasing. The detector
+  // covers a broad set of phrasings (outcome.ts), extended whenever a new one is found (the
+  // re-audit N-1 paraphrases); it is not provably exhaustive over natural language.
   const outcome = checkOutcomeClaims(claim.text, ctx.checks);
   if (!outcome.ok)
     return {

@@ -2,7 +2,7 @@ import { PULSE_GROUPS } from "@codesentra/checks";
 import { loadConfig } from "@codesentra/config";
 import { installShutdown, ScanStage } from "@codesentra/core";
 import { keyring } from "@codesentra/core/crypto";
-import { createDatabase } from "@codesentra/db";
+import { createDatabase, pruneExpiredRuns } from "@codesentra/db";
 import { GithubApp } from "@codesentra/github";
 import { linkHandler } from "@codesentra/link/job";
 import {
@@ -109,6 +109,25 @@ const scheduler =
   config.SCHEDULER_INTERVAL_SECONDS > 0
     ? setInterval(() => void tick(), config.SCHEDULER_INTERVAL_SECONDS * 1000)
     : null;
+
+// Data retention (Section 20): prune terminal, unreferenced runs older than the window every
+// few hours. Any replica may run it; the delete is a single statement. 0 disables it.
+const RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const prune = async () => {
+  try {
+    const { deletedRuns } = await pruneExpiredRuns(db, config.DATA_RETENTION_DAYS);
+    if (deletedRuns > 0)
+      log.info({ deletedRuns, days: config.DATA_RETENTION_DAYS }, "retention sweep");
+  } catch (e) {
+    log.error({ err: (e as Error).message }, "retention sweep failed");
+  }
+};
+const retention =
+  config.DATA_RETENTION_DAYS > 0 ? setInterval(() => void prune(), RETENTION_INTERVAL_MS) : null;
+if (retention) {
+  retention.unref?.();
+  void prune(); // once at startup
+}
 log.info(
   { email: email?.kind ?? null, scheduler_seconds: config.SCHEDULER_INTERVAL_SECONDS },
   "worker-link ready",
@@ -118,6 +137,7 @@ installShutdown({
   log,
   drain: async () => {
     if (scheduler) clearInterval(scheduler);
+    if (retention) clearInterval(retention);
     await worker.stop();
     await queue.stop();
     await db.close();

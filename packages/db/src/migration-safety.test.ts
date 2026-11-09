@@ -1,6 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { StartedTestContainer } from "testcontainers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MIGRATIONS_DIR, runMigrations } from "./migrate.js";
 import { TEST_POSTGRES_IMAGE } from "./testing.js";
@@ -36,12 +35,12 @@ describe("migration SQL hygiene (no DB)", () => {
 });
 
 describe("migrations against an empty Postgres", () => {
-  let container: StartedTestContainer & { getConnectionUri(): string };
+  let container: { stop(): Promise<unknown>; getConnectionUri(): string };
   let url: string;
 
   beforeAll(async () => {
     const { PostgreSqlContainer } = await import("@testcontainers/postgresql");
-    container = (await new PostgreSqlContainer(TEST_POSTGRES_IMAGE).start()) as never;
+    container = await new PostgreSqlContainer(TEST_POSTGRES_IMAGE).start();
     url = container.getConnectionUri();
   }, 180_000);
 

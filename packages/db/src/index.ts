@@ -9,6 +9,7 @@ export { MIGRATIONS_DIR, runMigrations } from "./migrate.js";
 export * from "./queries/findings.js";
 export * from "./queries/issues.js";
 export * from "./queries/link.js";
+export * from "./queries/retention.js";
 export * from "./queries/runs.js";
 export * from "./queries/scan.js";
 export { type ResealReport, resealAll } from "./reseal.js";

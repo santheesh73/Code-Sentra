@@ -478,3 +478,49 @@ describe("dead letters", () => {
     expect(hidden.statusCode).toBe(404);
   });
 });
+
+describe("data export", () => {
+  it("exports the org's data to its owner", async () => {
+    await createProject();
+    const res = await api.app.inject({
+      method: "GET",
+      url: `/v1/orgs/${orgId}/export`,
+      headers: as(owner),
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    const body = res.json();
+    expect(body.format).toBe("codesentra.export.v1");
+    expect(body.org_id).toBe(orgId);
+    expect(Array.isArray(body.projects)).toBe(true);
+    expect(body.projects.length).toBeGreaterThan(0);
+    expect(Array.isArray(body.runs)).toBe(true);
+    expect(Array.isArray(body.issues)).toBe(true);
+    // No raw sealed secrets in the export.
+    expect(JSON.stringify(body)).not.toMatch(/ciphertext|sealed/i);
+  });
+
+  it("is owner-only and tenant-scoped", async () => {
+    const member = await signIn(api, "ex-member@example.com");
+    await api.app.inject({
+      method: "POST",
+      url: `/v1/orgs/${orgId}/members`,
+      headers: as(owner),
+      payload: { email: "ex-member@example.com", role: "admin" },
+    });
+    // An admin (not owner) cannot export.
+    const denied = await api.app.inject({
+      method: "GET",
+      url: `/v1/orgs/${orgId}/export`,
+      headers: as(member),
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const outsider = await signIn(api, "ex-outsider@example.com");
+    const hidden = await api.app.inject({
+      method: "GET",
+      url: `/v1/orgs/${orgId}/export`,
+      headers: as(outsider),
+    });
+    expect(hidden.statusCode).toBe(404);
+  });
+});

@@ -137,6 +137,9 @@ export const EnvSchema = z.object({
   S3_PUBLIC_ENDPOINT: url().optional(),
   /** How often worker-link looks for due schedules (Section 6 `schedules`); 0 turns it off. */
   SCHEDULER_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(3600).default(30),
+  /** Delete terminal, unreferenced runs (and their evidence) older than this many days.
+   * 0 keeps everything. worker-link runs the sweep every few hours. */
+  DATA_RETENTION_DAYS: z.coerce.number().int().min(0).max(36_500).default(0),
   /** Largest accepted zip upload (compressed), bytes. */
   SCAN_MAX_UPLOAD_BYTES: z.coerce
     .number()
@@ -261,6 +264,7 @@ export const SERVICE_ENV = {
       "GITHUB_API_BASE_URL",
       "PULSE_TEST_ALLOW_HOSTS",
       "SCHEDULER_INTERVAL_SECONDS",
+      "DATA_RETENTION_DAYS",
       "ENCRYPTION_KEY_PREVIOUS",
     ],
     integrations: ["anthropic", "github_app", "email", "slack"],

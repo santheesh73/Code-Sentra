@@ -134,6 +134,18 @@ scripts/backup-restore.sh rehearse "$DATABASE_URL" "$ADMIN_URL"
 **Object storage** (uploaded zips, snapshots) is backed up by your bucket's own versioning or
 cross-region replication, not this script; enable it when you provision the bucket.
 
+## Data lifecycle: retention, deletion and export
+
+- **Retention** — set `DATA_RETENTION_DAYS` to prune terminal, unreferenced runs (and their
+  evidence/findings, which cascade) older than the window; worker-link sweeps every few hours.
+  Runs referenced by an issue or that have child runs are kept. 0 keeps everything. Object
+  artifacts expire via the bucket lifecycle policy above.
+- **Deletion** — an org owner deletes the whole organization at `DELETE /v1/orgs/:id` (confirm
+  with its slug): every tenant row cascades and its stored snapshots/screenshots are purged.
+- **Export** — an org owner downloads a portable JSON export at `GET /v1/orgs/:id/export`
+  (org, projects, environments, issues and bounded recent run summaries; no raw evidence
+  payloads or secrets).
+
 ## Verify end to end
 
 Run a full check on a test project (upload a zip, add a deploy URL). The run view should show

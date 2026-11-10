@@ -84,6 +84,13 @@ describe("OpenTelemetry collector integration", () => {
     expect(await waitForLog(service), `collector never logged service.name "${service}"`).toBe(
       true,
     );
-    expect(logs).toMatch(/codesentra\.kind/);
+    // The span attribute is printed after the resource's service.name in the same detailed dump,
+    // so it can arrive in the collector's captured stdout a beat later; wait for it rather than
+    // asserting synchronously (a synchronous check here is a timing race — the span is delivered,
+    // its attribute line just hasn't been scraped yet).
+    expect(
+      await waitForLog("codesentra.kind"),
+      `collector never logged span attribute "codesentra.kind"\n${logs}`,
+    ).toBe(true);
   }, 60_000);
 });

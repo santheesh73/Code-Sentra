@@ -172,11 +172,21 @@ describe.each(loadFixtureRepos().map((r) => [r.expected.name, r] as const))(
       const truthful = r().claims.filter(
         (c) => !exp.forbiddenClaims.some((f) => f.text === c.text),
       );
+      // A check-subject sentence is dropped as `check_statement` (WS-A): check outcomes are
+      // reported from data via templated lines, never from model narrative. That is an expected
+      // drop, not a lost truthful claim, so it is excluded from the "every true claim is kept"
+      // invariant below.
+      const keptOrReportedFromData = (c: (typeof truthful)[number]) =>
+        c.verified || c.dropReason === "check_statement";
       expect(
         truthful
-          .filter((c) => !c.verified)
+          .filter((c) => !keptOrReportedFromData(c))
           .map((c) => `${c.text} → ${c.dropReason}: ${c.dropDetail}`),
       ).toEqual([]);
+      // End-to-end proof of the subject gate: the scripted test-count sentence ("N of M tests
+      // pass and K fails") is about a check, so the pipeline drops it as check_statement.
+      const testCountClaim = r().claims.find((c) => /\btests pass and\b/.test(c.text));
+      if (testCountClaim) expect(testCountClaim.dropReason).toBe("check_statement");
       expect(truthful.length).toBeGreaterThan(exp.features.length);
     });
 

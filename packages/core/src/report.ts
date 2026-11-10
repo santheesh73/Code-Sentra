@@ -28,6 +28,9 @@ export const ClaimDropReason = z.enum([
   "number_mismatch",
   "status_contradiction",
   "skipped_check_asserted",
+  // A narrative sentence's subject is a check or its result; check results are reported from
+  // data (templated lines), never from model narrative (WS-A, re-audit N-4).
+  "check_statement",
   // A sentence asserts a check succeeded that did not, by any wording (WS-2, F-02).
   "outcome_unverified",
   // A sentence makes an unfalsifiable quality boast no check can establish (WS-2, F-02).

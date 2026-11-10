@@ -117,6 +117,9 @@ importers:
       '@codesentra/checks':
         specifier: workspace:*
         version: link:../../packages/checks
+      '@codesentra/claims':
+        specifier: workspace:*
+        version: link:../../packages/claims
       '@codesentra/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -145,6 +148,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@codesentra/claims':
+        specifier: workspace:*
+        version: link:../../packages/claims
       '@codesentra/config':
         specifier: workspace:*
         version: link:../../packages/config

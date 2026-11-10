@@ -9,6 +9,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@codesentra/claims": "workspace:*",
     "@codesentra/config": "workspace:*",
     "@tanstack/react-query": "5.104.5",
     "class-variance-authority": "0.7.1",

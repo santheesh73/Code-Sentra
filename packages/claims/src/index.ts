@@ -1,5 +1,22 @@
 import type { ClaimDraft, ClaimDropReason, FeatureStatus, JsonValue } from "@codesentra/core";
+import {
+  CHECK_LINES_VERSION,
+  type CheckResult,
+  renderCheckLine,
+  renderCheckLines,
+} from "./check-lines.js";
 import { checkOutcomeClaims } from "./outcome.js";
+import { type CheckSubject, checkSubject, isCheckStatement } from "./subjects.js";
+
+export {
+  CHECK_LINES_VERSION,
+  type CheckResult,
+  type CheckSubject,
+  checkSubject,
+  isCheckStatement,
+  renderCheckLine,
+  renderCheckLines,
+};
 
 export interface VerifierEvidence {
   id: string;
@@ -420,11 +437,22 @@ export function verifyClaim(claim: ClaimDraft, ctx: VerifierContext): Verdict {
     cited.push(e);
   }
 
-  // Outcome and quality language is default-deny (WS-2, F-02): when a sentence is recognised
-  // as asserting that a check succeeded, that check must have passed, and an unfalsifiable
-  // quality boast is always dropped. This does not trust the model's phrasing. The detector
-  // covers a broad set of phrasings (outcome.ts), extended whenever a new one is found (the
-  // re-audit N-1 paraphrases); it is not provably exhaustive over natural language.
+  // Subject gate (WS-A, re-audit N-4): a narrative sentence whose subject is a check or its
+  // result is dropped whatever it says — the check result is stated by a deterministic
+  // templated line (renderCheckLines), not by the model. This replaces trying to detect "it
+  // passed" in the model's words (unbounded) with recognising the check subject (a closed,
+  // enumerable set), so no paraphrase of success or failure can get a check claim into the
+  // report. outcome.ts stays as a secondary backstop below.
+  const subject = checkSubject(claim.text);
+  if (subject)
+    return {
+      verified: false,
+      reason: "check_statement",
+      detail: `narrative must not state a ${subject} check result; it is reported from data`,
+    };
+
+  // Backstop (WS-2, F-02): default-deny on recognised outcome/quality language. Covers any
+  // check sentence the subject gate might miss, and always drops unfalsifiable quality boasts.
   const outcome = checkOutcomeClaims(claim.text, ctx.checks);
   if (!outcome.ok)
     return {

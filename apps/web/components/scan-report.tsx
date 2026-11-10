@@ -1,5 +1,6 @@
 "use client";
 
+import { type CheckName, type CheckOutcome, renderCheckLines } from "@codesentra/claims";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { EvidenceButton, EvidenceDrawer } from "@/components/evidence-drawer";
@@ -40,6 +41,7 @@ const DROP_REASONS: Record<string, string> = {
   number_mismatch: "stated a number its evidence does not contain",
   status_contradiction: "contradicted the evidence-based feature status",
   skipped_check_asserted: "asserted the result of a check that did not run",
+  check_statement: "stated a check result, which is reported from data, not narrative",
   outcome_unverified: "asserted a check succeeded that did not",
   unverifiable_quality: "made a quality claim no check can establish",
 };
@@ -284,9 +286,16 @@ export function ScanReportView({ runId }: { runId: string }) {
             <>
               <dt className="text-muted-foreground">Checks</dt>
               <dd>
-                {Object.entries(r.coverage.checks)
-                  .map(([k, v]) => `${k}: ${v}`)
-                  .join("; ")}
+                <ul className="space-y-0.5">
+                  {renderCheckLines(
+                    Object.entries(r.coverage.checks).map(([name, outcome]) => ({
+                      name: name as CheckName,
+                      outcome: outcome as CheckOutcome,
+                    })),
+                  ).map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
               </dd>
             </>
           )}

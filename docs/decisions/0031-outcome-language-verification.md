@@ -1,6 +1,6 @@
 # 0031 — Outcome-language verification in the claim verifier
 
-- **Status:** accepted (remediation WS-2)
+- **Status:** superseded by [0037 — Check outcomes are reported from data, not policed in narrative](0037-check-outcomes-reported-from-data.md) (final remediation WS-A). The outcome/polarity detector described here is retained as a defence-in-depth backstop; the honesty guarantee now rests on the subject gate and templated check lines, because vocabulary-based outcome detection cannot be complete (see 0037).
 
 ## Context
 

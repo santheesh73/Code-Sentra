@@ -34,7 +34,7 @@ const SUBJECTS: { subject: CheckSubject; re: RegExp }[] = [
   },
   {
     subject: "install",
-    re: /\b(install(s|ation|ed|ing)?|install\s+step|dependenc(y|ies)\s+(install|pull|download|resolve)|packages?\s+(install|pull|download|resolve))\b/,
+    re: /\b(install(s|ation|ed|ing)?|install\s+step|(dependenc(y|ies)|packages?)\s+(install\w*|pull\w*|download\w*|resol(ve|ves|ved|ving|ution)))\b/,
   },
   {
     subject: "secrets",

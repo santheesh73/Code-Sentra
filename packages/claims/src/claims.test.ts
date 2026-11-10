@@ -156,13 +156,23 @@ describe("true claims survive", () => {
     ],
     ["CSV export is partial: exportCsv in src/lib/csv.ts throws.", [E.stub, E.routeExport]],
     ["Email reminders are planned on the roadmap.", [E.readmeEmail]],
-    ["2 of 4 tests pass and 1 fails.", [E.tests]],
     ["TASKBOARD_ADMIN_TOKEN is read in src/server.ts.", [E.envRead]],
-    ["lodash 4.17.15 has advisory GHSA-p6mc-m468-83gw.", [E.advisory]],
-    ["An AWS access key pattern is committed in src/config/defaults.ts.", [E.secret]],
     ["The API is built with Express.", [E.manifest]],
   ] as const)("%s", (text, cite) => {
     expect(claim(text, ...cite)).toEqual({ verified: true });
+  });
+});
+
+describe("check facts are reported from data, not narrative (WS-A)", () => {
+  // Even true, evidence-backed sentences about a check result are dropped from narrative: the
+  // check's templated line states the count/status instead, so the narrative cannot restate,
+  // soften or spin it.
+  it.each([
+    ["2 of 4 tests pass and 1 fails.", [E.tests]],
+    ["lodash 4.17.15 has advisory GHSA-p6mc-m468-83gw.", [E.advisory]],
+    ["An AWS access key pattern is committed in src/config/defaults.ts.", [E.secret]],
+  ] as const)("%s", (text, cite) => {
+    expect(claim(text, ...cite)).toMatchObject({ verified: false, reason: "check_statement" });
   });
 });
 
@@ -201,16 +211,18 @@ describe("adversarial suite: every fabricated claim is dropped", () => {
     ["wrong Rust framework", "The API uses Actix.", [E.manifest], "unsupported_token"],
     ["wrong PHP framework", "The API uses Symfony.", [E.manifest], "unsupported_token"],
     ["wrong version", "It runs on Express 5.0.0.", [E.manifest], "unsupported_token"],
+    // Advisory/vulnerability and count claims are about the dependency-audit / tests checks, so
+    // the subject gate drops them whatever they say (WS-A): check results are reported from data.
     [
       "fabricated advisory",
       "lodash has advisory GHSA-xxxx-yyyy-zzzz.",
       [E.advisory],
-      "unsupported_token",
+      "check_statement",
     ],
-    // Wrong counts.
-    ["inflated count", "The project has 12 tests.", [E.tests], "number_mismatch"],
-    ["wrong count in words", "Three tests fail.", [E.tests], "number_mismatch"],
-    ["wrong percentage", "75% of tests pass.", [E.tests], "number_mismatch"],
+    // Wrong counts about a check.
+    ["inflated count", "The project has 12 tests.", [E.tests], "check_statement"],
+    ["wrong count in words", "Three tests fail.", [E.tests], "check_statement"],
+    ["wrong percentage", "75% of tests pass.", [E.tests], "check_statement"],
     // Confident wording with no or bad evidence.
     ["no evidence", "The codebase is production-ready and well tested.", [], "no_evidence"],
     [
@@ -245,18 +257,19 @@ describe("adversarial suite: every fabricated claim is dropped", () => {
       [E.routeCreate],
       "status_contradiction",
     ],
-    // Asserting checks that failed or were skipped.
-    ["failed tests asserted", "All tests pass.", [E.tests], "outcome_unverified"],
-    ["counted tests asserted", "All 4 tests pass.", [E.tests], "outcome_unverified"],
-    ["specs asserted", "All 3 specs pass.", [E.tests], "outcome_unverified"],
-    ["skipped lint asserted", "The code lints cleanly.", [E.manifest], "outcome_unverified"],
+    // Any sentence whose subject is a check is dropped as a check_statement (WS-A), whether it
+    // asserts success, failure, counts or a clean result — the templated line states the fact.
+    ["failed tests asserted", "All tests pass.", [E.tests], "check_statement"],
+    ["counted tests asserted", "All 4 tests pass.", [E.tests], "check_statement"],
+    ["specs asserted", "All 3 specs pass.", [E.tests], "check_statement"],
+    ["skipped lint asserted", "The code lints cleanly.", [E.manifest], "check_statement"],
     [
       "failed audit asserted",
       "Dependencies have no known vulnerabilities.",
       [E.advisory],
-      "outcome_unverified",
+      "check_statement",
     ],
-    ["failed secrets asserted", "No secrets were found.", [E.secret], "outcome_unverified"],
+    ["failed secrets asserted", "No secrets were found.", [E.secret], "check_statement"],
   ];
   it.each(cases)("%s: %s", (_name, text, cite, reason) => {
     const v = claim(text, ...cite);
@@ -269,12 +282,16 @@ describe("adversarial suite: every fabricated claim is dropped", () => {
     expect(dropped / cases.length).toBe(1);
   });
 
-  it("does not trust a check it has no outcome for", () => {
-    const v = verifyClaim(
-      { text: "The build succeeds.", evidence_ids: [E.manifest.id] },
-      { ...ctx, checks: {} },
-    );
-    expect(v).toMatchObject({ verified: false, reason: "outcome_unverified" });
+  it("drops a check statement from narrative whatever its outcome (subject gate, WS-A)", () => {
+    // The check result is reported from data, so the narrative never carries it — pass, fail,
+    // skipped or no outcome at all.
+    for (const checks of [{}, { build: "pass" as const }, { build: "fail" as const }]) {
+      const v = verifyClaim(
+        { text: "The build succeeds.", evidence_ids: [E.manifest.id] },
+        { ...ctx, checks },
+      );
+      expect(v).toMatchObject({ verified: false, reason: "check_statement" });
+    }
   });
 });
 

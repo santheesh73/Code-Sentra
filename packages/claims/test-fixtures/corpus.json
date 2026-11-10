@@ -1546,7 +1546,7 @@
   },
   {
    "text": "It exposes a GET /health route.",
-   "cite": "manifest"
+   "cite": "route"
   },
   {
    "text": "The service provides a health endpoint.",
@@ -1582,7 +1582,7 @@
   },
   {
    "text": "A health check is exposed at /health.",
-   "cite": "manifest"
+   "cite": "route"
   },
   {
    "text": "The project uses the Express framework.",
@@ -1606,7 +1606,7 @@
   },
   {
    "text": "The service answers GET /health.",
-   "cite": "manifest"
+   "cite": "route"
   },
   {
    "text": "The HTTP API is small and focused.",

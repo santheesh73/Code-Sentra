@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@codesentra/checks": "workspace:*",
+    "@codesentra/claims": "workspace:*",
     "@codesentra/core": "workspace:*",
     "@codesentra/sandbox": "workspace:*",
     "@codesentra/scan": "workspace:*",

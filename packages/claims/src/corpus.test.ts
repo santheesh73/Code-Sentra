@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   type CheckName,
   type CheckOutcome,
+  isCheckStatement,
   type VerifierContext,
   type VerifierEvidence,
   verifyClaim,
@@ -79,22 +80,36 @@ describe("claim verifier adversarial corpus (WS-2, F-02)", () => {
     expect(kept.map((c) => c.text)).toEqual([]);
   });
 
-  it(`keeps at least 95% of the true corpus (${corpus.true.length} claims)`, () => {
-    expect(corpus.true.length).toBeGreaterThanOrEqual(100);
-    const dropped = corpus.true.filter(
+  // WS-A: true claims whose subject is a check are now reported from data (templated lines),
+  // so they are deliberately dropped from narrative. Retention is measured on the non-check
+  // true claims only; the check-subject true claims must all drop as check_statement.
+  it("drops every true check-subject claim from narrative (reported from data)", () => {
+    const checkTrue = corpus.true.filter((c) => isCheckStatement(c.text));
+    expect(checkTrue.length).toBeGreaterThan(0);
+    const kept = checkTrue.filter(
+      (c) => verifyClaim({ text: c.text, evidence_ids: cite(c.cite) }, passCtx).verified,
+    );
+    expect(kept.map((c) => c.text)).toEqual([]);
+  });
+
+  it("keeps at least 95% of the true NON-check corpus", () => {
+    const nonCheck = corpus.true.filter((c) => !isCheckStatement(c.text));
+    // The true corpus is check-heavy (it was written to exercise the verifier); most true
+    // claims are now templated, leaving ~28 non-check narrative claims to retain.
+    expect(nonCheck.length).toBeGreaterThanOrEqual(20);
+    const dropped = nonCheck.filter(
       (c) => !verifyClaim({ text: c.text, evidence_ids: cite(c.cite) }, passCtx).verified,
     );
-    // Report false drops so the lexicon can be tuned.
     if (dropped.length)
       console.log(
-        "true claims dropped:",
+        "non-check true claims dropped:",
         JSON.stringify(
           dropped.map((c) => c.text),
           null,
           1,
         ),
       );
-    expect(dropped.length / corpus.true.length).toBeLessThanOrEqual(0.05);
+    expect(dropped.length / nonCheck.length).toBeLessThanOrEqual(0.05);
   });
 
   it("is deterministic: the same claim verifies the same way twice", () => {

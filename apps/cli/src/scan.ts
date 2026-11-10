@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { draftIssues, type IssueDraftOut } from "@codesentra/checks";
+import { type CheckName, type CheckOutcome, renderCheckLines } from "@codesentra/claims";
 import { createSandbox, dockerAvailable } from "@codesentra/sandbox";
 import {
   anthropicModel,
@@ -204,6 +205,19 @@ export function scanToText(s: LocalScan, fixPrompt: boolean): string {
   const langs = Object.entries(r.summary.languages).map(([l, n]) => `${l} ${n}`);
   if (langs.length) lines.push(`Languages: ${langs.join(", ")}`);
   if (r.summary.frameworks.length) lines.push(`Frameworks: ${r.summary.frameworks.join(", ")}`);
+  const checkEntries = Object.entries(r.checks);
+  if (checkEntries.length) {
+    // Check outcomes are rendered from run data by the versioned templates, never from narrative
+    // (WS-A): the same deterministic lines the web and GitHub surfaces use.
+    lines.push("", "Checks:");
+    for (const line of renderCheckLines(
+      checkEntries.map(([name, outcome]) => ({
+        name: name as CheckName,
+        outcome: outcome as CheckOutcome,
+      })),
+    ))
+      lines.push(`  ${line}`);
+  }
   if (r.gaps.length) {
     lines.push("", "Not checked:");
     for (const g of r.gaps) lines.push(`  ${g.stage}: ${g.reason}`);

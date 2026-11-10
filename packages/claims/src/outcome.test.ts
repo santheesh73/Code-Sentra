@@ -102,4 +102,34 @@ describe("outcome-language detector (WS-2, F-02)", () => {
     ])
       expect(checkOutcomeClaims(t, all("pass")).ok, t).toBe(true);
   });
+
+  // Re-audit N-4: the detector must be structural (subject + outcome), not a fixed phrase
+  // list, so NEW phrasings it has never seen are still caught. These are distinct from the
+  // N-1 set and from the corpus.
+  const STRUCTURAL_BYPASSES = [
+    "The whole suite comes back clean.",
+    "Every spec is in the green.",
+    "The linter is entirely happy.",
+    "ESLint flags nothing.",
+    "The compiler emits no diagnostics.",
+    "Packages pull down without complaint.",
+    "The audit turns up nothing concerning.",
+    "No credentials leaked anywhere.",
+    "tsc has nothing to say.",
+    "The project builds end to end with no trouble.",
+    "The checks are all in order.",
+    "Tests sail through.",
+    "It passes every gate.",
+    "The scan reported nothing.",
+    "The compiler is silent.",
+    "The linter has no notes.",
+    "We found zero vulnerabilities.",
+    "Type safety holds throughout.",
+  ];
+  it("catches structurally-novel success paraphrases when the checks did not pass (N-4)", () => {
+    const keptFail = STRUCTURAL_BYPASSES.filter((t) => checkOutcomeClaims(t, all("fail")).ok);
+    expect(keptFail, "kept on fail").toEqual([]);
+    const keptSkip = STRUCTURAL_BYPASSES.filter((t) => checkOutcomeClaims(t, all("skipped")).ok);
+    expect(keptSkip, "kept on skip").toEqual([]);
+  });
 });

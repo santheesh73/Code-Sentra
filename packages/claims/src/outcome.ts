@@ -3,10 +3,18 @@ import type { CheckName, CheckOutcome } from "./index.js";
 /**
  * A deterministic read of what a report sentence claims about the project's health
  * (WS-2, audit F-02). The claim verifier is the last guard against the model fabricating or
- * being talked into success language ("all tests pass", "production-ready") that the
- * evidence does not support, so this does not trust the model's own words: it derives, from
- * the text, which check-outcome a sentence asserts, and whether it makes an unfalsifiable
- * quality boast. Default deny: an outcome or quality claim stands only when a check backs it.
+ * being talked into success language ("all tests pass", "production-ready") that the evidence
+ * does not support, so this does not trust the model's own words: it derives, from the text,
+ * which check a sentence says succeeded, and whether it makes an unfalsifiable quality boast.
+ * Default deny: an outcome or quality claim stands only when a check backs it.
+ *
+ * The detector is structural, not a fixed list of whole phrases (which a new paraphrase always
+ * slips past — re-audit N-1/N-4): a sentence asserts "check X succeeded" when it names a
+ * subject that belongs to check X (tests, build, typecheck, lint, install, the dependency
+ * audit, secrets) together with a positive-outcome signal (pass/green/clean/"no errors"/
+ * "flags nothing"/"emits no"/"sail through"/…) or the negation of a failure ("no failing
+ * tests", "zero failures"), and is not an honest partial or failure report. It is deliberately
+ * eager: an ambiguous success sentence is gated rather than waved through.
  */
 
 export type OutcomeClaim =
@@ -14,117 +22,57 @@ export type OutcomeClaim =
   | { kind: "quality"; phrase: string };
 
 /**
- * Phrases that assert a check succeeded, by check. Matched case-insensitively on word runs.
- * `force: "positive"` marks a phrase that is *framed* as a negation of a bad outcome ("no
- * failing tests", "not one test is failing") but asserts the good state, so the sentence-level
- * negation flip must not turn it negative.
+ * Subject tokens, by check. A sentence naming one of these is *about* that check; whether it
+ * asserts success is decided separately by the outcome signal. Ordered so a more specific
+ * subject (the compiler → typecheck) is found before a broad one.
  */
-const CHECK_PHRASES: { check: CheckName; re: RegExp; force?: "positive" }[] = [
-  // tests
-  {
-    check: "tests",
-    re: /\b(tests?|specs?|test\s+suite|spec\s+suite)\b[\s\w,]*\b(pass(es|ing|ed)?|green|succeed(s|ing|ed)?|success(ful|fully)?|ok|work(s|ing)?)\b/,
-  },
-  {
-    check: "tests",
-    re: /\b(pass(es|ing|ed)?|all|every|100%?|fully)\b[\s\w,]*\b(tests?|specs?|test\s+suite)\b/,
-  },
-  { check: "tests", re: /\b(fully|well|thoroughly|100%?|completely)\s+(tested|covered)\b/ },
-  { check: "tests", re: /\b(test|code)\s+coverage\s+(is\s+)?(100%?|complete|full|high)\b/ },
-  { check: "tests", re: /\bno\s+(failing|broken)\s+(tests?|specs?)\b/ },
-  { check: "tests", re: /\b(the\s+)?(test\s+)?suite\s+(is\s+)?(green|passes|passing)\b/ },
-  {
-    check: "tests",
-    re: /\b(CI|the\s+(ci\s+)?pipeline|all\s+checks|every\s+check|the\s+checks)\b[\s\w]{0,12}\b(green|pass(es|ing)?|succeed(s|ed)?)\b/,
-  },
-  { check: "tests", re: /\b(tests?|specs?|suite)\b[\s\w,]*\bcheck\s+out\b/ },
-  {
-    check: "tests",
-    re: /\bwithout\s+(a\s+single|any)\s+(test\s+)?(failures?|failing)\b/,
-    force: "positive",
-  },
-  {
-    check: "tests",
-    re: /\b(not\s+(one|a\s+single)|zero|no)\s+(unit\s+)?(tests?|specs?)\s+(is\s+|are\s+)?(failing|broken)\b/,
-    force: "positive",
-  },
-  { check: "tests", re: /\b(zero|no)\s+(test\s+)?failures?\b/, force: "positive" },
-  // build
-  {
-    check: "build",
-    re: /\b(builds?|compiles?|compilation|build)\b[\s\w,]*\b(clean(ly)?|success(ful|fully)?|green|pass(es|ed)?|works?|without\s+errors?|fine|ok)\b/,
-  },
-  {
-    check: "build",
-    re: /\b(the\s+)?build\s+(is\s+)?(green|clean|passing|fine|ok|succeed(s|ed)?|complete(s|d)?)\b/,
-  },
-  { check: "build", re: /\bcompiles?\s+(fine|cleanly|without\s+errors?|ok)\b/ },
-  { check: "build", re: /\bcompilation\s+(succeed(s|ed)?|is\s+(clean|successful)|passes)\b/ },
-  {
-    check: "build",
-    re: /\b(builds?|compiles?|compilation)\b[\s\w,]*\bwithout\s+(a\s+)?(hitch|issue|issues|problems?)\b/,
-  },
-  // typecheck
+const SUBJECTS: { check: CheckName; re: RegExp }[] = [
   {
     check: "typecheck",
-    re: /\b(type[\s-]?check(s|ing|ed)?|types?|tsc|typescript)\b[\s\w,]*\b(pass(es|ed)?|clean(ly)?|succeed(s|ed)?|fine|ok|without\s+errors?)\b/,
-  },
-  { check: "typecheck", re: /\bno\s+type\s+errors?\b/ },
-  { check: "typecheck", re: /\btype[\s-]?safe\b/ },
-  { check: "typecheck", re: /\btypes?\s+check\s+out\b/ },
-  // lint
-  {
-    check: "lint",
-    re: /\blint(s|ing)?\b[\s\w,]*\b(clean(ly)?|pass(es|ed)?|green|without\s+(errors?|warnings?)|fine|ok)\b/,
-  },
-  { check: "lint", re: /\blint(ing)?\s+is\s+clean\b/ },
-  { check: "lint", re: /\bno\s+lint\s+(errors?|warnings?|issues?)\b/ },
-  { check: "lint", re: /\bpasses\s+lint(ing)?\b/ },
-  {
-    check: "lint",
-    re: /\blint(s|ing)?\b[\s\w,]*\b(spotless|comes?\s+back\s+(clean|green|spotless)|reports?\s+(no\s+(problems?|issues?|errors?|warnings?)|nothing))\b/,
+    re: /\b(types?[\s-]?check(s|ing|ed)?|tsc|typescript|the\s+type\s+system|the\s+compiler|type[\s-]?safe(ty)?|type\s+errors?)\b/,
   },
   {
     check: "lint",
-    re: /\b(biome|eslint|prettier|the\s+linter)\b[\s\w,]*\b((reports?|finds?)\s+)?(no\s+(problems?|issues?|errors?|warnings?)|is\s+(clean|happy|green)|clean|passes|green|spotless)\b/,
+    re: /\b(lint(s|ing|er)?|biome|eslint|prettier|the\s+linter|static\s+analysis)\b/,
   },
-  // install
   {
-    check: "install",
-    re: /\b(installs?|dependencies\s+install|installation)\b[\s\w,]*\b(clean(ly)?|success(ful|fully)?|succeed(s|ed)?|complete(s|d)?|without\s+errors?|fine|ok)\b/,
+    check: "build",
+    re: /\b(builds?|build\s+step|(re)?compiles?|compilation|the\s+project\s+builds?|bundl(e|es|ing))\b/,
   },
   {
     check: "install",
-    re: /\b(installs?|dependencies\s+install|installation|install\s+step)\b[\s\w,]*\bwith\s+no\s+(errors?|issues?|problems?)\b/,
-  },
-  // dependency_audit
-  {
-    check: "dependency_audit",
-    re: /\bno\s+(known\s+)?(vulnerab\w+|vulnerable\s+dependencies|advisories|CVEs?|security\s+(issues|advisories))\b/,
-  },
-  {
-    check: "dependency_audit",
-    re: /\bdependencies\s+(are\s+)?(secure|safe|up[\s-]to[\s-]date\s+and\s+secure|free\s+of\s+(known\s+)?vulnerab\w+)\b/,
-  },
-  { check: "dependency_audit", re: /\b(free\s+(of|from)|no)\s+(known\s+)?vulnerab\w+\b/ },
-  {
-    check: "dependency_audit",
-    re: /\b(dependency|dependencies|security)\s+audit\b[\s\w,]*\b(is\s+)?(clean|passes|passed|green|came\s+back\s+clean|found\s+nothing)\b/,
-  },
-  // secrets
-  {
-    check: "secrets",
-    re: /\b(no|free\s+of|without)\s+(hard[\s-]?coded\s+)?(secrets?|credentials?|leaked\s+keys?|exposed\s+(secrets?|keys?|credentials?)|api\s+keys?)\b/,
+    re: /\b(installs?|installation|install\s+step|dependencies\s+(install|pull|download|resolve)|packages?\s+(install|pull|download|resolve))\b/,
   },
   {
     check: "secrets",
-    re: /\bno\s+(secrets?|credentials?)\s+(were\s+)?(found|detected|committed|leaked|exposed)\b/,
+    re: /\b(secrets?|credentials?|api\s+keys?|access\s+keys?|hard[\s-]?coded\s+(keys?|credentials?|secrets?)|secret[\s-]?scan\w*|gitleaks|security\s+scan\w*|the\s+scan|scanning)\b/,
   },
   {
-    check: "secrets",
-    re: /\b(secret|credential|security)\s+scan(ning|ner|s)?\b[\s\w,]*\b(found\s+nothing|came\s+back\s+clean|is\s+clean|clean|passed|turned\s+up\s+nothing|no\s+(secrets?|findings?|issues?|hits?))\b/,
+    check: "dependency_audit",
+    re: /\b((dependency|dependencies|security)\s+audit|the\s+audit|vulnerab\w+|cves?|advisor\w+|dependenc(y|ies))\b/,
+  },
+  // Broadest last: the test suite / coverage and the CI pipeline / "the checks" / "every gate".
+  {
+    check: "tests",
+    re: /\b(tests?|specs?|suite|tested|covered|(code\s+)?coverage|test\s+runs?|ci|the\s+(ci\s+)?pipeline|the\s+checks?|all\s+checks|every\s+check|the\s+gates?|every\s+gate|all\s+gates|each\s+gate)\b/,
   },
 ];
+
+/** Positive-outcome signals: a success is being asserted. These never include a flipping negation. */
+const POSITIVE =
+  /\b(pass(es|ing|ed)?|green|clean(ly)?|spotless|success(ful|fully)?|succeed(s|ing|ed)?|works?(\s+fine)?|fine|ok|happy|healthy|silent|satisfied|content|secure|safe|up[\s-]to[\s-]date|type[\s-]?safe(ty)?|in\s+order|in\s+the\s+green|checks?\s+out|sail(s|ed)?\s+through|go(es)?\s+through\s+(fine|clean(ly)?)|comes?\s+back\s+(clean|green|spotless|fine)|(fully|thoroughly|well|completely|100%?)\s+(tested|covered)|coverage\s+(is\s+)?(100%?|complete|full|high|comprehensive)|without\s+(a\s+)?(hitch|issue|issues|trouble|complaint|complaints|problem|problems|error|errors)|with\s+no\s+(errors?|issues?|problems?|trouble|complaints?)|no\s+(\w+\s+)?(errors?|issues?|problems?|warnings?|diagnostics?|complaints?|findings?|notes?|objections?|concerns?)|nothing\s+(concerning|to\s+say|of\s+note|flagged|amiss|wrong)|flags?\s+nothing|turns?\s+up\s+nothing|found\s+nothing|came?\s+up\s+(clean|empty)|emits?\s+no\b|report(s|ed)?\s+(no\b|nothing)|raises?\s+no\b|type[\s-]?safe)\b/;
+
+/** Negation of a failure, which is itself a success claim ("no failing tests", "zero failures"). */
+const NEG_SUCCESS =
+  /\b(no|not\s+(one|a\s+single|any)|zero|without\s+(a\s+single|any))\b[\s\w]{0,24}?\b(fail(s|ed|ing|ures?)?|broken)\b|\bnothing\s+(fail(s|ed|ing)?|broke|went\s+wrong)\b/;
+
+/**
+ * Negation of a bad *finding*, also a success claim: "no known vulnerabilities", "no secrets
+ * were detected", "free of hard-coded credentials". The dependency-audit and secrets checks
+ * assert the good state by the absence of findings rather than by "passing".
+ */
+const NEG_FINDING =
+  /\b(no|zero|not\s+(any|a\s+single)|free\s+(of|from)|without)\b[\s\w]{0,24}?\b(vulnerab\w+|cves?|advisor\w+|secrets?|credentials?|api\s+keys?|leaks?|leaked|exposed|committed|hard[\s-]?coded)\b|\bno\s+(\w+\s+)?(secrets?|credentials?|keys?|vulnerab\w+)\b/;
 
 /** Unfalsifiable quality boasts: dropped by default (no check can establish them). */
 const QUALITY_PHRASES =
@@ -132,67 +80,66 @@ const QUALITY_PHRASES =
 
 /** Words that negate a following outcome within a short window. */
 const NEG =
-  /\b(no|not|never|cannot|can't|without|fails?\s+to|does\s+not|doesn't|isn't|aren't|lacks?|missing|broken|failing)\b/;
+  /\b(no|not|never|cannot|can't|without|fails?\s+to|does\s+not|doesn't|didn't|isn't|aren't|won't|lacks?|missing|broken|failing)\b/;
 
 /**
  * Whether a sentence reports a *mixed or partial* result rather than a blanket success —
  * "2 of 4 tests pass and 1 fails", "75% of tests pass" — so its "tests pass" is honest
- * reporting, not a success claim to police. A "no failing tests" success phrase is not a
- * failure mention.
+ * reporting, not a success claim to police. A negated failure ("no failing tests") is success.
  */
 function mixedResult(lower: string): boolean {
   if (/\b\d+\s+of\s+\d+\b/.test(lower) || /\b\d+\s*%\s+of\b/.test(lower)) return true;
-  // Strip success framed as the negation of a bad outcome ("no failing tests", "not one test
-  // is failing", "zero failures", "without a single failure") before looking for a real
-  // failure report, so these success claims are not misread as partial/mixed results.
+  // Strip success framed as the negation of a bad outcome before looking for a real failure.
   const rest = lower
     .replace(/\bno\s+(failing|broken)\s+(tests?|specs?)\b/g, " ")
     .replace(
-      /\b(no|not\s+(one|a\s+single|any)|zero|without\s+(a\s+single|any))\b[\s\w]{0,20}?\b(fail(s|ed|ing|ures?)?|broken|errors?)\b/g,
+      /\b(no|not\s+(one|a\s+single|any)|zero|without\s+(a\s+single|any))\b[\s\w]{0,24}?\b(fail(s|ed|ing|ures?)?|broken|errors?)\b/g,
       " ",
-    );
+    )
+    .replace(/\bnothing\s+(fail(s|ed|ing)?|broke|went\s+wrong)\b/g, " ");
   return /\b(fails?|failed|failing|broken|errored?)\b/.test(rest);
 }
 
 /** Whether a negation falls close before `index` in the lower-cased text. */
 function negatedBefore(text: string, index: number): boolean {
-  const window = text.slice(Math.max(0, index - 40), index);
-  // A negation that is itself part of the matched positive phrase (e.g. "no lint errors")
-  // is handled by those phrases being listed as positive; here we catch sentence negation.
-  return NEG.test(window);
+  return NEG.test(text.slice(Math.max(0, index - 40), index));
 }
 
 /**
- * The check-outcome and quality claims a sentence makes. A phrase already built around a
- * negation (listed above as a positive, e.g. "no failing tests") is positive; a sentence-level
- * negation before an otherwise-positive phrase ("tests do not pass") flips it to negative.
+ * The check-outcome and quality claims a sentence makes. A subject plus a positive signal (not
+ * under sentence negation) is a positive claim; a subject plus a negated failure is positive
+ * too; a subject under a negated positive ("the build does not pass") is a negative claim,
+ * which is honest reporting and not policed.
  */
 export function outcomeClaims(text: string): OutcomeClaim[] {
   const lower = text.toLowerCase();
   const out: OutcomeClaim[] = [];
   const seen = new Set<string>();
-  // A sentence reporting a partial or mixed result is honest, not a blanket success claim.
   const partial = mixedResult(lower);
-  for (const { check, re, force } of CHECK_PHRASES) {
-    if (partial) continue;
-    const m = new RegExp(re.source, "gi").exec(lower);
-    if (!m) continue;
-    // Each phrase asserts success (including the "no failing tests" forms, which claim the
-    // good state). A negation before the phrase, or inside it ("build does not pass"), flips
-    // it to a negative claim. Bare "no" is excluded: it heads the "no failing tests" success
-    // phrases. `force: "positive"` phrases are framed as a negation of a bad outcome but assert
-    // the good state, so the flip does not apply to them.
-    const internalNeg = /\b(not|never|n't|cannot|do(es)?\s+not|fails?\s+to)\b/.test(m[0] as string);
-    const polarity =
-      force === "positive" || !(negatedBefore(lower, m.index) || internalNeg)
-        ? "positive"
-        : "negative";
+  const negGood = NEG_SUCCESS.test(lower) || NEG_FINDING.test(lower);
+  const pos = new RegExp(POSITIVE.source, "gi").exec(lower);
+
+  for (const { check, re } of SUBJECTS) {
+    const sm = new RegExp(re.source, "gi").exec(lower);
+    if (!sm) continue;
+    let polarity: "positive" | "negative" | null = null;
+    if (negGood) {
+      // Success framed as the absence of a failure or a bad finding ("no failing tests",
+      // "zero failures", "no known vulnerabilities", "no secrets detected").
+      polarity = "positive";
+    } else if (pos) {
+      // A positive outcome signal is present; a sentence negation before it flips it.
+      polarity = negatedBefore(lower, pos.index) ? "negative" : "positive";
+    }
+    if (polarity === null) continue; // the subject is named but no success is asserted
+    if (partial && polarity === "positive") continue; // honest partial/mixed report
     const key = `${check}:${polarity}`;
     if (!seen.has(key)) {
       seen.add(key);
       out.push({ kind: "check", check, polarity });
     }
   }
+
   const q = QUALITY_PHRASES.exec(lower);
   if (q && !negatedBefore(lower, q.index)) out.push({ kind: "quality", phrase: q[0].trim() });
   return out;

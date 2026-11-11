@@ -1,5 +1,5 @@
 # Sentra Pulse worker image: worker-pulse plus the Chromium build pinned by playwright-core.
-FROM node:22.23.4-bookworm-slim AS build
+FROM node:22.23.4-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d AS build
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH TURBO_TELEMETRY_DISABLED=1
 WORKDIR /src
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
@@ -19,7 +19,7 @@ RUN --mount=type=secret,id=extra_ca,required=false \
 
 # Chromium and its system libraries at exactly the revision playwright-core 1.64.1 drives.
 # Node is replaced with the repo's pinned version (.nvmrc) so the worker runs as tested.
-FROM mcr.microsoft.com/playwright:v1.64.1-noble
+FROM mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
 ENV NODE_ENV=production PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 WORKDIR /app

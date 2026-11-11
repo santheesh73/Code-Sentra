@@ -1,6 +1,6 @@
 # The web app as a container, for docker-compose and self-hosting. Production runs it on
 # Vercel (apps/web/vercel.json); this image is the same build served by `next start`.
-ARG NODE_IMAGE=node:22.23.4-bookworm-slim
+ARG NODE_IMAGE=node:22.23.4-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d
 
 FROM ${NODE_IMAGE} AS build
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH TURBO_TELEMETRY_DISABLED=1 NEXT_TELEMETRY_DISABLED=1
@@ -28,4 +28,8 @@ WORKDIR /app
 COPY --from=build --chown=node:node /out ./
 USER node
 EXPOSE 3000
+# Container healthcheck: the Next server answers on 3000 (/ server-renders, redirecting to the
+# sign-in page). Any non-5xx response means the server is up. Uses Node's global fetch.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
 CMD ["node_modules/.bin/next", "start", "--port", "3000", "--hostname", "0.0.0.0"]

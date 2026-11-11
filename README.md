@@ -45,7 +45,7 @@ pnpm stack:up             # or: the whole app in docker-compose on http://localh
 ```
 
 - Architecture: [`docs/architecture.md`](docs/architecture.md)
-- Deployment (self-hosted): [`docs/deployment.md`](docs/deployment.md)
+- Deployment (self-hosted): [`docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md) (hardening, bring-up, rollback), with per-service detail in [`docs/deployment.md`](docs/deployment.md)
 - Operations: [`docs/slos.md`](docs/slos.md), [`docs/incident-runbook.md`](docs/incident-runbook.md)
 - Releases: [`docs/release.md`](docs/release.md), [`CHANGELOG.md`](CHANGELOG.md)
 - Decisions: [`docs/decisions/`](docs/decisions/)

@@ -1,7 +1,7 @@
 # Sentra Scan worker image: worker-scan plus git (clones) and the Docker CLI. The CLI
 # talks to a Docker daemon that runs the sandbox (gVisor runsc preferred) and gitleaks;
 # the daemon is NOT in this image: mount a socket or set DOCKER_HOST (see docs/runbook.md).
-ARG NODE_IMAGE=node:22.23.4-bookworm-slim
+ARG NODE_IMAGE=node:22.23.4-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d
 
 FROM ${NODE_IMAGE} AS build
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH TURBO_TELEMETRY_DISABLED=1

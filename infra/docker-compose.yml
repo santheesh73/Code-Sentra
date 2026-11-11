@@ -154,6 +154,9 @@ services:
     env_file: [../.env]
     environment: *app-env
     volumes: [outbox:/outbox]
+    # Shares the API's image but runs no HTTP server, so the image's /health HEALTHCHECK does not
+    # apply; liveness is the process + Docker's restart policy. The API's /ready probes the queue.
+    healthcheck: { disable: true }
     depends_on:
       migrate: { condition: service_completed_successfully }
 

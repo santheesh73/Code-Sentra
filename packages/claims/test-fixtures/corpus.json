@@ -1265,6 +1265,114 @@
    "cite": "manifest",
    "expect_drop": true,
    "group": "outcome"
+  },
+  {
+   "text": "The full suite runs without a single failure.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "Not one test is failing.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "The unit tests all check out.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "Linting comes back spotless.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "Biome reports no problems.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "The build compiles without a hitch.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "Dependencies install with no errors.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "The dependency audit is clean.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "Security scanning found nothing.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "ESLint flags nothing.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "The compiler emits no diagnostics.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "Tests sail through.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "It passes every gate.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "The audit turns up nothing concerning.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "tsc has nothing to say.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "The build compiles cleanly.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "The suite of tests is passing.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
+  },
+  {
+   "text": "There are no CVEs in the dependency tree.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit"
   }
  ],
  "true": [

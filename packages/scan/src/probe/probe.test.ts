@@ -623,7 +623,11 @@ describe("probe planning for Go, Ruby and JVM projects", () => {
     expect(dockerfile).toContain(
       `FROM maven:${SANDBOX_MAVEN_VERSION}-eclipse-temurin-${SANDBOX_JAVA_VERSION} AS maven`,
     );
-    expect(dockerfile).toContain(`FROM rust:${SANDBOX_RUST_VERSION}-slim-bookworm AS rust`);
+    // Non-slim: the default rustup profile ships clippy + rustfmt, so the image builds offline
+    // (re-audit N-3). The slim variant would need `rustup component add clippy`, which reaches
+    // static.rust-lang.org at build time and breaks closed-network builds.
+    expect(dockerfile).toContain(`FROM rust:${SANDBOX_RUST_VERSION}-bookworm AS rust`);
+    expect(dockerfile).not.toContain("rustup component add");
     expect(dockerfile).toContain(
       `/usr/local/rustup/toolchains/${SANDBOX_RUST_VERSION}-x86_64-unknown-linux-gnu /opt/rust`,
     );

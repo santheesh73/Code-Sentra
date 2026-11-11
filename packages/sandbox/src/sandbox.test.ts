@@ -68,14 +68,25 @@ describe("sandbox safety suite", () => {
     const dns = await py("import socket\nsocket.getaddrinfo('example.com', 443)");
     expect(dns.exitCode).not.toBe(0);
     expect(dns.stderr).toMatch(/gaierror|Temporary failure|Name or service/);
-    const ifaces = await run(["sh", "-c", "ls /sys/class/net"]);
-    expect(ifaces.stdout.trim()).toBe("lo");
+    // runc keeps a down `lo` interface under --network none; gVisor's netstack shows none at
+    // all. Either way there must be NO interface that could reach the network (no eth0, …).
+    const ifaces = await run(["sh", "-c", "ls /sys/class/net 2>/dev/null || true"]);
+    const nets = ifaces.stdout.trim().split(/\s+/).filter(Boolean);
+    expect(
+      nets.every((n) => n === "lo"),
+      ifaces.stdout,
+    ).toBe(true);
   });
 
   it("has a read-only root filesystem", async () => {
-    const r = await run(["sh", "-c", "touch /usr/local/bin/evil"]);
+    // The image root is mounted --read-only, so untrusted code cannot modify the toolchain.
+    // runc surfaces the read-only mount as EROFS ("Read-only file system"); gVisor refuses the
+    // same write as EACCES ("Permission denied"). Either refusal is the guarantee — what matters
+    // is that the write to a system path does not happen.
+    const r = await run(["sh", "-c", "touch /usr/local/bin/evil && echo WROTE"]);
     expect(r.exitCode).not.toBe(0);
-    expect(r.stderr).toMatch(/Read-only file system/);
+    expect(r.stdout).not.toContain("WROTE");
+    expect(r.stderr).toMatch(/Read-only file system|Permission denied|Operation not permitted/);
   });
 
   it("runs unprivileged with no capabilities and no privilege escalation", async () => {
@@ -151,5 +162,20 @@ describe("runtime verification (ADR 0032, F-08)", () => {
     expect(check.ok).toBe(false);
     if (!check.ok)
       expect(check.reason).toMatch(/could not start|not available|No such image|not found|pull/i);
+  }, 60_000);
+
+  it("runs under gVisor (runsc) when the dedicated CI gate requires it — positive path", async () => {
+    // A no-op everywhere except the `runsc` CI job, which installs gVisor and sets
+    // REQUIRE_RUNSC=1. There it closes the re-audit's "positive gVisor path — UNVERIFIED here"
+    // gap: the throwaway container really runs under runsc, that runtime isolates untrusted code
+    // from the host kernel, and the sandbox this suite exercised also ran under runsc.
+    if (process.env.REQUIRE_RUNSC !== "1") return;
+    const check = await verifyRuntime(IMAGE);
+    expect(check, JSON.stringify(check)).toMatchObject({
+      ok: true,
+      runtime: "runsc",
+      isolating: true,
+    });
+    expect(sbx.runtime).toBe("runsc");
   }, 60_000);
 });

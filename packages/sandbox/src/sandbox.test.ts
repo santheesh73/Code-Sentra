@@ -152,4 +152,19 @@ describe("runtime verification (ADR 0032, F-08)", () => {
     if (!check.ok)
       expect(check.reason).toMatch(/could not start|not available|No such image|not found|pull/i);
   }, 60_000);
+
+  it("runs under gVisor (runsc) when the dedicated CI gate requires it — positive path", async () => {
+    // A no-op everywhere except the `runsc` CI job, which installs gVisor and sets
+    // REQUIRE_RUNSC=1. There it closes the re-audit's "positive gVisor path — UNVERIFIED here"
+    // gap: the throwaway container really runs under runsc, that runtime isolates untrusted code
+    // from the host kernel, and the sandbox this suite exercised also ran under runsc.
+    if (process.env.REQUIRE_RUNSC !== "1") return;
+    const check = await verifyRuntime(IMAGE);
+    expect(check, JSON.stringify(check)).toMatchObject({
+      ok: true,
+      runtime: "runsc",
+      isolating: true,
+    });
+    expect(sbx.runtime).toBe("runsc");
+  }, 60_000);
 });

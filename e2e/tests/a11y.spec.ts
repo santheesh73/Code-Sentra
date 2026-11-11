@@ -18,6 +18,22 @@ test("@responsive the projects page has no serious accessibility violations", as
   await expectNoA11yViolations(page, "projects");
 });
 
+test("@responsive the new-project page has no serious accessibility violations", async ({
+  page,
+}) => {
+  await signIn(page, `a11y-new-${Date.now()}@example.test`);
+  await page.goto(`${APP()}/projects/new`, { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading").first()).toBeVisible();
+  await expectNoA11yViolations(page, "projects/new");
+});
+
+test("@responsive the settings page has no serious accessibility violations", async ({ page }) => {
+  await signIn(page, `a11y-settings-${Date.now()}@example.test`);
+  await page.goto(`${APP()}/settings`, { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading").first()).toBeVisible();
+  await expectNoA11yViolations(page, "settings");
+});
+
 test("the sign-in form is operable by keyboard alone", async ({ page }) => {
   await page.goto(`${APP()}/signin`);
   const email = page.getByLabel("Email");

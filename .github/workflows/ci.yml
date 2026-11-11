@@ -17,6 +17,22 @@ env:
   TURBO_TELEMETRY_DISABLED: "1"
 
 jobs:
+  # The documented single entry point (`make`): the fast gate that needs no Docker — install,
+  # lint, typecheck, build. Runs on every push to main and every PR so the Makefile cannot rot;
+  # branch protection marks it required on main (a repository setting). The Docker-backed gates
+  # (test, e2e, compose, images) keep their own jobs below.
+  make:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: make check
+
   lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 15

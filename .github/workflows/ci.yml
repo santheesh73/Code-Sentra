@@ -311,16 +311,17 @@ jobs:
       - name: Install gVisor (runsc) and register it with Docker
         run: |
           set -euo pipefail
-          ARCH=$(uname -m)
-          URL="https://storage.googleapis.com/gvisor/releases/release/latest/${ARCH}"
-          wget -q "${URL}/runsc" "${URL}/runsc.sha512" \
-               "${URL}/containerd-shim-runsc-v1" "${URL}/containerd-shim-runsc-v1.sha512"
-          sha512sum -c runsc.sha512
-          sha512sum -c containerd-shim-runsc-v1.sha512
-          chmod a+rx runsc containerd-shim-runsc-v1
-          sudo mv runsc containerd-shim-runsc-v1 /usr/local/bin/
+          # gVisor's official apt repository (more robust in CI than the direct binary download).
+          sudo apt-get update
+          sudo apt-get install -y apt-transport-https ca-certificates curl gnupg
+          curl -fsSL https://gvisor.dev/archive.key \
+            | sudo gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" \
+            | sudo tee /etc/apt/sources.list.d/gvisor.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y runsc
           # Register the runtime. On a runner without KVM, runsc uses its systrap/ptrace platform.
-          sudo /usr/local/bin/runsc install
+          sudo runsc install
           sudo systemctl reload docker
           # Give dockerd a moment, then confirm Docker offers runsc.
           for i in $(seq 1 15); do
@@ -328,6 +329,7 @@ jobs:
             sleep 1
           done
           docker info --format '{{json .Runtimes}}' | grep -q runsc
+          runsc --version
       - name: Build the sandbox image
         run: docker build -t codesentra/sandbox:runsc infra/sandbox
       - name: Only runsc dependencies, then prove gVisor isolates and runs the whole safety suite

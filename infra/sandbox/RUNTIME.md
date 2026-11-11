@@ -17,6 +17,20 @@ CodeSentra enforces this in two places:
    a false pass — and the worker does not crash. The runtime that actually ran is recorded on
    the run.
 
+## Building the image (no network egress for the toolchain)
+
+```sh
+docker build -t codesentra/sandbox:<tag> infra/sandbox
+```
+
+The build pulls only the pinned base images (Node, Go, Ruby, Maven, Rust, PHP, Composer, Python)
+from the registry; it fetches **nothing** from a toolchain host. In particular the Rust stage uses
+the non-slim `rust:<ver>-bookworm` image, whose default rustup profile already includes clippy and
+rustfmt — so there is no `rustup component add`, which would otherwise reach `static.rust-lang.org`
+and fail a closed-network build (re-audit N-3). A probe test (`packages/scan/src/probe/probe.test.ts`)
+asserts the Dockerfile never adds a rustup component. Behind a TLS-intercepting egress proxy, pass
+the proxy CA so the registry pull validates: `docker build --secret id=build-ca,src=ca.pem …`.
+
 ## Installing gVisor (Debian/Ubuntu host)
 
 Run on each host that runs the Scan worker's Docker:

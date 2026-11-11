@@ -9,15 +9,16 @@ FROM node:22.23.4-bookworm-slim AS node
 FROM golang:1.27.2-bookworm AS go
 FROM ruby:3.4.10-slim-bookworm AS ruby
 FROM maven:3.9.12-eclipse-temurin-21 AS maven
-FROM rust:1.99.0-slim-bookworm AS rust
-# The `build-ca` secret is optional: the CA of a TLS-intercepting egress proxy, for builds
-# behind one (docker build --secret id=build-ca,src=ca.pem). It is never part of the image.
-RUN --mount=type=secret,id=build-ca \
-    if [ -f /run/secrets/build-ca ]; then export SSL_CERT_FILE=/run/secrets/build-ca; fi \
- && rustup component add clippy
+# Rust, Cargo and Clippy. The non-slim image ships the default rustup profile, so clippy and
+# rustfmt are already in the toolchain — we add no rustup component, so the image builds with NO
+# network egress to static.rust-lang.org (re-audit N-3; a probe test asserts no component is added
+# at build time). The toolchain dir copied below (/opt/rust) therefore already includes clippy.
+FROM rust:1.99.0-bookworm AS rust
 # Package managers for Node projects, pinned and checked against the registry's sha512
 # (ADR 0030). Each lockfile format gets the release that reads it: pnpm 7 (lockfile 5.x), pnpm
 # 8 (6.x), pnpm 10 (9.x), Yarn 1 (classic lockfiles) and Yarn 4 (Berry lockfiles).
+# The `build-ca` secret below is optional: the CA of a TLS-intercepting egress proxy, for builds
+# behind one (docker build --secret id=build-ca,src=ca.pem). It is never part of the image.
 FROM node AS pms
 RUN --mount=type=secret,id=build-ca \
     if [ -f /run/secrets/build-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/build-ca npm_config_cafile=/run/secrets/build-ca; fi \

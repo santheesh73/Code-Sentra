@@ -78,6 +78,14 @@ self-assessment.** Independent confirmation awaits the held-out re-audit.
   (a small, enumerable set) rather than success _wording_ (unbounded). A subject phrasing the
   classifier does not recognise would fall through to the ADR-0031 backstop; the fuzz guard and the
   development set grow from any miss. This is a strictly smaller residual than the old lexicon.
+- **Measured held-out re-audit (self-run).** A fresh skeptical sweep of novel false check-outcome
+  paraphrases — not in the corpus or fuzz — with all checks failing: a 20-string held-out set drops
+  **100%**; a wider 39-string sweep drops **36/39**. The remaining 3 are pure success _metaphors_
+  that name no check at all ("Nothing in the gauntlet tripped us up.", "Checks? All good.",
+  "Style-wise we're squeaky clean."). That class is the open-NL residual ADR 0037 names: closing it
+  would need an unbounded success lexicon (the treadmill N-4 penalised) or over-dropping legitimate
+  prose. It is recorded and ratcheted in `packages/claims/src/reaudit.test.ts` (`KNOWN_RESIDUAL`),
+  not claimed closed — this report does **not** assert "100% by any wording".
 - **CI-only by nature.** gVisor isolation, e2e/a11y, image/compose and signed-release gates require
   a gVisor- and egress-capable host; they are green in CI but cannot run in a Docker-less
   environment. Live GitHub App/OAuth, real Anthropic LLM and live OTel/Sentry export still need the

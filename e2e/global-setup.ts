@@ -55,6 +55,9 @@ export default async function globalSetup() {
     S3_SECRET_ACCESS_KEY: minioPassword,
     PULSE_TEST_ALLOW_HOSTS: "127.0.0.1",
     PULSE_TEST_CA_FILE: caFile,
+    // The whole suite signs in many times from one loopback IP; raise the sign-in-email rate
+    // limit so the production default (20 / 15 min) does not 429 later tests. Production keeps 20.
+    AUTH_EMAIL_RATE_MAX: "1000",
   };
 
   const api = spawnService("api", [join(ROOT, "apps/api/dist/server.js")], env);

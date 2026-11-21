@@ -110,6 +110,9 @@ export const EnvSchema = z.object({
   GITHUB_WEBHOOK_SECRET: secret(16),
   EMAIL_TRANSPORT: z.enum(["resend", "outbox", "smtp"]).default("resend"),
   EMAIL_OUTBOX_DIR: z.string().min(1).default(".outbox"),
+  /** Sign-in emails allowed per IP per 15-minute window. 20 in production (abuse control); the
+   * e2e stack raises it, since its single loopback IP legitimately signs in many times per run. */
+  AUTH_EMAIL_RATE_MAX: z.coerce.number().int().min(1).default(20),
   /** SMTP server for the dev "smtp" transport (Mailpit). Host:port, local and unauthenticated. */
   SMTP_HOST: z.string().min(1).default("localhost"),
   SMTP_PORT: z.coerce.number().int().positive().default(1025),
@@ -212,6 +215,7 @@ export const SERVICE_ENV = {
       "SLACK_API_BASE_URL",
       "EMAIL_TRANSPORT",
       "EMAIL_OUTBOX_DIR",
+      "AUTH_EMAIL_RATE_MAX",
       "SMTP_HOST",
       "SMTP_PORT",
       "PULSE_TEST_ALLOW_HOSTS",

@@ -49,4 +49,5 @@ pnpm stack:up             # or: the whole app in docker-compose on http://localh
 - Operations: [`docs/slos.md`](docs/slos.md), [`docs/incident-runbook.md`](docs/incident-runbook.md)
 - Releases: [`docs/release.md`](docs/release.md), [`CHANGELOG.md`](CHANGELOG.md)
 - Decisions: [`docs/decisions/`](docs/decisions/)
+- Remediation: [`docs/FINAL_REMEDIATION_REPORT.md`](docs/FINAL_REMEDIATION_REPORT.md), [`docs/spec/TRACEABILITY.md`](docs/spec/TRACEABILITY.md)
 - Environment: [`.env.example`](.env.example)

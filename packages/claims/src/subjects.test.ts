@@ -10,6 +10,10 @@ const CHECK_SENTENCES: [string, string][] = [
   // tests / suite / coverage / CI — varied phrasing, success, failure, neutral
   ["The full suite runs without a single failure.", "tests"],
   ["Two tests are currently failing.", "tests"],
+  // re-audit: an adjective between the determiner and gate/check must not slip the gate.
+  ["The whole gate sailed by on the first try.", "tests"],
+  ["Zero red in the entire check matrix.", "tests"],
+  ["Every quality gate is satisfied.", "tests"],
   ["The project has 412 passing tests.", "tests"],
   ["Coverage sits at 83%.", "tests"],
   ["The code is thoroughly covered by tests.", "tests"],

@@ -57,6 +57,9 @@ const ctx = (o: CheckOutcome): VerifierContext => ({
 // the subject gate recognises; the frames below are the open set it must be robust to.
 const SUBJECT_PHRASES: Record<CheckSubject, string[]> = {
   tests: [
+    "the whole gate",
+    "the entire check matrix",
+    "every quality gate",
     "the tests",
     "the test suite",
     "the unit tests",

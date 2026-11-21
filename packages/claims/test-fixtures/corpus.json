@@ -1373,6 +1373,24 @@
    "cite": "manifest",
    "expect_drop": true,
    "group": "held-out-reaudit"
+  },
+  {
+   "text": "The whole gate sailed by on the first try.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit-2"
+  },
+  {
+   "text": "Zero red in the entire check matrix.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit-2"
+  },
+  {
+   "text": "Every quality gate is satisfied.",
+   "cite": "manifest",
+   "expect_drop": true,
+   "group": "held-out-reaudit-2"
   }
  ],
  "true": [

@@ -22,7 +22,7 @@ const SUBJECTS: { subject: CheckSubject; re: RegExp }[] = [
   },
   {
     subject: "typecheck",
-    re: /\b(types?[\s-]?check(s|ing|ed)?|tsc|typescript|the\s+type\s+system|the\s+compiler|type[\s-]?safe(ty)?|type\s+errors?)\b/,
+    re: /\b(types?[\s-]?check(s|ing|ed)?|tsc|typescript|the\s+type\s+system|the\s+compiler|type[\s-]?safe(ty)?|type\s+(errors?|gripes?|complaints?|issues?|problems?|warnings?))\b/,
   },
   {
     subject: "lint",
@@ -34,7 +34,7 @@ const SUBJECTS: { subject: CheckSubject; re: RegExp }[] = [
   },
   {
     subject: "install",
-    re: /\b(install(s|ation|ed|ing)?|install\s+step|(dependenc(y|ies)|packages?)\s+(install\w*|pull\w*|download\w*|resol(ve|ves|ved|ving|ution)))\b/,
+    re: /\b(install(s|ation|ed|ing)?|install\s+step|(dependenc(y|ies)|packages?)\s+(install\w*|pull\w*|download\w*|resol(ve|ves|ved|ving|ution)|graph|tree)|lock\s?files?)\b/,
   },
   {
     subject: "secrets",
@@ -46,7 +46,11 @@ const SUBJECTS: { subject: CheckSubject; re: RegExp }[] = [
   },
   {
     subject: "tests",
-    re: /\b(tests?|specs?|suite|tested|covered|(code\s+)?coverage|test\s+runs?|ci|the\s+(ci\s+)?pipeline|the\s+checks?|all\s+checks|every\s+check|the\s+gates?|every\s+gate|all\s+gates|each\s+gate)\b/,
+    // "gate"/"check" are check subjects even with an adjective between the determiner and the
+    // noun ("the whole gate", "the entire check matrix", "every quality gate") — the determiner
+    // need not be adjacent (re-audit: rigid adjacency leaked those forms). `gates?\b` excludes
+    // "gateway". Also the standalone "quality gate" and "check matrix/set/battery/run".
+    re: /\b(tests?|specs?|suite|tested|covered|(code\s+)?coverage|test\s+runs?|ci|the\s+(ci\s+)?pipeline|(the|all|every|each|any)\s+(\w+\s+)?(checks?|gates?)|quality\s+gates?|check\s+(matrix|set|suite|battery|runs?)|verification\s+(stack|suite|run|step|matrix|pipeline))\b/,
   },
 ];
 

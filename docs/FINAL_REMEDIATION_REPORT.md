@@ -86,6 +86,17 @@ self-assessment.** Independent confirmation awaits the held-out re-audit.
   would need an unbounded success lexicon (the treadmill N-4 penalised) or over-dropping legitimate
   prose. It is recorded and ratcheted in `packages/claims/src/reaudit.test.ts` (`KNOWN_RESIDUAL`),
   not claimed closed — this report does **not** assert "100% by any wording".
+- **Second independent re-audit (H-1, closed).** A fresh third-party re-audit of merged `main`
+  falsified the earlier framing that the _only_ residual was metaphors naming no check: the
+  agent-noun subjects "the typechecker"/"type-checker" and "the packager"/"package manager" were
+  plainly-named check subjects the classifier did **not** recognise, so e.g. "The typechecker
+  passed." survived into narrative with typecheck failing — in both the subject gate and the
+  ADR-0031 backstop. This is the "subject misclassification" residual ADR 0037 predicts (the subject
+  set is the _closed_ part, so the fix is to extend the vocabulary, not to chase wording). Closed at
+  root in `subjects.ts`/`outcome.ts`; regression cases added to `subjects.test.ts`, the fuzz
+  `SUBJECT_PHRASES`, and `reaudit.test.ts` `CAUGHT` (fail-before/pass-after captured). The honesty
+  guarantee holds for _named_ check subjects; the open residual remains the pure-metaphor class
+  above, not a plainly-named subject.
 - **CI-only by nature.** gVisor isolation, e2e/a11y, image/compose and signed-release gates require
   a gVisor- and egress-capable host; they are green in CI but cannot run in a Docker-less
   environment. Live GitHub App/OAuth, real Anthropic LLM and live OTel/Sentry export still need the

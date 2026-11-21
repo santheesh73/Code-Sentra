@@ -33,6 +33,13 @@ const CHECK_SENTENCES: [string, string][] = [
   ["The build finishes with no warnings.", "build"],
   ["The compiler emits no diagnostics.", "typecheck"],
   // typecheck
+  // re-audit (independent): the AGENT-NOUN "typechecker"/"type-checker" is a plainly-worded check
+  // subject, not a metaphor — the determiner+adjective relaxation is not enough; the noun itself
+  // must be recognised, or "The typechecker passed." leaks through with typecheck failing.
+  ["The typechecker passed.", "typecheck"],
+  ["The type-checker is happy.", "typecheck"],
+  ["The typechecker reported no errors.", "typecheck"],
+  ["The type checker found nothing wrong.", "typecheck"],
   ["tsc has nothing to say.", "typecheck"],
   ["There are no type errors.", "typecheck"],
   ["The code is type-safe.", "typecheck"],
@@ -49,6 +56,9 @@ const CHECK_SENTENCES: [string, string][] = [
   ["Dependencies install with no errors.", "install"],
   ["Packages pull down without complaint.", "install"],
   ["Installation failed resolving a peer dependency.", "install"],
+  // re-audit (independent): "the packager" / "the package manager" names the install step.
+  ["The packager pulled everything down fine.", "install"],
+  ["The package manager reports no problems.", "install"],
   // dependency audit
   ["The dependency audit is clean.", "dependency_audit"],
   ["There are no known vulnerabilities.", "dependency_audit"],

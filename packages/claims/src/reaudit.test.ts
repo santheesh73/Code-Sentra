@@ -64,6 +64,12 @@ const CAUGHT = [
   "The CVE scan drew a blank.",
   "Builds reproduce cleanly end to end.",
   "Type-checking is watertight.",
+  // Second independent re-audit (main @ dd29299): plainly-named agent-noun subjects that leaked
+  // before — recognised now that the subject vocabulary includes "typechecker"/"the packager".
+  "The typechecker passed.",
+  "The type-checker is happy.",
+  "The packager pulled everything down fine.",
+  "The package manager reports no problems.",
 ];
 
 // Pure success metaphors that name no check — the documented bounded residual (see ADR 0037).
@@ -84,7 +90,10 @@ describe("held-out re-audit of the honesty guarantee", () => {
 
   it("keeps the documented residual small and bounded (ratchet, honest)", () => {
     // These are acknowledged, not claimed closed. If the set shrinks, tighten this number; it must
-    // never grow without a stated reason. The guarantee for *named* check subjects stays 100%.
+    // never grow without a stated reason. The residual is pure success *metaphors* that name no
+    // check. A plainly-named check subject (an agent-noun such as "the typechecker") is NOT in this
+    // class: a second independent re-audit found such a leak, which is now closed and asserted in
+    // CAUGHT above — the closed subject vocabulary, not this metaphor residual, is where it belongs.
     expect(KNOWN_RESIDUAL.length).toBeLessThanOrEqual(3);
   });
 });

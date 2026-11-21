@@ -618,21 +618,26 @@ describe("probe planning for Go, Ruby and JVM projects", () => {
       resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../../infra/sandbox/Dockerfile"),
       "utf8",
     );
-    expect(dockerfile).toContain(`FROM golang:${SANDBOX_GO_VERSION}-bookworm AS go`);
-    expect(dockerfile).toContain(`FROM ruby:${SANDBOX_RUBY_VERSION}-slim-bookworm AS ruby`);
-    expect(dockerfile).toContain(
-      `FROM maven:${SANDBOX_MAVEN_VERSION}-eclipse-temurin-${SANDBOX_JAVA_VERSION} AS maven`,
+    // Each base is pinned to BOTH the version tag the planner assumes AND a digest (re-audit L-1:
+    // the sandbox runs untrusted code, so supply-chain pinning matters most here). The regex keeps
+    // the version coupling and also enforces that the `@sha256:` pin is present and well-formed.
+    const pinned = (ref: string, stage: string) =>
+      new RegExp(`FROM ${ref.replace(/[.\\]/g, "\\$&")}@sha256:[0-9a-f]{64} AS ${stage}`);
+    expect(dockerfile).toMatch(pinned(`golang:${SANDBOX_GO_VERSION}-bookworm`, "go"));
+    expect(dockerfile).toMatch(pinned(`ruby:${SANDBOX_RUBY_VERSION}-slim-bookworm`, "ruby"));
+    expect(dockerfile).toMatch(
+      pinned(`maven:${SANDBOX_MAVEN_VERSION}-eclipse-temurin-${SANDBOX_JAVA_VERSION}`, "maven"),
     );
     // Non-slim: the default rustup profile ships clippy + rustfmt, so the image builds offline
     // (re-audit N-3). The slim variant would need `rustup component add clippy`, which reaches
     // static.rust-lang.org at build time and breaks closed-network builds.
-    expect(dockerfile).toContain(`FROM rust:${SANDBOX_RUST_VERSION}-bookworm AS rust`);
+    expect(dockerfile).toMatch(pinned(`rust:${SANDBOX_RUST_VERSION}-bookworm`, "rust"));
     expect(dockerfile).not.toContain("rustup component add");
     expect(dockerfile).toContain(
       `/usr/local/rustup/toolchains/${SANDBOX_RUST_VERSION}-x86_64-unknown-linux-gnu /opt/rust`,
     );
-    expect(dockerfile).toContain(`FROM php:${SANDBOX_PHP_VERSION}-cli-bookworm AS php`);
-    expect(dockerfile).toContain(`FROM composer:${SANDBOX_COMPOSER_VERSION} AS composer`);
+    expect(dockerfile).toMatch(pinned(`php:${SANDBOX_PHP_VERSION}-cli-bookworm`, "php"));
+    expect(dockerfile).toMatch(pinned(`composer:${SANDBOX_COMPOSER_VERSION}`, "composer"));
   });
 });
 

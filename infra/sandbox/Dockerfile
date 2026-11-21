@@ -5,15 +5,20 @@
 # (ADR 0026), Ruby with Bundler, Java 21 with Maven (ADR 0027), Rust with Cargo and Clippy, and
 # PHP with Composer (ADR 0028). Keep the SANDBOX_*_VERSION constants in
 # packages/scan/src/probe/plan.ts equal to these tags (a test checks).
-FROM node:22.23.4-bookworm-slim AS node
-FROM golang:1.27.2-bookworm AS go
-FROM ruby:3.4.10-slim-bookworm AS ruby
-FROM maven:3.9.12-eclipse-temurin-21 AS maven
+# Every base is digest-pinned (@sha256) as well as tagged (re-audit L-1): this image runs
+# untrusted project code, so the toolchain it ships must be byte-for-byte reproducible and not
+# follow a tag that an upstream re-push could move. To bump a base, change the version tag AND the
+# digest together: resolve the new manifest-list digest with
+# `docker buildx imagetools inspect <image>:<tag>` (or the registry API) and update both.
+FROM node:22.23.4-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d AS node
+FROM golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61 AS go
+FROM ruby:3.4.10-slim-bookworm@sha256:a53b923c4d7ae2a927f766b3e71a9512d034ebec65931c0c34254de8768e7671 AS ruby
+FROM maven:3.9.12-eclipse-temurin-21@sha256:c3c9d3ac4ce8431a3995c0318b8d390f448e693dd4fabc16e9b68d2e1f3d7b46 AS maven
 # Rust, Cargo and Clippy. The non-slim image ships the default rustup profile, so clippy and
 # rustfmt are already in the toolchain — we add no rustup component, so the image builds with NO
 # network egress to static.rust-lang.org (re-audit N-3; a probe test asserts no component is added
 # at build time). The toolchain dir copied below (/opt/rust) therefore already includes clippy.
-FROM rust:1.99.0-bookworm AS rust
+FROM rust:1.99.0-bookworm@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6 AS rust
 # Package managers for Node projects, pinned and checked against the registry's sha512
 # (ADR 0030). Each lockfile format gets the release that reads it: pnpm 7 (lockfile 5.x), pnpm
 # 8 (6.x), pnpm 10 (9.x), Yarn 1 (classic lockfiles) and Yarn 4 (Berry lockfiles).
@@ -37,8 +42,8 @@ RUN --mount=type=secret,id=build-ca \
    && [ "$got" = "$sri" ] || { echo "$path: checksum mismatch ($got)"; exit 1; } \
    && mkdir "/opt/codesentra/pm/$dir" && tar -xzf "$f" -C "/opt/codesentra/pm/$dir" --strip-components=1 && rm "$f"; \
     done < list
-FROM php:8.4.27-cli-bookworm AS php
-FROM composer:2.10.3 AS composer
+FROM php:8.4.27-cli-bookworm@sha256:b3e907a1108629c562c4bb313ce3449e34d49991f6bb2487913f6146f47200fe AS php
+FROM composer:2.10.3@sha256:2cf275428757e5435a667bfc0d038b14520ca02be2b1b70d44a05c8c19e2de48 AS composer
 
 # Debian packages taken from those images (same Debian release as the base) without a
 # network: every file `dpkg -L` lists for them, docs left out. The C compiler and linker that
@@ -57,7 +62,7 @@ RUN mkdir /out && dpkg -L libargon2-1 libbrotli1 libcurl4 libicu72 libldap-2.5-0
     | while read -r f; do if [ -f "$f" ] || [ -L "$f" ]; then echo "$f"; fi; done \
     | grep -v '^/usr/share/\(doc\|man\|info\|locale\|lintian\|bug\)/' | tar -cf - -T - | tar -xf - -C /out
 
-FROM python:3.12.15-slim-bookworm
+FROM python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
 COPY --from=pms /opt/codesentra/pm /opt/codesentra/pm

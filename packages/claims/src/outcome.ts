@@ -29,7 +29,9 @@ export type OutcomeClaim =
 const SUBJECTS: { check: CheckName; re: RegExp }[] = [
   {
     check: "typecheck",
-    re: /\b(types?[\s-]?check(s|ing|ed)?|tsc|typescript|the\s+type\s+system|the\s+compiler|type[\s-]?safe(ty)?|type\s+errors?)\b/,
+    // Agent-noun "typechecker"/"type-checker" included so the backstop closes the same subject the
+    // primary gate does (re-audit, independent).
+    re: /\b(types?[\s-]?check(s|ing|ed|er)?|tsc|typescript|the\s+type\s+system|the\s+compiler|type[\s-]?safe(ty)?|type\s+errors?)\b/,
   },
   {
     check: "lint",
@@ -41,7 +43,7 @@ const SUBJECTS: { check: CheckName; re: RegExp }[] = [
   },
   {
     check: "install",
-    re: /\b(installs?|installation|install\s+step|dependencies\s+(install|pull|download|resolve)|packages?\s+(install|pull|download|resolve))\b/,
+    re: /\b(installs?|installation|install\s+step|dependencies\s+(install|pull|download|resolve)|packages?\s+(install|pull|download|resolve)|packager|package\s+manager)\b/,
   },
   {
     check: "secrets",

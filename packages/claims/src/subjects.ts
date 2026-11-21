@@ -22,7 +22,10 @@ const SUBJECTS: { subject: CheckSubject; re: RegExp }[] = [
   },
   {
     subject: "typecheck",
-    re: /\b(types?[\s-]?check(s|ing|ed)?|tsc|typescript|the\s+type\s+system|the\s+compiler|type[\s-]?safe(ty)?|type\s+(errors?|gripes?|complaints?|issues?|problems?|warnings?))\b/,
+    // `check(s|ing|ed|er)?` recognises the agent-noun "typechecker"/"type-checker"/"type checker"
+    // — a plainly-worded check subject, not a metaphor (re-audit, independent: rigid `(s|ing|ed)?`
+    // leaked "The typechecker passed." with typecheck failing).
+    re: /\b(types?[\s-]?check(s|ing|ed|er)?|tsc|typescript|the\s+type\s+system|the\s+compiler|type[\s-]?safe(ty)?|type\s+(errors?|gripes?|complaints?|issues?|problems?|warnings?))\b/,
   },
   {
     subject: "lint",
@@ -34,7 +37,7 @@ const SUBJECTS: { subject: CheckSubject; re: RegExp }[] = [
   },
   {
     subject: "install",
-    re: /\b(install(s|ation|ed|ing)?|install\s+step|(dependenc(y|ies)|packages?)\s+(install\w*|pull\w*|download\w*|resol(ve|ves|ved|ving|ution)|graph|tree)|lock\s?files?)\b/,
+    re: /\b(install(s|ation|ed|ing)?|install\s+step|(dependenc(y|ies)|packages?)\s+(install\w*|pull\w*|download\w*|resol(ve|ves|ved|ving|ution)|graph|tree)|lock\s?files?|packager|package\s+manager)\b/,
   },
   {
     subject: "secrets",

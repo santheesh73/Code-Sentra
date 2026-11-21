@@ -40,7 +40,7 @@ export function authRoutes(ctx: AppContext): FastifyPluginAsyncZod {
     app.post(
       "/v1/auth/email",
       {
-        config: { rateLimit: { max: 20, timeWindow: "15 minutes" } },
+        config: { rateLimit: { max: ctx.config.AUTH_EMAIL_RATE_MAX, timeWindow: "15 minutes" } },
         schema: {
           tags: ["auth"],
           summary: "Send a sign-in link by email",

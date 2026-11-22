@@ -476,8 +476,12 @@ describe("probe planning for Go, Ruby and JVM projects", () => {
     expect(
       planProbes(
         memView({
+          // The version is the Maven property "${revision}" (split across the concatenation so it
+          // is not read as a JS template placeholder); the test asserts such a non-plain parent
+          // version is refused.
           "pom.xml":
-            "<project><parent><groupId>g</groupId><artifactId>p</artifactId><version>${revision}</version></parent></project>",
+            "<project><parent><groupId>g</groupId><artifactId>p</artifactId><version>$" +
+            "{revision}</version></parent></project>",
         }),
       ).refused,
     ).toMatch(/parent of pom.xml is not named by a plain groupId/);
